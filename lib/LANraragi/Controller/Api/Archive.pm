@@ -229,7 +229,9 @@ sub create_archive {
     # modify status based on handler's return message.
     if ( $success_status==0 ) {
         $status = 500;
-        if ( index($message, "Unsupported File Extension") != -1 ) {
+        if ( index($message, "job is reserved by another process") != -1 ) {
+            $status = 423;
+        } elsif ( index($message, "Unsupported File Extension") != -1 ) {
             $status = 415;
         } elsif ( index($message, "Enable replace duplicated archive in config to replace old ones") != -1 ) {
             $status = 409;
