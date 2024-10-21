@@ -4,12 +4,14 @@ description: Everything dealing with Archives.
 
 # Archive API
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives" method="get" summary="Get all Archives" %}
-{% swagger-description %}
-Get the Archive Index in JSON form. You can use the IDs of this JSON with the other endpoints.
-{% endswagger-description %}
+## Get all Archives
 
-{% swagger-response status="200" description="" %}
+<mark style="color:blue;">`GET`</mark> `http://lrr.tvc-16.science/api/archives`
+
+Get the Archive Index in JSON form. You can use the IDs of this JSON with the other endpoints.
+
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 [{
     "arcid": "ec9b83b6a835771b0f9862d0326add2f8373989a",
@@ -58,15 +60,17 @@ Get the Archive Index in JSON form. You can use the IDs of this JSON with the ot
     "title": "Rohan Kishibe goes to Gucci"
 }]
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/untagged" method="get" summary="Get Untagged Archives" %}
-{% swagger-description %}
-Get archives that don't have any tags recorded. This follows the same rules as the Batch Tagging filter and will include archives that have parody:, date_added:, series: or artist: tags.
-{% endswagger-description %}
+## Get Untagged Archives
 
-{% swagger-response status="200" description="" %}
+<mark style="color:blue;">`GET`</mark> `http://lrr.tvc-16.science/api/archives/untagged`
+
+Get archives that don't have any tags recorded. This follows the same rules as the Batch Tagging filter and will include archives that have parody:, date\_added:, series: or artist: tags.
+
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 [
     "d1858d5dc36925aa66be072a97817650d39de166",
@@ -74,19 +78,23 @@ Get archives that don't have any tags recorded. This follows the same rules as t
     "28697b96f0ac5858be2614ed10ca47742c9522fd",
 ]
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/metadata" method="get" summary="Get Archive Metadata" %}
-{% swagger-description %}
+## Get Archive Metadata
+
+<mark style="color:blue;">`GET`</mark> `http://lrr.tvc-16.science/api/archives/:id/metadata`
+
 Get Metadata (title, tags) for a given Archive.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process.
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-response status="200" description="" %}
+| Name                                 | Type   | Description                   |
+| ------------------------------------ | ------ | ----------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process. |
+
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 {
     "arcid": "e69e43e1355267f7d32a4f9b7f2fe108d2401ebf",
@@ -98,9 +106,9 @@ ID of the Archive to process.
     "title": "Saturn Backup Cartridge - Japanese Manual"
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "______",
@@ -108,19 +116,23 @@ ID of the Archive to process.
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/categories" method="get" summary="Get Archive Categories" %}
-{% swagger-description %}
+## Get Archive Categories
+
+<mark style="color:blue;">`GET`</mark> `http://lrr.tvc-16.science/api/archives/:id/categories`
+
 Get all the Categories which currently refer to this Archive ID.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process.
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-response status="200" description="" %}
+| Name                                 | Type   | Description                   |
+| ------------------------------------ | ------ | ----------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process. |
+
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 {
     "categories": [
@@ -139,9 +151,9 @@ ID of the Archive to process.
     "success": 1
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "______",
@@ -149,19 +161,23 @@ ID of the Archive to process.
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/tankoubons" method="get" summary="Get Archive Tankoubons" %}
-{% swagger-description %}
+## Get Archive Tankoubons
+
+<mark style="color:blue;">`GET`</mark> `http://lrr.tvc-16.science/api/archives/:id/tankoubons`
+
 Get all the Tankoubons which currently refer to this Archive ID.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process.
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-response status="200" description="" %}
+| Name                                 | Type   | Description                   |
+| ------------------------------------ | ------ | ----------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process. |
+
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 {
     "operation": "find_arc_tankoubons",
@@ -172,27 +188,31 @@ ID of the Archive to process.
     ]
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/thumbnail" method="get" summary="Get Archive Thumbnail" %}
-{% swagger-description %}
-Get a Thumbnail image for a given Archive. This endpoint will return a placeholder image if it doesn't already exist.  
-If you want to queue generation of the thumbnail in the background, you can use the `no_fallback` query parameter. This will give you a background job ID instead of the placeholder. 
-{% endswagger-description %}
+## Get Archive Thumbnail
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process.
-{% endswagger-parameter %}
-{% swagger-parameter name="page" type="int" required="false" in="query" %}
-Specify which page you want to get a thumbnail for. Defaults to the cover, aka page 1.
-{% endswagger-parameter %}
-{% swagger-parameter name="no_fallback" type="boolean" required="false" in="query" %}
-Disables the placeholder image, queues the thumbnail for extraction and returns a JSON with code 202.  
-This parameter does nothing if the image already exists. (You will get the image with code 200 no matter what)
-{% endswagger-parameter %}
+<mark style="color:blue;">`GET`</mark> `http://lrr.tvc-16.science/api/archives/:id/thumbnail`
 
-{% swagger-response status="202" description="The thumbnail is queued for extraction. Use `/api/minion/:jobid` to track when your thumbnail is ready." %}
+Get a Thumbnail image for a given Archive. This endpoint will return a placeholder image if it doesn't already exist.\
+If you want to queue generation of the thumbnail in the background, you can use the `no_fallback` query parameter. This will give you a background job ID instead of the placeholder.
+
+#### Path Parameters
+
+| Name                                 | Type   | Description                   |
+| ------------------------------------ | ------ | ----------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process. |
+
+#### Query Parameters
+
+| Name         | Type    | Description                                                                                                                                                                                                                    |
+| ------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| page         | int     | Specify which page you want to get a thumbnail for. Defaults to the cover, aka page 1.                                                                                                                                         |
+| no\_fallback | boolean | <p>Disables the placeholder image, queues the thumbnail for extraction and returns a JSON with code 202.<br>This parameter does nothing if the image already exists. (You will get the image with code 200 no matter what)</p> |
+
+{% tabs %}
+{% tab title="202 The thumbnail is queued for extraction. Use `/api/minion/:jobid` to track when your thumbnail is ready." %}
 ```javascript
 {
   "job": 2429,
@@ -200,18 +220,18 @@ This parameter does nothing if the image already exists. (You will get the image
   "success": 1
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="200" description="If the thumbnail was already extracted, you get it directly." %}
+{% tab title="200 If the thumbnail was already extracted, you get it directly." %}
 {% tabs %}
 {% tab title="2810d5e0a8d027ecefebca6237031a0fa7b91eb3.jpg" %}
 ```
 ```
 {% endtab %}
 {% endtabs %}
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "serve_thumbnail",
@@ -219,24 +239,31 @@ This parameter does nothing if the image already exists. (You will get the image
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/files/thumbnails" method="post" summary="Queue extraction of page thumbnails" %}
-{% swagger-description %}
-Create thumbnails for every page of a given Archive. This endpoint will queue generation of the thumbnails in the background.  
-If all thumbnails are detected as already existing, the call will return HTTP code 200.  
+## Queue extraction of page thumbnails
+
+<mark style="color:green;">`POST`</mark> `http://lrr.tvc-16.science/api/archives/:id/files/thumbnails`
+
+Create thumbnails for every page of a given Archive. This endpoint will queue generation of the thumbnails in the background.\
+If all thumbnails are detected as already existing, the call will return HTTP code 200.\
 This endpoint can be called multiple times -- If a thumbnailing job is already in progress for the given ID, it'll just give you the ID for that ongoing job.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process.
-{% endswagger-parameter %}
-{% swagger-parameter name="force" type="boolean" required="false" in="query" %}
-Whether to force regeneration of all thumbnails even if they already exist.  
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-response status="202" description="The thumbnails are queued for extraction. You can use `/api/minion/:jobid` to track progress, by looking at `notes->progress` and `notes->pages`." %}
+| Name                                 | Type   | Description                   |
+| ------------------------------------ | ------ | ----------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process. |
+
+#### Query Parameters
+
+| Name  | Type    | Description                                                                 |
+| ----- | ------- | --------------------------------------------------------------------------- |
+| force | boolean | Whether to force regeneration of all thumbnails even if they already exist. |
+
+{% tabs %}
+{% tab title="202 The thumbnails are queued for extraction. You can use `/api/minion/:jobid` to track progress, by looking at `notes->progress` and `notes->pages`." %}
 ```javascript
 {
   "job": 2429,
@@ -244,9 +271,9 @@ Whether to force regeneration of all thumbnails even if they already exist.
   "success": 1
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="200" description="If the thumbnails were already extracted and force=0." %}
+{% tab title="200 If the thumbnails were already extracted and force=0." %}
 ```javascript
 {
   "message": "No job queued, all thumbnails already exist.",
@@ -254,9 +281,9 @@ Whether to force regeneration of all thumbnails even if they already exist.
   "success": 1
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "generate_page_thumbnails",
@@ -264,28 +291,32 @@ Whether to force regeneration of all thumbnails even if they already exist.
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/download" method="get" summary="Download an Archive" %}
-{% swagger-description %}
+## Download an Archive
+
+<mark style="color:blue;">`GET`</mark> `http://lrr.tvc-16.science/api/archives/:id/download`
+
 Download an Archive from the server.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to download.
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-response status="200" description="" %}
+| Name                                 | Type   | Description                    |
+| ------------------------------------ | ------ | ------------------------------ |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to download. |
+
+{% tabs %}
+{% tab title="200 " %}
 {% tabs %}
 {% tab title="Archive.zip" %}
 ```
 ```
 {% endtab %}
 {% endtabs %}
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "______",
@@ -293,24 +324,29 @@ ID of the Archive to download.
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/files" method="get" summary="Extract an Archive" %}
-{% swagger-description %}
+## Extract an Archive
+
+<mark style="color:blue;">`GET`</mark> `http://lrr.tvc-16.science/api/archives/:id/files`
+
 Get a list of URLs pointing to the images contained in an archive. If necessary, this endpoint also launches a background Minion job to extract the archive so it is ready for reading.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process.
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-parameter name="force" type="bool" required="false" in="query" %}
-Force a full background re-extraction of the Archive.  
-Existing cached files might still be used in subsequent `/api/archives/:id/page` calls until the Archive is fully re-extracted.
-{% endswagger-parameter %}
+| Name                                 | Type   | Description                   |
+| ------------------------------------ | ------ | ----------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process. |
 
-{% swagger-response status="200" description="You get page URLs, and the ID of the background extract job." %}
+#### Query Parameters
+
+| Name  | Type | Description                                                                                                                                                                                                |
+| ----- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| force | bool | <p>Force a full background re-extraction of the Archive.<br>Existing cached files might still be used in subsequent <code>/api/archives/:id/page</code> calls until the Archive is fully re-extracted.</p> |
+
+{% tabs %}
+{% tab title="200 You get page URLs, and the ID of the background extract job." %}
 ```javascript
 {
     "job": 561,
@@ -347,9 +383,9 @@ Existing cached files might still be used in subsequent `/api/archives/:id/page`
     ]
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "get_file_list",
@@ -357,19 +393,23 @@ Existing cached files might still be used in subsequent `/api/archives/:id/page`
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/isnew" method="delete" summary="Clear Archive New flag" %}
-{% swagger-description %}
+## Clear Archive New flag
+
+<mark style="color:red;">`DELETE`</mark> `http://lrr.tvc-16.science/api/archives/:id/isnew`
+
 Clears the "New!" flag on an archive.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-response status="200" description="" %}
+| Name                                 | Type   | Description                  |
+| ------------------------------------ | ------ | ---------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process |
+
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 {
     "id": "f3fc480a97f1afcd81c8e3392a3bcc66fe6c0809",
@@ -377,33 +417,34 @@ ID of the Archive to process
     "success": 1
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/progress/:page" method="put" summary="Update Reading Progression" %}
-{% swagger-description %}
-Tell the server which page of this Archive you're currently showing/reading, so that it updates its internal reading progression accordingly.  
-This endpoint will also update the date this Archive was last read, using the current server timestamp.  
+## Update Reading Progression
 
-You should call this endpoint only when you're sure the user is currently reading the page you present.  
+<mark style="color:orange;">`PUT`</mark> `http://lrr.tvc-16.science/api/archives/:id/progress/:page`
+
+Tell the server which page of this Archive you're currently showing/reading, so that it updates its internal reading progression accordingly.\
+This endpoint will also update the date this Archive was last read, using the current server timestamp.
+
+You should call this endpoint only when you're sure the user is currently reading the page you present.\
 **Don't** use it when preloading images off the server.
 
-Whether to make reading progression regressible or not is up to the client. (The web client will reduce progression if the user starts reading previous pages)  
+Whether to make reading progression regressible or not is up to the client. (The web client will reduce progression if the user starts reading previous pages)\
 Consider however removing the "New!" flag from an archive when you start updating its progress - The web client won't display any reading progression if the new flag is still set.
 
-⚠ If the server is configured to use clientside progress tracking, this API call will return an error!  
+⚠ If the server is configured to use clientside progress tracking, this API call will return an error!\
 Make sure to check using `/api/info` whether the server tracks reading progression or not before calling this endpoint.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-parameter name="page" type="int" required="true" in="path" %}
-Current page to update the reading progress to. **Must** be a positive integer, and inferior or equal to the total page number of the archive.
-{% endswagger-parameter %}
+| Name                                   | Type   | Description                                                                                                                                    |
+| -------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| id<mark style="color:red;">\*</mark>   | string | ID of the Archive to process                                                                                                                   |
+| page<mark style="color:red;">\*</mark> | int    | Current page to update the reading progress to. **Must** be a positive integer, and inferior or equal to the total page number of the archive. |
 
-{% swagger-response status="200" description="" %}
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 {
   "id": "75d18ce470dc99f83dc355bdad66319d1f33c82b",
@@ -413,9 +454,9 @@ Current page to update the reading progress to. **Must** be a positive integer, 
   "success": 1
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "update_progress",
@@ -441,23 +482,112 @@ Current page to update the reading progress to. **Must** be a positive integer, 
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/thumbnail" method="put" summary="🔑Update Thumbnail" %}
-{% swagger-description %}
-Update the cover thumbnail for the given Archive.
-You can specify a page number to use as the thumbnail, or you can use the default thumbnail.
-{% endswagger-description %}
+## 🔑Upload Archive
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process.
-{% endswagger-parameter %}
-{% swagger-parameter name="page" type="int" required="false" in="path" %}
-Page you want to make the thumbnail out of. Defaults to 1.
-{% endswagger-parameter %}
+<mark style="color:orange;">`PUT`</mark> `http://lrr.tvc-16.science/api/archives/upload`
 
-{% swagger-response status="200" description="" %}
+Upload an Archive to the server.
+
+If a SHA1 checksum of the Archive is included, the server will perform an optional in-transit, file integrity validation, and reject the upload if the server-side checksum does not match.
+
+#### File Parameters
+
+| Name                                           | Type   | Description                                |
+| ---------------------------------------------- | ------ | ------------------------------------------ |
+| file\_name<mark style="color:red;">\*</mark>   | string | File name of the Archive in the server.    |
+| file\_binary<mark style="color:red;">\*</mark> | binary | Data of the Archive represented in binary. |
+| upload\_mime                                   | string | MIME type of the Archive.                  |
+
+#### Data Parameters
+
+| Name           | Type   | Description                   |
+| -------------- | ------ | ----------------------------- |
+| title          | string | Title of the Archive.         |
+| tags           | string | Tags of the Archive.          |
+| summary        | string | Summary of the Archive.       |
+| category\_id   | int    | Category ID of the Archive.   |
+| file\_checksum | string | SHA1 checksum of the Archive. |
+
+{% tabs %}
+{% tab title="200" %}
+```javascript
+{
+  "operation": "upload",
+  "success": 1,
+  "id": "7ffb78b32abfb679e4824db9f1e3addf335d0f70"
+}
+```
+{% endtab %}
+
+{% tab title="400" %}
+```javascript
+{
+    "operation": "upload",
+    "success": 0,
+    "error": "No file attached."
+}
+```
+{% endtab %}
+
+{% tab title="409 duplicate archive" %}
+```
+{
+    "operation": "upload",
+    "success": 0,
+    "error": "Enable replace duplicated archive in config to replace old ones."
+}
+```
+{% endtab %}
+
+{% tab title="415 unsupported file" %}
+```
+{
+    "operation": "upload",
+    "success": 0,
+    "error": "Unsupported File Extension (Spirited Away.mkv)"
+}
+```
+{% endtab %}
+
+{% tab title="422 checksum mismatch" %}
+```
+{
+    "operation": "upload",
+    "success": 0,
+    "error": "Checksum mismatch: expected 92cfceb39d57d914ed8b14d0e37643de0797ae56, got 0286dd552c9bea9a69ecb3759e7b94777635514b."
+}
+```
+{% endtab %}
+
+{% tab title="500" %}
+```
+{
+    "operation": "upload",
+    "success": 0,
+    "error": "Couldn't move uploaded file."
+}
+```
+{% endtab %}
+{% endtabs %}
+
+## 🔑Update Thumbnail
+
+<mark style="color:orange;">`PUT`</mark> `http://lrr.tvc-16.science/api/archives/:id/thumbnail`
+
+Update the cover thumbnail for the given Archive. You can specify a page number to use as the thumbnail, or you can use the default thumbnail.
+
+#### Path Parameters
+
+| Name                                 | Type   | Description                                                |
+| ------------------------------------ | ------ | ---------------------------------------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process.                              |
+| page                                 | int    | Page you want to make the thumbnail out of. Defaults to 1. |
+
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 {
   "operation": "update_thumbnail",
@@ -465,9 +595,9 @@ Page you want to make the thumbnail out of. Defaults to 1.
   "new_thumbnail": "/mnt//lrr/content/thumb/95/9595845d952e8141feeba375767248b960979bc2.jpg"
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "update_thumbnail",
@@ -475,40 +605,40 @@ Page you want to make the thumbnail out of. Defaults to 1.
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id/metadata" method="put" summary="🔑Update Archive Metadata" %}
-{% swagger-description %}
+## 🔑Update Archive Metadata
+
+<mark style="color:orange;">`PUT`</mark> `http://lrr.tvc-16.science/api/archives/:id/metadata`
+
 Update tags and title for the given Archive. Data supplied to the server through this method will **overwrite** the previous data.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process.
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-parameter name="title" type="string" required="false" in="query" %}
-New Title of the Archive.
-{% endswagger-parameter %}
+| Name                                 | Type   | Description                   |
+| ------------------------------------ | ------ | ----------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process. |
 
-{% swagger-parameter name="tags" type="string" required="false" in="query" %}
-New Tags of the Archive.
-{% endswagger-parameter %}
+#### Query Parameters
 
-{% swagger-parameter name="summary" type="string" required="false" in="query" %}
-New Summary of the Archive.
-{% endswagger-parameter %}
+| Name    | Type   | Description                 |
+| ------- | ------ | --------------------------- |
+| title   | string | New Title of the Archive.   |
+| tags    | string | New Tags of the Archive.    |
+| summary | string | New Summary of the Archive. |
 
-{% swagger-response status="200" description="" %}
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 {
     "operation": "update_metadata",
     "success": 1
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "______",
@@ -516,20 +646,24 @@ New Summary of the Archive.
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
 
-{% swagger baseUrl="http://lrr.tvc-16.science" path="/api/archives/:id" method="delete" summary="🔑Delete Archive" %}
-{% swagger-description %}
-Delete both the archive metadata and the file stored on the server.  
+## 🔑Delete Archive
+
+<mark style="color:red;">`DELETE`</mark> `http://lrr.tvc-16.science/api/archives/:id`
+
+Delete both the archive metadata and the file stored on the server.\
 🙏 Please ask your user for confirmation before invoking this endpoint.
-{% endswagger-description %}
 
-{% swagger-parameter name="id" type="string" required="true" in="path" %}
-ID of the Archive to process.
-{% endswagger-parameter %}
+#### Path Parameters
 
-{% swagger-response status="200" description="" %}
+| Name                                 | Type   | Description                   |
+| ------------------------------------ | ------ | ----------------------------- |
+| id<mark style="color:red;">\*</mark> | string | ID of the Archive to process. |
+
+{% tabs %}
+{% tab title="200 " %}
 ```javascript
 {
     "operation": "delete_archive",
@@ -538,9 +672,9 @@ ID of the Archive to process.
     "filename": "big_chungus.zip"
 }
 ```
-{% endswagger-response %}
+{% endtab %}
 
-{% swagger-response status="400" description="" %}
+{% tab title="400 " %}
 ```javascript
 {
     "operation": "delete_archive",
@@ -548,5 +682,5 @@ ID of the Archive to process.
     "success": 0
 }
 ```
-{% endswagger-response %}
-{% endswagger %}
+{% endtab %}
+{% endtabs %}
