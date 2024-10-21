@@ -57,6 +57,13 @@ sub handle_incoming_file {
     my $replace_dupe = LANraragi::Model::Config->get_replacedupe;
     my $isdupe       = $redis->exists($id) && -e $redis->hget( $id, "file" );
 
+    # Incoming file handle locking with 60s expiration.
+    my $reserved_lock = $redis->setnx( "lock:$filename", "locked" );
+    if ( !$reserved_lock ) {
+        return ( 0, $id, $filename, "$filename job is reserved by another process." );
+    }
+    $redis->expire("lock:$filename", 60);
+
     # Stop here if file is a dupe and replacement is turned off.
     if ( ( -e $output_file || $isdupe ) && !$replace_dupe ) {
 
@@ -70,6 +77,7 @@ sub handle_incoming_file {
           ? "This file already exists in the Library." . $suffix
           : "A file with the same name is present in the Library." . $suffix;
 
+        $redis->del("lock:$filename");
         return ( 0, $id, $filename, $msg );
     }
 
@@ -128,6 +136,7 @@ sub handle_incoming_file {
     # If the move didn't signal an error, but still doesn't exist, something is quite spooky indeed!
     # Really funky permissions that prevents viewing folder contents?
     unless ( -e $output_file ) {
+        $redis->del("lock:$filename");
         return ( 0, $id, $name, "The file couldn't be moved to your content folder!" );
     }
 
@@ -136,6 +145,7 @@ sub handle_incoming_file {
     LANraragi::Utils::Database::add_timestamp_tag( $redis, $id );
     LANraragi::Utils::Database::add_pagecount( $redis, $id );
     LANraragi::Utils::Database::add_arcsize( $redis, $id );
+    $redis->del("lock:$filename");
     $redis->quit();
     $redis_search->quit();
 
