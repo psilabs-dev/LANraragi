@@ -60,6 +60,7 @@ sub handle_incoming_file {
     # Incoming file handle locking with 60s expiration.
     my $reserved_lock = $redis->setnx( "lock:$filename", "locked" );
     if ( !$reserved_lock ) {
+        unlink $tempfile;
         return ( 0, $id, $filename, "$filename job is reserved by another process." );
     }
     $redis->expire("lock:$filename", 60);
