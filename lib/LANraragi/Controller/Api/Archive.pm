@@ -192,7 +192,7 @@ sub create_archive {
 
     # redis file locking.
     my $reserved_lock = $redis->setnx( "upload:$filename", "locked" );
-    if ( $reserved_lock ) {
+    if ( !$reserved_lock ) {
         return $self->render(
             json => {
                 operation   => "upload",
