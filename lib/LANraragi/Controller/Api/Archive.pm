@@ -175,6 +175,21 @@ sub create_archive {
         );
     }
 
+    # utf downgrade (see LANraragi::Utils::Minion)
+    unless (utf8::downgrade($filename, 1)) {
+        return $self->render(
+            json => {
+                operation   => "upload",
+                name        => $upload->filename,
+                debug_name  => $filename,
+                type        => $uploadMime,
+                success     => 0,
+                error       => "Bullshit! File path could not be converted back to a byte sequence!"
+            },
+            status => 500
+        )
+    };
+
     # redis file locking.
     my $reserved_lock = $redis->setnx( "upload:$filename", "locked" );
     if ( $reserved_lock ) {
@@ -224,21 +239,6 @@ sub create_archive {
         },
         $tempdir
     );
-
-    # utf downgrade (see LANraragi::Utils::Minion)
-    unless (utf8::downgrade($filename, 1)) {
-        return $self->render(
-            json => {
-                operation   => "upload",
-                name        => $upload->filename,
-                debug_name  => $filename,
-                type        => $uploadMime,
-                success     => 0,
-                error       => "Bullshit! File path could not be converted back to a byte sequence!"
-            },
-            status => 500
-        )
-    };
 
     my ( $success_status, $id, $response_title, $message ) = LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
     my $status = 200;
