@@ -120,6 +120,7 @@ sub create_archive {
     my $self = shift;
 
     my $logger = get_logger( "Archive API ", "lanraragi");
+    my $redis   = LANraragi::Model::Config->get_redis;
 
     # receive uploaded file
     my $upload              = $self->req->upload('file');
@@ -174,6 +175,20 @@ sub create_archive {
         );
     }
 
+    # redis file locking.
+    my $reserved_lock = $redis->setnx( "upload:$filename", "locked" );
+    if ( $reserved_lock ) {
+        return $self->render(
+            json => {
+                operation   => "upload",
+                success     => 0,
+                error       => "File locked $filename"
+            },
+            status => 423
+        );
+    }
+    $redis->expire("upload:$filename", 60);
+
     # Move file to a temp folder (not the default LRR one)
     my $tempdir                 = tempdir();
 
@@ -188,6 +203,7 @@ sub create_archive {
 
     my $tempfile = $tempdir . '/' . $filename;
     if ( !$upload->move_to($tempfile) ) {
+        $redis->del("upload:$filename");
         return $self->render(
             json => {
                 operation   => "upload",
@@ -213,7 +229,6 @@ sub create_archive {
     my $status = 200;
 
     # post-processing thumbnail generation
-    my $redis   = LANraragi::Model::Config->get_redis;
     my %hash    = $redis->hgetall($id);
     my ( $thumbhash ) = @hash{qw(thumbhash)};
     unless ( length $thumbhash ) {
@@ -224,6 +239,7 @@ sub create_archive {
         $thumbhash = $redis->hget( $id, "thumbhash" );
         $thumbhash = LANraragi::Utils::Database::redis_decode($thumbhash);
     }
+    $redis->del("upload:$filename");
     $redis->quit();
 
     # modify status based on handler's return message.
