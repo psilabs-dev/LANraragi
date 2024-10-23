@@ -495,11 +495,7 @@ If a SHA1 checksum of the Archive is included, the server will perform an option
 
 #### File Parameters
 
-| Name                                           | Type   | Description                                |
-| ---------------------------------------------- | ------ | ------------------------------------------ |
-| file\_name<mark style="color:red;">\*</mark>   | string | File name of the Archive in the server.    |
-| file\_binary<mark style="color:red;">\*</mark> | binary | Data of the Archive represented in binary. |
-| upload\_mime                                   | string | MIME type of the Archive.                  |
+<table data-full-width="false"><thead><tr><th width="250">Name</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td>file_name<mark style="color:red;">*</mark></td><td>string</td><td>File name of the Archive in the server.</td></tr><tr><td>file_binary<mark style="color:red;">*</mark></td><td>binary</td><td>Data of the Archive represented in binary.</td></tr><tr><td>upload_mime</td><td>string</td><td>MIME type of the Archive.</td></tr></tbody></table>
 
 #### Data Parameters
 
@@ -525,49 +521,51 @@ If a SHA1 checksum of the Archive is included, the server will perform an option
 {% tab title="400" %}
 ```javascript
 {
-    "operation": "upload",
-    "success": 0,
-    "error": "No file attached."
+  "operation": "upload",
+  "error": "No file attached",
+  "success": 0
 }
 ```
 {% endtab %}
 
 {% tab title="409 duplicate archive" %}
-```
+```javascript
 {
-    "operation": "upload",
-    "success": 0,
-    "error": "Enable replace duplicated archive in config to replace old ones."
+  "operation": "upload",
+  "error": "Duplicate archive",
+  "success": 0,
+  "id": "0b91b546850e881034833c73375558928ddcec7c"
 }
 ```
 {% endtab %}
 
 {% tab title="415 unsupported file" %}
-```
+```javascript
 {
-    "operation": "upload",
-    "success": 0,
-    "error": "Unsupported File Extension (Spirited Away.mkv)"
+  "operation": "upload",
+  "error": "Unsupported File Extension (Spirited Away.mkv)",
+  "success": 0,
+  
 }
 ```
 {% endtab %}
 
 {% tab title="422 checksum mismatch" %}
-```
+```javascript
 {
-    "operation": "upload",
-    "success": 0,
-    "error": "Checksum mismatch: expected 92cfceb39d57d914ed8b14d0e37643de0797ae56, got 0286dd552c9bea9a69ecb3759e7b94777635514b."
+  "operation": "upload",
+  "error": "Checksum mismatch: expected 92cfceb39d57d914ed8b14d0e37643de0797ae56, got 0286dd552c9bea9a69ecb3759e7b94777635514b.",
+  "success": 0
 }
 ```
 {% endtab %}
 
 {% tab title="500" %}
-```
+```javascript
 {
-    "operation": "upload",
-    "success": 0,
-    "error": "Couldn't move uploaded file."
+  "operation": "upload",
+  "error": "Server Error",
+  "success": 0
 }
 ```
 {% endtab %}
