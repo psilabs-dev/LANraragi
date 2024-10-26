@@ -450,29 +450,29 @@ Upload an Archive to the server.
 If a SHA1 checksum of the Archive is included, the server will perform an optional in-transit, file integrity validation, and reject the upload if the server-side checksum does not match.
 {% endswagger-description %}
 
-{% swagger-parameter name="file_name" type="string" required="true" in="path" %}
+{% swagger-parameter name="file_name" type="string" required="true" in="query" %}
 File name of the Archive in the server.
 {% endswagger-parameter %}
-{% swagger-parameter name="file_binary" type="binary" required="true" in="path" %}
+{% swagger-parameter name="file_binary" type="binary" required="true" in="query" %}
 Data of the Archive represented in binary.
 {% endswagger-parameter %}
-{% swagger-parameter name="upload_mime" type="string" required="false" in="path" %}
+{% swagger-parameter name="upload_mime" type="string" required="false" in="query" %}
 MIME type of the Archive.
 {% endswagger-parameter %}
 
-{% swagger-parameter name="title" type="string" required="false" in="path" %}
+{% swagger-parameter name="title" type="string" required="false" in="query" %}
 Title of the Archive.
 {% endswagger-parameter %}
-{% swagger-parameter name="tags" type="string" required="false" in="path" %}
+{% swagger-parameter name="tags" type="string" required="false" in="query" %}
 Tags of the Archive.
 {% endswagger-parameter %}
-{% swagger-parameter name="summary" type="string" required="false" in="path" %}
+{% swagger-parameter name="summary" type="string" required="false" in="query" %}
 summary
 {% endswagger-parameter %}
-{% swagger-parameter name="category_id" type="int" required="false" in="path" %}
+{% swagger-parameter name="category_id" type="int" required="false" in="query" %}
 Category ID of the Archive.
 {% endswagger-parameter %}
-{% swagger-parameter name="file_checksum" type="string" required="false" in="path" %}
+{% swagger-parameter name="file_checksum" type="string" required="false" in="query" %}
 SHA1 checksum of the Archive.
 {% endswagger-parameter %}
 
