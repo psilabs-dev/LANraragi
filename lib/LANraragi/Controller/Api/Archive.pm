@@ -242,8 +242,164 @@ sub create_archive {
         $tempdir
     );
 
-    my ( $success_status, $id, $response_title, $message ) = LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
-    my $status = 200;
+    # START handle_incoming_file
+    # filename parsed already, skip
+    # archive check done, skip
+    
+    # Compute an ID here
+    my $id = compute_id($tempfile);
+    $logger->debug("ID of uploaded file is $id");
+
+    # Future home of the file
+    my $userdir     = LANraragi::Model::Config->get_userdir;
+    my $output_file = $userdir . '/' . $filename;
+
+    #Check if the ID is already in the database, and
+    #that the file it references still exists on the filesystem
+    my $redis_search = LANraragi::Model::Config->get_redis_search;
+    my $replace_dupe = LANraragi::Model::Config->get_replacedupe;
+    my $isdupe       = $redis->exists($id) && -e $redis->hget( $id, "file" );
+
+    # Stop here if file is a dupe and replacement is turned off.
+    if ( ( -e $output_file || $isdupe ) && !$replace_dupe ) {
+        unlink $tempfile;
+        my $msg =
+          $isdupe
+          ? "This file already exists in the Library."
+          : "A file with the same name is present in the Library."
+        $msg = $msg . " Enable replace duplicated archive in config to replace old ones.";
+        $redis->quit();
+        $redis_search->quit();
+        return $self->render(
+            json => {
+                operation   => "upload",
+                success     => 0,
+                error       => $msg
+            },
+            status => 409
+        );
+    }
+
+    # If we are replacing an existing one, just remove the old one first.
+    if ($replace_dupe) {
+        $logger->debug("Delete archive $id before replacing it.");
+        LANraragi::Model::Archive::delete_archive($id);
+    }
+
+    # Add the file to the database ourselves so Shinobu doesn't do it
+    # This allows autoplugin to be ran ASAP.
+    my $name = LANraragi::Utils::Database::add_archive_to_redis( $id, $output_file, $redis, $redis_search );
+
+    # If additional tags were given to the sub, add them now.
+    if ($tags) {
+        $redis->hset( $id, "tags", redis_encode($tags) );
+
+        # Check for a source: tag, and if it exists amend the urlmap by hand.
+        # This is faster than queueing a full recalculation job.
+        my @tags = split( /,\s?/, $tags );
+
+        foreach my $t (@tags) {
+            $t = trim($t);
+            $t = trim_CRLF($t);
+
+            # If the tag is a source: tag, add it to the URL index
+            if ( $t =~ /source:(.*)/i ) {
+                my $url = $1;
+                $logger->debug("Adding $url as an URL for $id");
+                trim_url($url);
+                $logger->debug("Trimmed: $url");
+
+                # No need to encode the value, as URLs are already encoded by design
+                $redis_search->hset( "LRR_URLMAP", $url, $id );
+            }
+        }
+    }
+
+    # Set title
+    if ($title) {
+        set_title( $id, $title );
+    }
+
+    # Set summary
+    if ($summary) {
+        set_summary( $id, $summary );
+    }
+
+    # Move the file to the content folder.
+    # Move to a .upload first in case copy to the content folder takes a while...
+    unless ( move( $tempfile, $output_file . ".upload" ) ) {
+        $redis->quit();
+        $redis_search->quit();
+        return $self->render(
+            json => {
+                operation   => "upload",
+                success     => 0,
+                error       => "The file couldn't be moved to your content folder: $!"
+            },
+            status => 500
+        );
+    }
+
+    # Then rename inside the content folder itself to proc Shinobu.
+    unless ( move( $output_file . ".upload", $output_file ) ) {
+        $redis->quit();
+        $redis_search->quit();
+        return $self->render(
+            json => {
+                operation   => "upload",
+                success     => 0,
+                error       => "The file couldn't be renamed in your content folder: $!"
+            },
+            status => 500
+        );
+    }
+
+    # If the move didn't signal an error, but still doesn't exist, something is quite spooky indeed!
+    # Really funky permissions that prevents viewing folder contents?
+    unless ( -e $output_file ) {
+        $redis->quit();
+        $redis_search->quit();
+        return $self->render(
+            json => {
+                operation   => "upload",
+                success     => 0,
+                error       => "The file couldn't be moved to your content folder!"
+            },
+            status => 500
+        );
+    }
+
+    # Now that the file has been copied, we can add the timestamp tag and calculate pagecount.
+    # (The file being physically present is necessary in case last modified time is used)
+    LANraragi::Utils::Database::add_timestamp_tag( $redis, $id );
+    LANraragi::Utils::Database::add_pagecount( $redis, $id );
+    LANraragi::Utils::Database::add_arcsize( $redis, $id );
+
+    $logger->debug("Running autoplugin on newly uploaded file $id...");
+    my ( $succ, $fail, $addedtags, $newtitle ) = LANraragi::Model::Plugins::exec_enabled_plugins_on_file($id);
+    my $successmsg = "$succ Plugins used successfully, $fail Plugins failed, $addedtags tags added. ";
+    if ( $newtitle ne "" ) {
+        $name = $newtitle;
+    }
+
+    if ($catid) {
+        $logger->debug("Adding uploaded file to category $catid");
+
+        my ( $catsucc, $caterr ) = LANraragi::Model::Category::add_to_category( $catid, $id );
+        if ($catsucc) {
+            my %category = LANraragi::Model::Category::get_category($catid);
+            my $catname  = $category{name};
+            $successmsg .= "Added to Category '$catname'!";
+        } else {
+            $successmsg .= "Couldn't add to Category: $caterr";
+        }
+    }
+
+    # Invalidate search cache ourselves, Shinobu won't do it since the file is already in the database
+    invalidate_cache();
+
+    # my ( $success_status, $id, $response_title, $message ) = LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
+    # END
 
     # post-processing thumbnail generation
     my %hash    = $redis->hgetall($id);
@@ -258,47 +414,14 @@ sub create_archive {
     }
     $redis->del("upload:$filename");
     $redis->quit();
-
-    # handle all post-upload errors, setting a server-side error status by default.
-    if ( $success_status==0 ) {
-        $status = 500;
-        my $error = "Server Error";
-        if ( index($message, "Enable replace duplicated archive in config to replace old ones") != -1 ) {
-            $status     = 409;
-            $error      = "Duplicate archive"
-        }
-
-        # add archive ID for non-server-side errors.
-        if ( !$status==500 ) {
-            return $self->render(
-                json => {
-                    operation   => "upload",
-                    success     => $success_status,
-                    error       => $message,
-                    id          => $id
-                },
-                status => $status
-            );
-        } else {
-            return $self->render(
-                json => {
-                    operation   => "upload",
-                    success     => $success_status,
-                    error       => $error
-                },
-                status => $status
-            );
-        }
-    }
-
-    # successful response
+    $redis_search->quit();
     return $self->render(
         json => {
             operation   => "upload",
-            success     => $success_status,
+            success     => 1,
             id          => $id
         },
-        status => $status
+        status => 200
     );
 }
 
