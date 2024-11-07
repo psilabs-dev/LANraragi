@@ -56,6 +56,9 @@ requires 'Parallel::Loops',    0.10;
 requires 'Sys::CpuAffinity',   1.12;
 requires 'File::ChangeNotify', 0.31;
 
+# Prometheus Metrics
+requires 'Net::Prometheus',     0.14;
+
 # Plugin system
 requires 'Module::Pluggable', 5.2;
 

@@ -1,0 +1,26 @@
+# delete after done.
+services:
+
+  redis:
+    image: redis:7.2
+    container_name: redis
+    restart: unless-stopped
+    # ports:
+    #   - 127.0.0.1:6379:6379
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      start_period: 10s
+
+  lanraragi:
+    build:
+      context: .
+      dockerfile: ./tools/build/docker/Dockerfile
+    container_name: lanraragi
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+    environment:
+      - "LRR_REDIS_ADDRESS=redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
