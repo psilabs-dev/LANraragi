@@ -10,6 +10,7 @@ use Mojo::JSON qw(decode_json encode_json);
 use Storable;
 use Sys::Hostname;
 use Config;
+use Net::Prometheus;
 
 use LANraragi::Utils::Generic    qw(start_shinobu start_minion);
 use LANraragi::Utils::Logging    qw(get_logger get_logdir);
@@ -19,6 +20,7 @@ use LANraragi::Utils::Routing;
 use LANraragi::Utils::Minion;
 
 use LANraragi::Model::Search;
+use LANraragi::Model::Stats;
 use LANraragi::Model::Config;
 
 # This method will run once at server start
@@ -178,6 +180,10 @@ sub startup {
     # Start File Watcher
     shutdown_from_pid( get_temp . "/shinobu.pid" );
     start_shinobu($self);
+
+    # Start Prometheus
+    my $prometheus = Net::Prometheus->new;
+    $self->helper( LRR_PROMETHEUS => sub { return $prometheus } );
 
     # Hook to SIGTERM to cleanly kill minion+shinobu on server shutdown
     # As this is executed during before_dispatch, this code won't work if you SIGTERM without loading a single page!

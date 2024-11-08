@@ -50,6 +50,9 @@ sub apply_routes {
     $public_routes->get('/reader')->to('reader#index');
     $public_routes->get('/stats')->to('stats#index');
 
+    # Metrics API
+    $public_routes->get('/metrics')->to('metrics#metrics');
+
     # Minion Admin UI
     $self->plugin( 'Minion::Admin' => { route => $logged_in->get('/minion') } );
 
@@ -87,9 +90,6 @@ sub apply_routes {
     $logged_in->get('/logs/redis')->to('logging#print_redis');
 
     $logged_in->get('/tankoubons')->to('tankoubon#index');
-
-    # Metrics API
-    $public_api->get('/api/metrics')->to('api-metrics#hello');
 
     # OPDS API
     $public_api->get('/api/opds')->to('api-other#serve_opds_catalog');
