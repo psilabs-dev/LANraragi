@@ -51,3 +51,4 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=grafana
       - GF_SECURITY_ADMIN_PASSWORD=grafana
+      - GF_LOG_LEVEL=warning
