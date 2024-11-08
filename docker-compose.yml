@@ -1,15 +1,22 @@
 # delete after done.
+volumes:
+  redis-data:
+  lanraragi-data:
+  prometheus-data:
+
 services:
 
   redis:
     image: redis:7.2
     container_name: redis
     restart: unless-stopped
-    # ports:
-    #   - 127.0.0.1:6379:6379
+    ports:
+      - 127.0.0.1:6379:6379
     healthcheck:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       start_period: 10s
+    volumes:
+      - redis-data:/data
 
   lanraragi:
     build:
@@ -24,6 +31,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    volumes:
+      - lanraragi-data:/home/koyomi
 
   prometheus:
     image: prom/prometheus
@@ -35,6 +44,7 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
     volumes:
       - ./tools/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
     depends_on:
       - lanraragi
 

@@ -10,3 +10,4 @@ scrape_configs:
     static_configs:
       - targets:
         - 'lanraragi:3000'
+    metrics_path: /api/metrics
