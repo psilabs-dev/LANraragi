@@ -225,7 +225,7 @@ sub create_archive {
             json => {
                 operation   => "upload",
                 success     => 0,
-                error       => "Couldn't move uploaded file to $tempfile"
+                error       => "Couldn't move uploaded file to temporary location."
             },
             status => 500
         );
@@ -243,7 +243,6 @@ sub create_archive {
     );
 
     my ( $status_code, $id, $response_title, $message ) = LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
-    my $success_status = $status_code == 200 ? 1 : 0;
 
     # post-processing thumbnail generation
     my %hash    = $redis->hgetall($id);
@@ -259,7 +258,7 @@ sub create_archive {
     $redis->del("upload:$filename");
     $redis->quit();
 
-    unless ( $success_status ) {
+    unless ( $status_code == 200 ) {
         return $self->render(
             json => {
                 operation   => "upload",
@@ -274,7 +273,7 @@ sub create_archive {
     return $self->render(
         json => {
             operation   => "upload",
-            success     => $success_status,
+            success     => 1,
             id          => $id
         },
         status => 200
