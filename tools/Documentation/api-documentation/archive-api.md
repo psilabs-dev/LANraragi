@@ -454,16 +454,16 @@ If a SHA1 checksum of the Archive is included, the server will perform an option
 Title of the Archive.
 {% endswagger-parameter %}
 {% swagger-parameter name="tags" type="string" required="false" in="query" %}
-Tags of the Archive.
+Set of tags you want to insert in the database alongside the archive.
 {% endswagger-parameter %}
 {% swagger-parameter name="summary" type="string" required="false" in="query" %}
 summary
 {% endswagger-parameter %}
 {% swagger-parameter name="category_id" type="int" required="false" in="query" %}
-Category ID of the Archive.
+Category ID you'd want the archive to be added to.
 {% endswagger-parameter %}
 {% swagger-parameter name="file_checksum" type="string" required="false" in="query" %}
-SHA1 checksum of the Archive.
+SHA1 checksum of the archive for in-transit validation.
 {% endswagger-parameter %}
 
 {% swagger-response status="200" description="" %}
@@ -523,6 +523,16 @@ SHA1 checksum of the Archive.
 {
   "operation": "upload",
   "error": "Filename \"quirky-symbols～☆.cbz\" could not be converted back to a byte sequence!",
+  "success": 0
+}
+```
+{% endswagger-response %}
+
+{% swagger-response status="423" description="locked resource" %}
+```javascript
+{
+  "operation": "upload",
+  "error": "Locked resource: Monster-01.cbz",
   "success": 0
 }
 ```
