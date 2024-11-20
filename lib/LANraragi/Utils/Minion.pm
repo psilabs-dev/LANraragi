@@ -175,8 +175,8 @@ sub add_tasks {
             $logger->info("Processing uploaded file $file...");
 
             # Since we already have a file, this goes straight to handle_incoming_file.
-            my ( $status, $id, $title, $message ) = LANraragi::Model::Upload::handle_incoming_file( $file, $catid, "" );
-
+            my ( $status_code, $id, $title, $message ) = LANraragi::Model::Upload::handle_incoming_file( $file, $catid, "", "", "" );
+            my $status = $status_code == 200 ? 1 : 0;
             $job->finish(
                 {   success  => $status,
                     id       => $id,
@@ -224,9 +224,9 @@ sub add_tasks {
                 # Use the downloader to transform the URL
                 my $plugname = $downloader->{namespace};
                 my $plugin   = get_plugin($plugname);
-                my @settings = get_plugin_parameters($plugname);
+                my %settings = get_plugin_parameters($plugname);
 
-                my $plugin_result = LANraragi::Model::Plugins::exec_download_plugin( $plugin, $url, @settings );
+                my $plugin_result = LANraragi::Model::Plugins::exec_download_plugin( $plugin, $url, %settings );
 
                 if ( exists $plugin_result->{error} ) {
                     $job->finish(
@@ -253,7 +253,8 @@ sub add_tasks {
                 my $tag = "source:$og_url";
 
                 # Hand off the result to handle_incoming_file
-                my ( $status, $id, $title, $message ) = LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tag );
+                my ( $status_code, $id, $title, $message ) = LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tag, "", "" );
+                my $status = $status_code == 200 ? 1 : 0;
 
                 $job->finish(
                     {   success  => $status,
