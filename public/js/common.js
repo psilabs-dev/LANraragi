@@ -298,12 +298,8 @@ LRR.buildProgressDiv = function (arcdata) {
         progress = parseInt(arcdata.progress || 0, 10);
     }
 
-    if (isnew === "true") {
-        return "<div class=\"isnew\">🆕</div>";
-    } else if (pagecount > 0) {
-        // Consider an archive read if progress is past 85% of total
-        if ((progress / pagecount) > 0.85) return "<div class='isnew'>👑</div>";
-        else return `<div class='isnew'><sup>${progress}/${pagecount}</sup></div>`;
+    if (isnew === "true" || pagecount > 0) {
+         return `<div class='isnew'><sup>${progress}/${pagecount}</sup></div>`
     }
     // If there wasn't sufficient data, return an empty string
     return "";
