@@ -209,7 +209,7 @@ Reader.initializeAll = function () {
         }
 
         $("#tagContainer").append(`<div class="archive-summary"/>`);
-        $(".archive-summary").text(Reader.content.summary);
+        $(".archive-summary").html(Reader.content.summary);
 
         // Get the chapter for the current page (if any)
         Reader.currentChapter = Reader.getCurrentChapter();
