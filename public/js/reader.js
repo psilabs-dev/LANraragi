@@ -104,15 +104,6 @@ Reader.initializeAll = function () {
 
     // When user hits browser back, return to index.
     window.addEventListener("popstate", (event) => {
-        // If we're going back to index, let the browser handle it naturally
-        // This allows bfcache to work properly and prevents AJAX errors
-        if (document.location.pathname === "/" || document.location.pathname === "/index") {
-            console.log("browser back to index");
-            return;
-        }
-        
-        // Otherwise, handle reader-specific back button behavior
-        console.log("reader-specific back button behavior");
         event.preventDefault();
         Reader.returnToIndex();
     });
