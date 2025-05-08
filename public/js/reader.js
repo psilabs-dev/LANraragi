@@ -104,11 +104,10 @@ Reader.initializeAll = function () {
 
     // When user hits browser back, return to index.
     window.addEventListener("popstate", (event) => {
-        // Only override back button if we're not navigating between archives
-        if (!event.state || event.state.navigation !== 'archive') {
-            event.preventDefault();
-            Reader.returnToIndex();
-        }
+        // Always return to index when browser back is pressed, 
+        // unless we're explicitly navigating between archives
+        event.preventDefault();
+        Reader.returnToIndex();
     });
 
     // Apply full-screen utility
