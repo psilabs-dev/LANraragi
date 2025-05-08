@@ -104,8 +104,11 @@ Reader.initializeAll = function () {
 
     // When user hits browser back, return to index.
     window.addEventListener("popstate", (event) => {
-        event.preventDefault();
-        Reader.returnToIndex();
+        // Only override back button if we're not navigating between archives
+        if (!event.state || event.state.navigation !== 'archive') {
+            event.preventDefault();
+            Reader.returnToIndex();
+        }
     });
 
     // Apply full-screen utility
@@ -1110,7 +1113,8 @@ Reader.readPreviousArchive = function () {
         }
         const newUrl = new LRR.apiURL(`/reader?id=${previousArchiveId}`).toString();
         history.pushState({navigation: 'archive'}, '', newUrl);
-        window.location.reload();
+        // Replace reload with a more bfcache-friendly approach
+        window.location.href = newUrl;
     } else {
         LRR.toast({"text": "This is the first archive"});
     }
@@ -1143,7 +1147,8 @@ Reader.readNextArchive = function () {
         }
         const newUrl = new LRR.apiURL(`/reader?id=${nextArchiveId}`).toString();
         history.pushState({navigation: 'archive'}, '', newUrl);
-        window.location.reload();
+        // Replace reload with a more bfcache-friendly approach
+        window.location.href = newUrl;
     } else {
         LRR.toast({"text": "This is the last archive"});
     }
@@ -1236,5 +1241,6 @@ Reader.returnToIndex = function () {
     }
     const indexUrl = new LRR.apiURL(returnUrl).toString();
     history.pushState({navigation: 'index'}, '', indexUrl);
-    window.location.reload();
+    // Use location.href instead of reload for better bfcache utilization
+    window.location.href = indexUrl;
 }
