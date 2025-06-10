@@ -2,16 +2,16 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-05 18:10+0200\n"
-"PO-Revision-Date: 2025-05-19 16:03+0000\n"
-"Last-Translator: scentedtiger <something95@tutanota.com>\n"
-"Language-Team: Norwegian Bokmål <https://hosted.weblate.org/projects/"
-"lanraragi/lanraragi-source/nb_NO/>\n"
-"Language: nb_NO\n"
+"POT-Creation-Date: 2025-05-13 21:13+0200\n"
+"PO-Revision-Date: 2025-05-14 20:02+0000\n"
+"Last-Translator: ボンク!Bonk! <alp@kibaroglu.net>\n"
+"Language-Team: Japanese <https://hosted.weblate.org/projects/lanraragi/"
+"lanraragi-source/ja/>\n"
+"Language: ja\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: Weblate 5.12-dev\n"
 
 # Sample Data
@@ -20,31 +20,26 @@ msgid "Database Backup/Restore"
 msgstr ""
 
 msgid "You can backup your existing database here, or restore an existing backup."
-msgstr ""
-"Du kan sikkerhetskopiere din eksisterende database her, eller gjenopprette "
-"en eksisterende sikkerhetskopi."
+msgstr "既存のデータベースのバックアップまたは復元を行います。"
 
 msgid "Backuping allows you to download a JSON file containing all your categories and archive IDs, and their matching metadata."
-msgstr ""
-"Sikkerhetskopiering tillater deg å laste ned en JSON fil som inneholder alle "
-"kategoriene og arkiv ID'ene dine, og den matchende metadataen."
+msgstr "バックアップすると、すべてのカテゴリとアーカイブID、それに対応するメタデータ"
+"を含むJSONファイルをダウンロードできます。"
 
 msgid "Restoring from a backup will restore this metadata, <b>for IDs which already exist in your database.</b>"
 msgstr ""
-"Gjenopprettning fra en sikkerhetskopi vil gjenopprette denne metadataen, "
-"<b>for ID'er som allerede eksisterer i databasen din.</b>"
 
 msgid "(Categories will always be restored)"
-msgstr "(Kategorier vil alltid bli gjenopprettet)"
+msgstr ""
 
 msgid "Backup Database"
-msgstr "Sikkerhetskopier database"
+msgstr ""
 
 msgid "Restore Backup"
-msgstr "Gjenopprett database"
+msgstr ""
 
 msgid "Restoring your backup ..."
-msgstr "Gjenoppretter din database ..."
+msgstr ""
 
 msgid "Return to Library"
 msgstr ""
@@ -55,94 +50,85 @@ msgid "Batch Operations"
 msgstr ""
 
 msgid "You can apply modifications to multiple archives in one go here."
-msgstr "Du kan ta i bruk endringer av flere arkiver på en gang her."
+msgstr ""
 
 msgid "Select what you'd like to do, check archives you want to use it on, and get rolling!"
 msgstr ""
-"Velg hva du ønsker å gjøre, sjekk arkivene du vil bruke det på, og kjør på!"
 
 msgid "Archives with no tags have been pre-checked."
-msgstr "Arkiver uten tagger har blitt forhåndsvalgt."
+msgstr ""
 
 msgid "Task :"
-msgstr "Oppgave :"
+msgstr "タスク："
 
 msgid "Use Plugin"
-msgstr "Bruk programvaretillegg"
+msgstr ""
 
 msgid "Remove New Flag"
-msgstr "Fjern Nytt Flagg"
+msgstr ""
 
 msgid "Apply Tag Rules"
-msgstr "Bruk taggregler"
+msgstr ""
 
 msgid "Add To Category"
-msgstr "Legg Til i Kategori"
+msgstr ""
 
 msgid "Delete Archive"
 msgstr ""
 
 msgid "Use plugin :"
-msgstr "Bruk programvaretillegg :"
+msgstr ""
 
 msgid "Timeout (max 20s):"
-msgstr "Tidsavbrudd (maks 20s):"
+msgstr "タイムアウト（最大20秒）："
 
 msgid "This plugin recommends a cooldown of <span id=\"cooldown\">-1</span> seconds."
 msgstr ""
-"Dette programvaretillegget annbefaler en nedkjølingstid på <span id="
-"\"cooldown\">-1</span> sekunder."
 
 msgid "Some external services may temporarily ban your machine for excessive loads if you call a plugin too many times!"
 msgstr ""
-"Noen eksterne tjenester kan midlertidig blokkere maskinen din ved for høy "
-"belastning hvis du bruker et programvaretillegg for mange ganger!"
 
 msgid "Make sure to set a suitable <b>timeout</b> between archives using this picker if the plugin you want to use is concerned."
 msgstr ""
-"Sørg for å angi et passende <b>tidsavbrudd</b> mellom arkiver når du bruker "
-"denne velgeren, hvis programvaretillegget du vil bruke er relevant."
 
 msgid "Override Plugin Global Arguments"
-msgstr "Overstyr globale argumenter for programvaretillegg"
+msgstr ""
 
 msgid "This will apply the following Tag Rules to the selected Archives."
-msgstr "Dette vil bruke følgende taggregler på de valgte arkivene."
+msgstr ""
 
 msgid "You can edit your Tag Rules in Server Configuration."
-msgstr "Du kan redigere dine Taggregler i serverkonfigurasjon."
+msgstr ""
 
 msgid "Server Configuration"
-msgstr "Serverkonfigurasjon"
+msgstr ""
 
 msgid "This removes the \"new\" flag from the selected archives."
-msgstr "Dette fjerner \"ny\" flagget fra de valgte arkiver."
+msgstr ""
 
 msgid "Add to Category :"
-msgstr "Legg til i Kategori :"
+msgstr ""
 
 msgid "This will delete both metadata and matching files from your system! Please use with caution."
 msgstr ""
-"Dette vil slette både metadata og matchende filer fra systemet! Venligst "
-"bruk med forsiktighet."
 
 msgid "Check/Uncheck all"
-msgstr "Merk/Avmerk alle"
+msgstr ""
 
 msgid "Start Task"
-msgstr "Start Oppgave"
+msgstr ""
 
 msgid "Cancel"
-msgstr "Avbryt"
+msgstr ""
 
 msgid "Start another job"
-msgstr "Start en ny jobb"
+msgstr ""
 
 msgid "Processed <span id=\"arcs\"></span> out of <span id=\"totalarcs\"></span>"
-msgstr "Behandlet <span id=\"arcs\"></span>av<span id=\"totalarcs\"></span>"
+msgstr ""
 
 msgid "Preparing your data."
-msgstr "Forbereder dataene dine."
+msgstr ""
 
 msgid "Plugin Configuration"
 msgstr ""
@@ -156,139 +142,125 @@ msgid "Categories"
 msgstr ""
 
 msgid "Categories appear at the top of your window when browsing the Library."
-msgstr "Kategorier vises øverst i vinduet når du blar gjennom biblioteket."
+msgstr ""
 
 msgid "There are two distinct kinds:"
-msgstr "Det finnes to unike typer:"
+msgstr ""
 
 msgid "Static Categories are arbitrary collections of Archives, where you can add as many items as you want."
 msgstr ""
-"Statiske kategorier er vilkårlige samlinger av arkiver, hvor du kan legge "
-"til så mange elementer du ønsker."
 
 msgid "Dynamic Categories contain all archives matching a given predicate, and automatically update alongside your library."
 msgstr ""
-"Dynamiske Kategorier inneholder alle arkiver som samsvarer med et gitt "
-"kriterium, og oppdateres automatisk sammen med biblioteket ditt."
 
 msgid "You can create new categories here or edit existing ones."
-msgstr "Du kan lage nye kategorier her eller redigere eksisterende."
+msgstr ""
 
 msgid "Select a category in the combobox below to edit its name, the archives it contains, or its predicate."
 msgstr ""
-"Velg en kategori i rullegardinmenyen nedenfor for å redigere navnet dens, "
-"arkivene den inneholder, eller kriteriet dens."
 
 msgid "All your modifications are saved automatically."
-msgstr "Alle modifikasjonene dine lagres automatisk."
+msgstr ""
 
 msgid "Category:"
-msgstr "Kategori:"
+msgstr ""
 
 msgid "Name:"
-msgstr "Navn:"
+msgstr ""
 
 msgid "Predicate:"
-msgstr "Kriterie:"
+msgstr ""
 
 msgid "Pin this Category"
-msgstr "Fest denne Kategorien"
+msgstr ""
 
 msgid "Delete Category"
-msgstr "Slett Kategori"
+msgstr ""
 
 msgid "If you select a Static Category, your archives will appear here so you can add/remove them from the category."
 msgstr ""
-"Hvis du velger en Statisk Kategori, vil arkivene dine vises her, så du kan "
-"legge de til eller fjerne de fra kategorien."
 
 msgid "Return to Library"
 msgstr ""
 
 msgid "Store Bookmarks in this Category"
-msgstr "Lagre Bokmerker i denne Kategorien"
+msgstr ""
 
 msgid "Error linking bookmark button:"
-msgstr "Feil ved kobling av bokmerkeknapp:"
+msgstr ""
 
 msgid "Error unlinking bookmark button:"
-msgstr "Feil ved fjerning av bokmerkeknapp:"
+msgstr ""
 
 msgid "Error getting bookmark category:"
-msgstr "Feil ved henting av bokmerkekategori:"
+msgstr ""
 
 msgid "New Static Category"
-msgstr "Ny Statisk Kategori"
+msgstr ""
 
 msgid "New Dynamic Category"
-msgstr "Ny Dynamisk Kategori"
+msgstr ""
 
 # ------End of Category.html.tt2------
 # ------Start of Config.html.tt2------
 msgid "Admin Settings"
-msgstr "Administrasjonsinnstillinger"
+msgstr ""
 
 msgid "LANraragi"
-msgstr "LANraragi"
+msgstr ""
 
 msgid "Version %1 %2"
-msgstr "Versjon %1 - %2"
+msgstr ""
 
 msgid "Select a category to show the matching settings."
-msgstr "Velg en kategori for å vise de matchende innstillingene."
+msgstr ""
 
 msgid "Save Settings"
-msgstr "Lagre Instillinger"
+msgstr ""
 
 msgid "Plugin Configuration"
 msgstr ""
 
 msgid "Database Backup/Restore"
-msgstr "Sikkerhetskopier/Gjenopprett Database"
+msgstr "データベースバックアップ・復元"
 
 msgid "Return to Library"
 msgstr ""
 
 msgid "Global Settings"
-msgstr "Globale Instillinger"
+msgstr ""
 
 msgid "Theme"
-msgstr "Tema"
+msgstr ""
 
 msgid "Security"
-msgstr "Sikkerhet"
+msgstr ""
 
 msgid "Archive Files"
-msgstr "Arkiver Filer"
+msgstr ""
 
 msgid "Tags and Thumbnails"
-msgstr "Tagger og miniatyrbilder"
+msgstr ""
 
 msgid "Background Workers"
-msgstr "Bakgrunnsarbeidere"
+msgstr ""
 
 # ------End of Config.html.tt2------
 # ------Start of Config_Files.html.tt2------
 msgid "Archive Directory"
-msgstr "Arkivmappe"
+msgstr ""
 
 msgid "Directory where the archives will be located. It will be created if it doesn't exist."
 msgstr ""
-"Mappen der arkivene vil bli plassert. Den vil bli opprettet hvis den ikke "
-"finnes."
 
 msgid "Make sure the OS user running LANraragi has read access to this directory."
 msgstr ""
-"Sørg for at OS brukeren som kjører LANraragi har lesetilgang til denne "
-"mappen."
 
 msgid "Synology eCryptFS Compatibility Mode"
-msgstr "Synology eCryptFS-kompatibilitetsmodus"
+msgstr ""
 
 msgid "If enabled, LANraragi will cutoff archive filenames to 143 bytes, which is the max accepted by eCryptFS."
 msgstr ""
-"Hvis aktivert, vil LANraragi kutte arkivfilnavn til 143 byte, som er "
-"maksimum tillatt av eCryptFS."
 
 msgid "Rescan Archive Directory"
 msgstr ""
@@ -297,406 +269,337 @@ msgid "Click this button to trigger a rescan of the Archive Directory in case yo
 msgstr ""
 
 msgid "Maximum <br>Cache Size"
-msgstr "Maksimum <br>Cachestørrelse"
+msgstr ""
 
 msgid "In MBs. The cache contains recently viewed pages, for faster subsequent reading."
-msgstr "I MB. Cachen inneholder nylig viste sider for raskere senere lesing."
+msgstr ""
 
 msgid "It is automatically emptied when it grows past this specified size."
 msgstr ""
-"Den blir automatisk tømt når den vokser over den spesifiserte størrelsen."
 
 msgid "Clear Cache"
-msgstr "Tøm cachen"
+msgstr ""
 
 msgid "Current Size:"
-msgstr "Nåværende Størrelse:"
+msgstr ""
 
 msgid "Clear the cache manually by clicking this button."
-msgstr "Tøm cachen manuelt ved å trykke på denne knappen."
+msgstr ""
 
 msgid "Reset Search Cache"
-msgstr "Tilbakestill Søkecache"
+msgstr ""
 
 msgid "The last searches done in the archive index are cached for faster loads."
 msgstr ""
-"De siste søkene gjort i arkivindeksen lagres i cache for raskere lasting."
 
 msgid "If something went wrong with said cache, you can reset it by clicking this button."
 msgstr ""
-"Om noe gikk galt med cachen kan du tilbakestille den ved å klikke på denne "
-"knappen."
 
 msgid "Clear NEW flags"
-msgstr "Fjern NY-flagg"
+msgstr ""
 
 msgid "Newly uploaded archives are marked as \"new\" in the index until you\'ve opened them."
 msgstr ""
-"Nylig oppdaterte arkiv markered som \"ny\" i indeksen til du har åpnet dem."
 
 msgid "If you want to clear those flags, click this button."
-msgstr "Om du vil fjerne de flaggene, klikk på denne knappen."
+msgstr ""
 
 msgid "Replace duplicated archives"
-msgstr "Erstatt dupliserte arkiver"
+msgstr ""
 
 msgid "If enabled, LANraragi will overwrite old archives when a newer one (with the same name) is uploaded through the Web Uploader or the Download System."
 msgstr ""
-"Hvis aktivert, vil LANraragi overskrive gamle arkiver når et nyere (med "
-"samme navn) lastes opp gjennom Web Opplasteren eller Nedlastingssystemet."
 
 msgid "This will delete metadata for old files when they're replaced! Use with caution."
 msgstr ""
-"Dette vil slette metadata for gamle filer når de erstattes! Bruk med "
-"forsiktighet."
 
 # ------End of Config_Files.html.tt2------
 # ------Start of Config_Global.html.tt2------
 msgid "Site Title"
-msgstr "Nettside Tittel"
+msgstr ""
 
 msgid "The site title appears on most pages as...their title."
-msgstr "Nettside tittelen vises på de fleste sider som...nettsidens tittel."
+msgstr ""
 
 msgid "MOTD"
-msgstr "MOTD"
+msgstr ""
 
 msgid "Slang for Message of the Day. Appears on top of the main Library view."
 msgstr ""
-"Slang for \"Message of the Day\". Visas øverst i hovedbibliotekvisningen."
 
 msgid "Archives per page"
-msgstr "Arkiver pr side"
+msgstr ""
 
 msgid "Number of archives shown on a page in the main list."
-msgstr "Antall arkiver som vises på en side i hovedlisten."
+msgstr ""
 
 msgid "Resize Images in Reader"
-msgstr "Skaler bilder i leseren"
+msgstr ""
 
 msgid "If enabled, pages exceeding a certain size will be resized when viewed to save bandwidth."
 msgstr ""
-"Hvis aktivert, vil sider som overskrider en viss størrelse bli skalert når "
-"de vises for å spare båndbredde."
 
 msgid "This option can potentially consume a lot of RAM if enabled and used on large images! Use with caution."
 msgstr ""
-"Denne valgmuligheten kan potensielt bruke mye RAM om aktivert og brukes på "
-"store bilder! Bruk med forsiktighet."
 
 msgid "Image Size Threshold"
-msgstr "Bilderstørrelsesterskel"
+msgstr ""
 
 msgid "(in KBs.) Maximum size an image can reach before being resized."
-msgstr "(i KBs.) Maksimum størrelse ett bilde kan nå før det blir skalert."
+msgstr ""
 
 msgid "Resize Quality"
-msgstr "Skaleringskvalitet"
+msgstr ""
 
 msgid "Quality of the resized images. Less quality = Smaller image. (0-100)"
 msgstr ""
-"Kvalitet på de skalerte bildene. Lavere kvalitet = Mindre bilde. (0–100)"
 
 msgid "Clientside Progress Tracking"
-msgstr "Klientside fremdriftssporing"
+msgstr ""
 
 msgid "Enabling this option will save reading progression on the browser (through localStorage) instead of the server."
 msgstr ""
-"Aktivering av dette alternativet vil lagre lesefremdrift i nettleseren (via "
-"lokalLagring) i stedet for på serveren."
 
 msgid "Consider toggling this option if you're sharing the LANraragi instance with multiple users!"
 msgstr ""
-"Vurder å slå på dette alternativet hvis du deler LANraragi-instansen med "
-"flere brukere!"
 
 msgid "Debug Mode"
-msgstr "Feilsøkingsmodus"
+msgstr ""
 
 msgid "Enabling Debug Mode will show more logs and disable update nagging."
 msgstr ""
-"Aktivering av Feilsøkingsmodus vil vise flere logger og skru av "
-"oppdateringspåminnelser."
 
 msgid "Fully effective after restarting LANraragi."
 msgstr ""
 
 msgid "Clean Database"
-msgstr "Rens database"
+msgstr ""
 
 msgid "Cleaning the database will remove entries that aren't on your filesystem."
 msgstr ""
-"Å rense databasen vil fjerne innlegg som ikke er lagret i filsystemet ditt."
 
 msgid "Reset Database"
-msgstr "Tilbakestill Database"
+msgstr ""
 
 msgid "Danger zone!"
-msgstr "Faresone!"
+msgstr ""
 
 msgid "Clicking this button will reset the entire database and delete all settings and metadata."
 msgstr ""
-"Ved å klikke på denne knappen tilbakestilles hele databasen og alle "
-"innstillinger og metadata slettes."
 
 # ------End of Config_Global.html.tt2------
 # ------Start of Config_Security.html.tt2------
 msgid "Enable Password"
-msgstr "Aktiver Passord"
+msgstr ""
 
 msgid "If enabled, everything that isn't reading will require a password."
-msgstr "Hvis aktivert, vil alt som ikke er lesing kreve ett passord."
+msgstr ""
 
 msgid "New Password"
-msgstr "Nytt Passord"
+msgstr ""
 
 msgid "New Password Confirmation"
-msgstr "Bekreft Nytt Passord"
+msgstr ""
 
 msgid "Only edit these fields if you want to change your password."
-msgstr "Endre kun disse feltene om du ønsker å endre passordet ditt."
+msgstr ""
 
 msgid "The one already stored will be used otherwise."
-msgstr "Det som allerede er lagret vil bli brukt ellers."
+msgstr ""
 
 msgid "No-Fun Mode"
-msgstr "Ingen-moro-modus"
+msgstr ""
 
 msgid "Enabling No-Fun Mode will lock reading archives behind the password as well."
 msgstr ""
-"Aktivering av Ingen-Morro-Modus vil også låse lesing av arkiver bak "
-"passordet."
 
 msgid "Fully effective after restarting LANraragi."
-msgstr "Trer i kraft fullt ut etter omstart av LANraragi."
+msgstr ""
 
 msgid "API Key"
-msgstr "API Nøkkel"
+msgstr ""
 
 msgid "If you wish to use the Client API and have a password, you'll have to set a key here."
 msgstr ""
-"Om du ønsker å bruke Klient APIen og har ett passord må du sette en nøkkel "
-"her."
 
 msgid "Empty keys will <b>not</b> work!"
-msgstr "Tomme nøkkler vil <b>ikke</b> virke!"
+msgstr ""
 
 msgid "This key will need to be provided in every protected API call as the <i>Authorization</i> header."
 msgstr ""
-"Denne nøkkelen må oppgis i hver beskyttet API-anrop som "
-"<i>Authorization</i>-header."
 
 msgid "Enable CORS for the Client API"
-msgstr "Aktiver CORS for Klient APIen"
+msgstr ""
 
 msgid "Have API requests support Cross-Origin Resource Sharing, which allows web browsers to access it off other domains."
 msgstr ""
-"La API-forespørsler støtte Cross-Origin Resource Sharing (CORS), som lar "
-"nettlesere få tilgang til den fra andre domener."
 
 msgid "Turn this on if you want to access this service through a web-based wrapper (e.g. a userscript) used/hosted on another domain."
 msgstr ""
-"Slå dette på hvis du ønsker å få tilgang til denne tjenesten gjennom en web-"
-"basert wrapper (f.eks. et userscript) som brukes/hostes på et annet domene."
 
 # ------End of Config_Security.html.tt2------
 # ------Start of Config_Shinobu.html.tt2------
 msgid "Shinobu Status"
-msgstr "Shinobu Status"
+msgstr ""
 
 msgid "The Shinobu File Watcher is currently"
-msgstr "Shinobu-filovervåkeren er for øyeblikket"
+msgstr ""
 
 msgid "OK!"
-msgstr "OK!"
+msgstr ""
 
 msgid "Kaput!"
-msgstr "Totalhavari!"
+msgstr ""
 
 msgid "This File Watcher is responsible for monitoring your content directory and automatically handling new archives as they come."
 msgstr ""
-"Denne Filovervåkeren er ansvarlig for å monitorere innholdsmappen din og "
-"automatisk håndtere nye arkiver ettersom de legges til."
 
 msgid "Restart File Watcher"
-msgstr "Restart Filovervåkeren"
+msgstr ""
 
 msgid "If Shinobu is dead or unresponsive, you can reboot her by clicking this button."
 msgstr ""
-"Hvis Shinobu er død eller ikke svarer kan du starte henne på nytt ved å "
-"klikke på denne knappen."
 
 msgid "Open Minion Console"
-msgstr "Åpne Tjener-Konsoll"
+msgstr ""
 
 msgid "The Minion Worker handles spare tasks that are too long to execute within the request/response lifecycle of web applications."
 msgstr ""
-"Tjener Arbeideren håndterer ekstra oppgaver som tar for lang tid å utføre "
-"innen forespørsel/svar-syklusen til nettapplikasjoner."
 
 msgid "The console shows currently running and concluded tasks."
-msgstr "Konsollen viser nåværende og fullførte oppgaver."
+msgstr ""
 
 # ------End of Config_Shinobu.html.tt2------
 # ------Start of Config_Tags.html.tt2------
 msgid "Thumbnail Directory"
-msgstr "Miniatyrbildemappe"
+msgstr ""
 
 msgid "Directory where the archive thumbnails will be located. It will be created if it doesn't exist."
 msgstr ""
-"Mappen hvor arkiv miniatyrbildene plasseres. Mappen skapes om den ikke "
-"eksisterer."
 
 msgid "Make sure the OS user running LANraragi has read/write access to this directory."
 msgstr ""
-"Sørg for at OS brukeren som kjører LANraragi har lese- og skrivetilgang til "
-"denne mappen."
 
 msgid "Use high-quality thumbnails for pages"
-msgstr "Bruk høykvalitets miniatyrbilder for sider"
+msgstr ""
 
 msgid "LANraragi generates lower-quality thumbnails for archive pages for performance reasons."
 msgstr ""
-"LANraragi genererer miniatyrbilder av lavere kvalitet for arkivsider av "
-"ytelseshensyn."
 
 msgid "If this option is checked, it will instead generate page thumbnails at the same quality as cover thumbnails."
 msgstr ""
-"Hvis dette alternativet er valgt, vil det i stedet generere "
-"sideminiatyrbilder med samme kvalitet som omslagsminiatyrene."
 
 msgid "Use JPEG XL for thumbnails"
-msgstr "Bruk JPEG XL for miniatyrbilder"
+msgstr ""
 
 msgid "LANraragi generates JPEG thumbnails for compatibility and performance reasons."
 msgstr ""
-"LANraragi genererer JPEG-miniatyrbilder av hensyn til kompatibilitet og "
-"ytelse."
 
 msgid "If this option is checked, it will instead generate thumbnails using JPEG XL."
 msgstr ""
-"Hvis dette alternativet er valgt, vil det i stedet generere miniatyrbilder "
-"som JPEG XL."
 
 msgid "Generate Missing Thumbnails"
-msgstr "Generer Manglende Miniatyrbilder"
+msgstr ""
 
 msgid "Generate Thumbnails for all archives that don't have one yet."
-msgstr "Generer Miniatyrbilder for alle arkivene som ikke har et enda."
+msgstr ""
 
 msgid "Regenerate all Thumbnails"
-msgstr "Generer alle miniatyrbilder på nytt"
+msgstr ""
 
 msgid "Regenerate all thumbnails. This might take a while!"
-msgstr "Generer alle miniatyrbilder på nytt. Dette kan ta en stund!"
+msgstr ""
 
 msgid "Add Timestamp Tag"
-msgstr "Legg til tidsstempel-tagg"
+msgstr ""
 
 msgid "If enabled, LANraragi will add the UNIX timestamp of the current time as a tag under the \"date_added\" namespace to newly added archives."
 msgstr ""
-"Hvis aktivert, vil LANraragi legge til UNIX-tidsstempelet for den nåværende "
-"tiden som en tagg under \"date_added\"-navnerommet til nylig lagde arkiver."
 
 msgid "Use \"Last modified\" Time"
-msgstr "Bruk \"Sist Endret\"-tidspunkt"
+msgstr ""
 
 msgid "Enabling this will use file modified time instead of current time when setting \"date_added\" timestamps."
 msgstr ""
-"Å aktivere dette vil bruke filens endringstidspunkt i stedet for nåværende "
-"tid når \"date_added\"-tidsstempler settes."
 
 msgid "Tag Rules"
-msgstr "Tagg Regler"
+msgstr ""
 
 msgid "When tagging archives using Plugins, the rules specified here will be applied to the tags before saving them to the database."
 msgstr ""
-"Når arkiver merkes ved hjelp av programvaretillegg, vil reglene som er "
-"spesifisert her bli brukt på taggene før de lagres i databasen."
 
 msgid "Split rules with linebreaks."
-msgstr "Del reglene med linjeskift."
+msgstr ""
 
 msgid "<b>-tag | tag</b> : removes the tag (like a blacklist)"
-msgstr "<b>-tagg | tagg</b> : fjerner taggen (som en svarteliste)"
+msgstr ""
 
 msgid "<b>-namespace:*</b> : removes all tags within this namespace"
-msgstr "<b>-navnerom:*</b> : fjerner alle tagger innenfor dette navnerommet"
+msgstr ""
 
 msgid "namespace : strips the namespace from the tags"
-msgstr "<b>~navnerom</b> : fjerner navnerommet fra taggene"
+msgstr ""
 
 msgid "<b>tag -> new-tag</b> : replaces one tag"
-msgstr "<b>tagg -> new-tagg</b> : erstatter en tagg"
+msgstr ""
 
 msgid "<b>tag => new-tag</b> : replaces one tag, but use a hash table internally for faster performance. These rules will be executed <i>once</i> after all other rules."
 msgstr ""
-"<b>tagg => new-tagg</b> : erstatter en tagg, men bruker en hash-tabell "
-"internt for raskere ytelse. Disse reglene vil bli utført <i>én gang</i> "
-"etter alle andre regler."
 
 msgid "<b>namespace:* -> new-namespace:*</b> : replaces the namespace with the new one"
 msgstr ""
-"<b>navnerom :* -> nytt-navnerom:*</b> : erstatter navnerom med det nye "
-"navnerommet"
 
 # ------End of Config_Tags.html.tt2------
 # ------Start of Config_Theme.html.tt2------
 msgid "The selected theme will apply to the entire application and be shown to all users."
 msgstr ""
-"Det valgte temaet vil gjelde for hele applikasjonen og vises for alle "
-"brukere."
 
 msgid "If you're using a browser that supports \"theme-color\", the theme's primary color will also be applied there."
 msgstr ""
-"Hvis du bruker en nettleser som støtter \"tema-farger\", vil temaets "
-"primærfarge også bli brukt der."
 
 msgid "Click on a theme to preview it before saving!"
-msgstr "Klikk på ett tema for å forhåndsvise det før du lagrer!"
+msgstr ""
 
 # ------End of Config_Theme.html.tt2------
 # ------Start of Edit.html.tt2------
 msgid "Editing %1 by %2"
-msgstr "Redigerer %1 av %2"
+msgstr ""
 
 msgid "Editing %1"
-msgstr "Redigerer %1"
+msgstr ""
 
 msgid "Current File Name:"
-msgstr "Nåværende Filnavn:"
+msgstr ""
 
 msgid "ID:"
-msgstr "ID:"
+msgstr ""
 
 msgid "Title:"
-msgstr "Tittel:"
+msgstr ""
 
 msgid "Summary:"
-msgstr "Sammendrag:"
+msgstr ""
 
 msgid "Tags"
 msgstr ""
 
 msgid "(separated by hyphens, i.e : tag1, tag2)"
-msgstr "(separert med komma, f.eks: tagg1, tagg2)"
+msgstr ""
 
 msgid "Import Tags from Plugin :"
-msgstr "Importer Tagger fra Programvaretillegg :"
+msgstr ""
 
 msgid "Help"
 msgstr ""
 
 msgid "Go!"
-msgstr "Kjør!"
+msgstr ""
 
 msgid "Using a Plugin will save any modifications to archive metadata you might have made !"
 msgstr ""
-"Å bruke et programvaretillegg vil lagre eventuelle endringer du måtte ha "
-"gjort i arkivmetadata !"
 
 msgid "Save Metadata"
-msgstr "Lagre Metadata"
+msgstr ""
 
 msgid "Delete Archive"
 msgstr ""
@@ -707,84 +610,82 @@ msgstr ""
 # ------End of Edit.html.tt2------
 # ------Start of Index.html.tt2------
 msgid "Add Archives"
-msgstr "Legg til Arkiver"
+msgstr ""
 
 msgid "Batch Operations"
-msgstr "Gjengangsoperasjoner"
+msgstr ""
 
 msgid "Settings"
-msgstr "Instillinger"
+msgstr ""
 
 msgid "Modify Categories"
-msgstr "Endre Kategorier"
+msgstr ""
 
 msgid "Statistics"
-msgstr "Statistikk"
+msgstr ""
 
 msgid "Logs"
-msgstr "Logger"
+msgstr ""
 
 msgid "Admin Login"
-msgstr "Admin-pålogging"
+msgstr ""
 
 msgid "Search Title, Artist, Series, Language or Tags"
-msgstr "Søk etter Tittel, Artist, Serie, Språk eller Tagger"
+msgstr ""
 
 msgid "Apply Filter"
-msgstr "Bruk Filter"
+msgstr ""
 
 msgid "Clear Filter"
-msgstr "Fjern Filter"
+msgstr ""
 
 msgid "Click to show archives from the current search with the specified filter"
 msgstr ""
-"Klikk for å vise arkiver fra det nåværende søket med det spesifiserte "
-"filteret"
 
 msgid "Refresh Selection"
-msgstr "Oppdater Valg"
+msgstr ""
 
 msgid "Carousel Options"
-msgstr "Karusellinnstillinger"
+msgstr ""
 
 msgid "No results here."
-msgstr "Ingen resultater her."
+msgstr ""
 
 msgid "Sort by:"
-msgstr "Sorter etter:"
+msgstr ""
 
 msgid "Title"
 msgstr ""
 
 msgid "Date"
-msgstr "Dato"
+msgstr ""
 
 msgid "Sort Order"
-msgstr "Sorter Rekkefølge"
+msgstr ""
 
 msgid "Crop thumbnails"
-msgstr "Beskjær miniatyrbilder"
+msgstr ""
 
 msgid "Go to Page:"
-msgstr "Gå til Side:"
+msgstr ""
 
 msgid "Columns:"
-msgstr "Kolonner:"
+msgstr ""
 
 msgid "Switch to Compact Mode"
-msgstr "Bytt til Kompaktmodus"
+msgstr ""
 
 msgid "Switch to Thumbnail Mode"
-msgstr "Bytt til Miniatyrbilde-modus"
+msgstr ""
 
 msgid "Title"
 msgstr ""
 
 msgid "Artist"
-msgstr "Artist"
+msgstr ""
 
 msgid "Series"
-msgstr "Serier"
+msgstr ""
 
 msgid "Tags"
 msgstr ""
@@ -794,117 +695,106 @@ msgstr ""
 
 msgid "I don't know everything, but I sure as hell know this database's busted lads"
 msgstr ""
-"Jeg vet ikke alt, meg jeg er sikker som fjell på at denne databasen er "
-"ødelagt, folkens"
 
 msgid "The database cache is corrupt, and as such LANraragi is unable to display your archive list."
 msgstr ""
-"Database-cachen er ødelagt, og derfor kan ikke LANraragi vise arkivlisten "
-"din."
 
 msgid "Read"
-msgstr "Les"
+msgstr ""
 
 msgid "Download"
-msgstr "Last ned"
+msgstr ""
 
 msgid "Edit Metadata"
-msgstr "Rediger Metadata"
+msgstr ""
 
 msgid "Delete"
-msgstr "Slett"
+msgstr ""
 
 msgid "Add Rating"
-msgstr "Legg til Vurdering"
+msgstr ""
 
 msgid "Add to Category"
-msgstr "Legg til i Kategori"
+msgstr ""
 
 msgid "New Version Release Notes"
-msgstr "Nye versjonsutgivelsesnotater"
+msgstr ""
 
 msgid "You\'re using the default password and that\'s super baka of you"
-msgstr "Du bruker standardpassordet, og det er skikkelig baka av deg"
+msgstr ""
 
 msgid "Login with password \"kamimamita\" and change that shit on the double. ...Or just disable it! Why not check the configuration options afterwards, while you\'re at it?"
 msgstr ""
-"<a href=\"/login\">Logg inn</a> med passordet \"kamimamita\" og <a href="
-"\"/config\">endre den skitten</a> med en eneste gang.<br/>...Eller bare skru "
-"det av! <br/>Hvorfor ikke sjekke konfigurasjonsalternativene etterpå, mens "
-"du er i gang? "
 
 # ------End of Index.html.tt2------
 # ------Start of Login.html.tt2------
 msgid "This page requires you to log on."
-msgstr "Denne sider krever at du logger inn."
+msgstr ""
 
 msgid "Admin Password:"
-msgstr "Admin-passord:"
+msgstr ""
 
 msgid "Login"
-msgstr "Logg inn"
+msgstr ""
 
 msgid "Wrong Password."
-msgstr "Feil Passord."
+msgstr ""
 
 msgid "<a href='\${url}'>Login</a> to toggle bookmark feature."
-msgstr "<a href='${url}'>Logg inn</a> for å aktivere bokmerke-funksjonen."
+msgstr ""
 
 # ------End of Login.html.tt2------
 # ------Start of Logs.html.tt2------
 msgid "Application Logs"
-msgstr "Applikasjonslogger"
+msgstr ""
 
 msgid "You can check LANraragi logs here for debugging purposes."
-msgstr "De kan sjekke LANraragi-loggene her for feilsøking."
+msgstr ""
 
 msgid "By default, this view only shows the last 100 lines of each logfile, newest lines last."
 msgstr ""
-"Som standard viser denne visningen kun de siste 100 linjene i hver loggfil, "
-"med de nyeste linjene til slutt."
 
 msgid "General Logs pertain to the main application."
-msgstr "Generelle Logger gjelder hovedapplikasjonen."
+msgstr ""
 
 msgid "Shinobu Logs correspond to the Background Worker."
-msgstr "Shinobu-loggeene sammenstemmer med Bakgrundsarbeideren."
+msgstr ""
 
 msgid "Plugin Logs are reserved for metadata plugins only."
 msgstr ""
-"Programvaretillegg-loggene er kun forbeholdt metadata programvaretillegg."
 
 msgid "Mojolicious logs won't tell much unless you're running Debug Mode."
-msgstr "Mojolicious-loggene sier ikke mye med mindre du er i Feilsøkingsmodus."
+msgstr ""
 
 msgid "Redis logs won't be available from here if you're running from source!"
-msgstr "Redis-loggene er ikke tilgjengelige her dersom du kjører fra kildekode!"
+msgstr ""
 
 msgid "Currently Viewing:"
-msgstr "Viser nå: "
+msgstr ""
 
 msgid "general"
-msgstr "Generelt"
+msgstr ""
 
 msgid "Refresh"
-msgstr "Oppdater"
+msgstr ""
 
 msgid "Lines:"
-msgstr "Linjer: "
+msgstr ""
 
 msgid "View LANraragi Logs"
-msgstr "Se LANraragi-loggene"
+msgstr ""
 
 msgid "View Shinobu Logs"
-msgstr "Se Shinobu-loggene"
+msgstr ""
 
 msgid "View Plugin Logs"
-msgstr "Se Programvaretillegg-loggene"
+msgstr ""
 
 msgid "View Mojolicious Logs"
-msgstr "Se Mojolicious-loggene"
+msgstr ""
 
 msgid "View Redis Logs"
-msgstr "Se Redis-loggene"
+msgstr ""
 
 msgid "Return to Library"
 msgstr ""
@@ -912,307 +802,287 @@ msgstr ""
 # ------End of Logs.html.tt2------
 # ------Start of Plugins.html.tt2------
 msgid "Plugin Configuration"
-msgstr "Programvaretilleggskonfigurasjon"
+msgstr ""
 
 msgid "Enable/Disable Auto-Plugin on metadata plugins by checking the toggles."
 msgstr ""
-"Aktiver/deaktiver Auto-Programvaretillegg på metadata-programvaretillegg ved "
-"å bruke bryterne."
 
 msgid "Plugins will be automatically used on new archives if they're toggled here."
 msgstr ""
-"Programvaretillegg vil automatisk bli brukt på nye arkiver om de er skrudd "
-"på her."
 
 msgid "If they have configuration variables, you can set them here as well."
-msgstr "Om de har konfigurasjonsvariabler kan du sette de her også."
+msgstr ""
 
 msgid "You can also trigger Scripts here. Triggering a script will save your Plugin settings beforehand."
 msgstr ""
-"Du kan også kjøre skript herfra. Når du kjører et skript, vil "
-"programvaretillegg-innstillingene dine lagres på forhånd."
 
 msgid "Login Plugins"
-msgstr "Programvaretillegg for Pålogging"
+msgstr ""
 
 msgid "Downloaders"
-msgstr "Nedlastere"
+msgstr ""
 
 msgid "Scripts"
-msgstr "Skripts"
+msgstr ""
 
 msgid "Metadata Plugins"
-msgstr "Programvaretillegg for Metadata"
+msgstr ""
 
 msgid "Allow Plugins to replace archive titles:"
-msgstr "Tillat Programvaretillegg å erstatte arkiv tittler:"
+msgstr ""
 
 msgid "If enabled, metadata plugins will be able to change the title of your archives alongside adding tags to them."
 msgstr ""
-"Hvis aktivert, vil programvaretillegg for metadata kunne endre tittelen på "
-"arkivene dine i tillegg til å legge til tagger."
 
 msgid "A script is running..."
-msgstr "Ett skript kjører..."
+msgstr ""
 
 msgid "Save Plugin Configuration"
-msgstr "Lagre Konfigurasjon for Programvaretillegg"
+msgstr ""
 
 msgid "Upload Plugin"
-msgstr "Opplastningsprogramvaretillegg"
+msgstr ""
 
 msgid "Return to Library"
 msgstr ""
 
 msgid "This plugin will trigger on URLs matching this regex!"
 msgstr ""
-"Dette programvaretillegget vil utløses på URL-er som samsvarer med dette "
-"regex-mønsteret!"
 
 msgid "This plugin depends on the login plugin"
 msgstr ""
-"Dette programvaretillegget er avhengig av påloggingsprogramvaretillegget"
 
 msgid "Trigger Script"
-msgstr "Kjør Skript"
+msgstr ""
 
 msgid "Run Automatically"
-msgstr "Kjør Automatisk"
+msgstr ""
 
 msgid "Plugin Settings"
-msgstr "Programvaretillegginstillinger"
+msgstr ""
 
 # ------End of Plugins.html.tt2------
 # ------Start of Reader.html.tt2------
 msgid "Done reading? Go back to Archive Index"
-msgstr "Ferdig med å lese? Gå tilbake til Arkivindeksen"
+msgstr ""
 
 msgid "View full-size image"
-msgstr "Se fullstørrelse bilde"
+msgstr ""
 
 msgid "Switch to another random archive"
-msgstr "Bytt til ett annet tilfeldig arkiv"
+msgstr ""
 
 msgid "Archive Overview"
 msgstr ""
 
 msgid "Admin Options"
-msgstr "Admin-instillinger"
+msgstr ""
 
 msgid "Set this Page as Thumbnail"
-msgstr "Set denne Siden som Miniatyrbilde"
+msgstr ""
 
 msgid "Set the currently opened page as the thumbnail for this archive."
-msgstr "Sett den åpnede siden som miniatyrbilde for dette arkivet."
+msgstr ""
 
 msgid "Clean Archive Cache"
-msgstr "Rens Arkiv Cachen"
+msgstr ""
 
 msgid "Edit Archive Metadata"
-msgstr "Rediger Arkiv Metadata"
+msgstr ""
 
 msgid "Delete Archive"
-msgstr "Slett arkiv"
+msgstr ""
 
 msgid "Categories"
-msgstr "Kategorier"
+msgstr ""
 
 msgid "Add to : "
-msgstr "Legg til: "
+msgstr ""
 
 msgid " -- No Category -- "
 msgstr ""
 
 msgid "Add Archive to Category"
-msgstr "Legg Arkiv til i Kategori"
+msgstr ""
 
 msgid "Pages"
-msgstr "Sider"
+msgstr ""
 
 msgid "Working on it..."
-msgstr "Jobber med det..."
+msgstr ""
 
 msgid "You can navigate between pages using:"
-msgstr "Du kan navigere mellom sider med:"
+msgstr ""
 
 msgid "The arrow icons"
-msgstr "Pil ikonene"
+msgstr ""
 
 msgid "The a/d keys"
-msgstr "a/d tastene"
+msgstr ""
 
 msgid "Your keyboard arrows (and the spacebar)"
-msgstr "Piltastene (og mellomrom)"
+msgstr ""
 
 msgid "Touching the left/right side of the image."
-msgstr "Klikke på venstre/høyre side av bildet."
+msgstr ""
 
 msgid "Other keyboard shortcuts:"
-msgstr "Andre hurtigtaster:"
+msgstr ""
 
 msgid "M: toggle manga mode (right-to-left reading)"
-msgstr "M: Aktiver manga modus (høyre til venstre leserettning)"
+msgstr ""
 
 msgid "O: show advanced reader options."
-msgstr "O: Vis avanserte leser instillinger."
+msgstr ""
 
 msgid "P: toggle double page mode"
-msgstr "P: Aktiver dobbelt side modus"
+msgstr ""
 
 msgid "Q: bring up the thumbnail index and archive options."
-msgstr "Q: Hent opp miniatyrbilde indeks og arkiv instillinger."
+msgstr ""
 
 msgid "R: open a random archive."
-msgstr "R: Åpne ett tilfeldig arkiv."
+msgstr ""
 
 msgid "F: toggle fullscreen mode"
-msgstr "F: Aktiver fullskjerm modus"
+msgstr ""
 
 msgid "B: toggle bookmark"
-msgstr "B: Aktiver bokmerke"
+msgstr ""
 
 msgid "To return to the archive index, touch the arrow pointing down or use Backspace."
 msgstr ""
-"For å gå tilbake til arkivoversikten, trykk på pilen som peker nedover eller "
-"bruk Tilbake-tasten (Backspace)."
 
 msgid "Reader Options"
-msgstr "Leser Instillinger"
+msgstr ""
 
 msgid "Those options save automatically -- Click around and find out!"
 msgstr ""
-"Disse instillingene lagres automatisk -- Klikk rundt og ta konsekvensene!"
 
 msgid "Fit display to"
-msgstr "Tilpass visning til"
+msgstr ""
 
 msgid "Container"
-msgstr "Konteiner"
+msgstr ""
 
 msgid "Width"
-msgstr "Bredde"
+msgstr ""
 
 msgid "Height"
-msgstr "Høyde"
+msgstr ""
 
 msgid "Container Width (in pixels or percentage)"
-msgstr "Konteiner Bredde (I piksler og prosent)"
+msgstr ""
 
 msgid "The default value is 1200px, or 90% in Double Page Mode."
-msgstr "Standardverdien er 1200 piksler, eller 90 % i dobbelsidemodus."
+msgstr ""
 
 msgid "Apply"
-msgstr "Bruk"
+msgstr ""
 
 msgid "Page Rendering"
-msgstr "Sidegjengivelse"
+msgstr ""
 
 msgid "Single"
-msgstr "Singel"
+msgstr ""
 
 msgid "Double"
-msgstr "Dobbel"
+msgstr ""
 
 msgid "Reading Direction"
 msgstr ""
 
 msgid "Left to Right"
-msgstr "Venstre til Høyre"
+msgstr ""
 
 msgid "Right to Left"
-msgstr "Høyre til Venstre"
+msgstr ""
 
 msgid "How many images to preload"
-msgstr "Hvor mange bilder å forhåndslaste"
+msgstr ""
 
 msgid "The default is two images."
-msgstr "Standardverdien er to bilder."
+msgstr ""
 
 msgid "Header"
 msgstr ""
 
 msgid "Visible"
-msgstr "Synlig"
+msgstr ""
 
 msgid "Hidden"
-msgstr "Skjult"
+msgstr ""
 
 msgid "Show Archive Overlay by default"
-msgstr "Vis Arkivoverlegg som standard"
+msgstr ""
 
 msgid "This will show the overlay with thumbnails every time you open a new Reader page."
 msgstr ""
-"Dette vil vise ett overlegg med miniatyrbilder hver gang du åpner en ny "
-"Leser side."
 
 msgid "Enabled"
-msgstr "Aktivert"
+msgstr ""
 
 msgid "Disabled"
-msgstr "Deaktivert"
+msgstr ""
 
 msgid "Progression Tracking"
-msgstr "Progresjonssporing"
+msgstr ""
 
 msgid "Disabling tracking will restart reading from page one every time you reopen the reader."
 msgstr ""
-"Hvis sporing deaktiveres, vil lesingen starte fra side én hver gang du åpner "
-"leseren på nytt."
 
 msgid "Infinite Scrolling"
-msgstr "Uendelig rulling"
+msgstr ""
 
 msgid "Display all images in a vertical view in the same page."
-msgstr "Vis alle bilder i en vertikal visning på samme side."
+msgstr ""
 
 msgid "Reader Settings"
-msgstr "Leserinstillinger"
+msgstr ""
 
 msgid "Help"
-msgstr "Hjelp"
+msgstr ""
 
 msgid "Reading Direction"
-msgstr "Leserettning"
+msgstr ""
 
 msgid "Archive Overview"
-msgstr "Arkiv Oversikt"
+msgstr ""
 
 msgid "FullScreen"
-msgstr "Fullskjerm"
+msgstr ""
 
 msgid "Toggle Bookmark"
-msgstr "Slå av/på bokmerke"
+msgstr ""
 
 # ------End of Reader.html.tt2------
 # ------Start of Stats.html.tt2------
 msgid "Library Statistics"
-msgstr "Bibliotekstatistikk"
+msgstr ""
 
 msgid "Archives on record"
-msgstr "Registrerte arkiver"
+msgstr ""
 
 msgid "Different tags existing"
-msgstr "Ulike eksisterende tagger"
+msgstr ""
 
 msgid "in content folder"
-msgstr "i innholdsmappen"
+msgstr ""
 
 msgid "pages read"
-msgstr "sider lest"
+msgstr ""
 
 msgid "Tag Cloud"
-msgstr "Tagg Sky"
+msgstr ""
 
 msgid "Asking the great powers that be for your tag statistics..."
-msgstr "Spør de hellige makter om taggstatistikken din..."
+msgstr ""
 
 msgid "Detailed Stats"
-msgstr "Detaljert statistikk"
+msgstr ""
 
 msgid "(These statistics only show tags that appear at least twice in your database.)"
 msgstr ""
-"(Disse statistikkene viser kun tagger som forekommer minst to ganger i "
-"databasen din.)"
 
 msgid "Return to Library"
 msgstr ""
@@ -1220,609 +1090,557 @@ msgstr ""
 # ------End of Stats.html.tt2------
 # ------Start of Upload.html.tt2------
 msgid "Upload Center"
-msgstr "Opplastingssenter"
+msgstr ""
 
 msgid "Adding Archives to the Library"
-msgstr "Legge til Arkiver i Biblioteket"
+msgstr ""
 
 msgid "Add files to your LANraragi instance from your computer, or the Internet directly."
 msgstr ""
-"Legg til filer i LANraragi-instansen din fra datamaskinen din, eller direkte "
-"fra Internett."
 
 msgid "Add uploaded files to category:"
-msgstr "Legg opplastede filer til i kategori:"
+msgstr ""
 
 msgid " -- No Category -- "
-msgstr " --Ingen Kategori-- "
+msgstr ""
 
 msgid "From your computer"
-msgstr "Fra din datamaskin"
+msgstr ""
 
 msgid "You can drag and drop files into this window, or click the upload button."
 msgstr ""
-"Du kan dra og slippe filer inn i dette vinduet, eller klikke på "
-"opplastingsknappen."
 
 msgid "Add from your computer"
-msgstr "Legg til fra datamaskinen din"
+msgstr ""
 
 msgid "From the Internet"
-msgstr "Fra Internett"
+msgstr ""
 
 msgid "You can download files from remote URLs directly into LANraragi from here."
 msgstr ""
-"Du kan laste ned filer fra eksterne nettadresser direkte til LANraragi "
-"herfra."
 
 msgid "Download jobs will keep going even if you close this window!"
-msgstr "Nedlastningsjobber fortsetter selv om du lukker dette vinduet!"
+msgstr ""
 
 msgid "Type in your URLs (separated by a newline), and click the download button."
 msgstr ""
-"Skriv inn nettadressene dine (adskilt med linjeskift), og klikk på "
-"nedlastingsknappen."
 
 msgid "If a Downloader plugin is compatible with the URL, it'll be automatically used."
 msgstr ""
-"Hvis et <a href=\"[% c.url_for(\"/config/plugins\") %]\">nedlastings-"
-"programvaretillegg</a> er kompatibelt med nettadressen, vil det bli brukt "
-"automatisk."
 
 msgid "URL(s) to download:"
-msgstr "Nettadresse(r) å laste ned:"
+msgstr ""
 
 msgid "Add from URL(s)"
-msgstr "Leg til fra nettadresse(r)"
+msgstr ""
 
 msgid "Return to Library"
-msgstr "Tilbake til Bibliotek"
+msgstr ""
 
 # ------End of Upload.html.tt2------
 msgid "Rescan Archive Directory"
-msgstr "Søk gjennom arkivmappe på nytt"
+msgstr ""
 
 msgid "Click this button to trigger a rescan of the Archive Directory in case you're missing files, or some data such as total page counts."
 msgstr ""
-"Klikk på denne knappen for å starte et nytt søk gjennom arkivkatalogen hvis "
-"du mangler filer, <br>eller data som totalt antall sider. <br>"
 
 # ------Stary of i18n.html.tt2------
 msgid "Backup restored!"
-msgstr "Sikkerhetskopi gjenopprettet!"
+msgstr ""
 
 msgid "An error occured while restoring the backup.<br/> Please check the server logs and that your JSON is correctly formatted."
 msgstr ""
-"Det oppsto en feil under gjenoppretting av sikkerhetskopien.<br/> Vennligst "
-"sjekk serverloggene og at JSON-filen er riktig formatert."
 
 msgid "Couldn't load the complete archive list! Please reload the page."
-msgstr "Kunne ikke laste hele arkivlisten! Vennligst last inn siden på nytt."
+msgstr ""
 
 msgid "Couldn't load the tag statistics! Please reload the page."
-msgstr "Kunne ikke laste tag-statistikken! Vennligst last inn siden på nytt."
+msgstr ""
 
 msgid "Error getting untagged archives!"
-msgstr "Feil ved henting av arkiver uten tagger!"
+msgstr ""
 
 msgid "Are you sure you want to delete this archive?"
-msgstr "Er du sikker på at du vil slette dette arkivet?"
+msgstr ""
 
 msgid "Are you sure you want to delete the selected archives?"
-msgstr "Er du sikker på at du vil slette de valgte arkivene?"
+msgstr ""
 
 msgid "This action cannot be undone!"
-msgstr "Denne handlingen kan ikke angres!"
+msgstr ""
 
 msgid "This action (truly) cannot be undone!"
-msgstr "Denne handlingen kan (virkelig) ikke angres!"
+msgstr ""
 
 msgid "Yes, delete it!"
-msgstr "Ja, slett det!"
+msgstr ""
 
 msgid "No, keep it!"
-msgstr "Nei, behold det!"
+msgstr ""
 
 msgid "Error while deleting cache! Check application logs."
-msgstr "Feil under sletting av cache! Sjekk programloggene."
+msgstr ""
 
 msgid "Error while processing request"
-msgstr "Feil under behandling av forespørsel"
+msgstr ""
 
 msgid "Error checking Minion job status"
-msgstr "Feil ved sjekking av status for Tjener-oppgave"
+msgstr ""
 
 msgid "Saved!"
-msgstr "Lagret!"
+msgstr ""
 
 msgid "Error saving data"
-msgstr "Feil ved lagring av data"
+msgstr ""
 
 msgid "Started Batch Operation..."
-msgstr "Startet gruppeoperasjon..."
+msgstr ""
 
 msgid "Batch Operation complete!"
-msgstr "Gruppeoperasjon fullført!"
+msgstr ""
 
 msgid "An error occured during batch tagging!"
-msgstr "En feil oppstod under gruppetagging!"
+msgstr ""
 
 msgid "Please check application logs."
-msgstr "Vennligst sjekk applikasjonsloggene."
+msgstr ""
 
 msgid "Error! Terminating session."
-msgstr "Feil! Avslutter økten."
+msgstr ""
 
 msgid "Sleeping for \${x} seconds."
-msgstr "Sover i ${x} sekunder."
+msgstr ""
 
 msgid "Error while processing ID \${id} (\${msg})"
-msgstr "Feil ved behandling av ID ${id} (${msg})"
+msgstr ""
 
 msgid "Processed ID \${id} with \"\${plug}\" (Added tags: \${tags})"
-msgstr "Behandlet ID ${id} med «${plug}» (La til merkelapper: ${tags})"
+msgstr ""
 
 msgid "Deleted ID \${id} (Filename: \${filename})"
-msgstr "Slettet ID ${id} (Filnavn: ${filename})"
+msgstr ""
 
 msgid "Replaced tags for ID \${id} (New tags: \${tags})"
-msgstr "Erstattet tagger for ID ${id} (Nye tagger: ${tags})"
+msgstr ""
 
 msgid "Added ID \${id} to category \${category}! (\${msg})"
-msgstr "La til ID ${id} i kategori ${category}! (${msg})"
+msgstr ""
 
 msgid "Cleared new flag for ID \${id}!"
-msgstr "Fjernet nytt-flagget for ID ${id}!"
+msgstr ""
 
 msgid "Unknown operation \${oper} (\${msg})"
-msgstr "Ukjent operasjon ${oper} (${msg})"
+msgstr ""
 
 msgid "Changed title to: \${title}"
-msgstr "Endret tittel til: ${title}"
+msgstr ""
 
 msgid "Reloading page in 5 seconds to account for deleted archives..."
 msgstr ""
-"Laster inn siden på nytt om 5 sekunder for å ta høyde for slettede arkiver..."
 
 msgid "Cancelling Batch Operation..."
-msgstr "Avbryter batch-operasjonen..."
+msgstr ""
 
 msgid "Enter a name for the new category"
-msgstr "Skriv inn et navn for den nye kategorien"
+msgstr ""
 
 msgid "My Category"
-msgstr "Min Kategori"
+msgstr ""
 
 msgid "Please enter a category name."
-msgstr "Vennligst skriv inn et navn for kategorien."
+msgstr ""
 
 msgid "No category"
-msgstr "Ingen kategori"
+msgstr ""
 
 msgid "Error getting categories from server"
-msgstr "Feil ved henting av kategorier fra serveren"
+msgstr ""
 
 msgid "Error modifying category"
-msgstr "Feil ved endring av kategori"
+msgstr ""
 
 msgid "The category will be deleted permanently."
-msgstr "Kategorien vil bli slettet permanent."
+msgstr ""
 
 msgid "Category deleted!"
-msgstr "Kategori slettet!"
+msgstr ""
 
 msgid "Error deleting category"
-msgstr "Feil ved sletting av kategori"
+msgstr ""
 
 msgid "Writing a Predicate"
-msgstr "Å skrive et predikat"
+msgstr ""
 
 msgid "Predicates follow the same syntax as searches in the Archive Index. Check the Documentation for more information."
 msgstr ""
-"Predikater følger samme syntaks som søk i arkivindeksen. Sjekk <a href="
-"\"https://sugoi.gitbook.io/lanraragi/basic-operations/searching\""
-">Dokumentasjonen</a> for mer informasjon."
 
 msgid "Background Worker restarted!"
-msgstr "Bakgrunnsarbeideren ble startet på nytt!"
+msgstr ""
 
 msgid "Error restarting Worker:"
-msgstr "Feil ved omstart av arbeider:"
+msgstr ""
 
 msgid "Content folder rescan started!"
-msgstr "Gjenlesing av innholdsmappen startet!"
+msgstr ""
 
 msgid "Error starting content folder rescan:"
-msgstr "Feil ved oppstart av gjenlesing av innholdsmappen:"
+msgstr ""
 
 msgid "Error while querying Shinobu status:"
-msgstr "Feil ved forespørsel om Shinobu-status:"
+msgstr ""
 
 msgid "About Plugins"
-msgstr "Om programvaretillegg"
+msgstr ""
 
 msgid "You can use plugins to automatically fetch metadata for this archive. <br/> Just select a plugin from the dropdown and hit Go! <br/> Some plugins might provide an optional argument for you to specify. If that's the case, a textbox will be available to input said argument."
 msgstr ""
-"Du kan bruke programvaretillegg for automatisk å hente metadata for dette "
-"arkivet. <br/> Bare velg et tillegg fra nedtrekksmenyen og trykk på \"Kjør\""
-"! <br/> Noen tillegg kan ha et valgfritt felt der du kan spesifisere et "
-"argument. Hvis det er tilfelle, vil det dukke opp en tekstboks hvor du kan "
-"skrive inn argumentet."
 
 msgid "Metadata saved!"
-msgstr "Metadata lagret!"
+msgstr ""
 
 msgid "Error saving archive metadata"
-msgstr "Feil ved lagring av arkivmetadata"
+msgstr ""
 
 msgid "Error while fetching tags"
-msgstr "Feil ved henting av tagger"
+msgstr ""
 
 msgid "Archive title changed to"
-msgstr "Arkivtittel endret til"
+msgstr ""
 
 msgid "Archive summary updated!"
-msgstr "Arkivoppsummering oppdatert!"
+msgstr ""
 
 msgid "Added the following tags"
-msgstr "La til følgende tagger"
+msgstr ""
 
 msgid "No new tags added!"
-msgstr "Ingen nye tagger lagt til!"
+msgstr ""
 
 # Do not translate _START_, _END_ or _TOTAL_.
 msgid "Showing _START_ to _END_ of _TOTAL_ ancient chinese lithographies."
-msgstr "Viser _START_ til _END_ av _TOTAL_ gamle kinesiske litografier."
+msgstr ""
 
 msgid "No archives to show you! Try <a href=\"\${url}\")>uploading some</a>?"
-msgstr "Ingen arkiver å vise! Prøv å <a href=\"${url}\")>laste opp noen</a>?"
+msgstr ""
 
 msgid "Welcome to LANraragi \${version}!"
-msgstr "Velkommen til LANraragi ${version}!"
+msgstr ""
 
 msgid "If you want to perform advanced operations on an archive, remember to just right-click its name. Happy reading!"
 msgstr ""
-"Hvis du vil utføre avanserte operasjoner på et arkiv, husk å høyreklikke på "
-"navnet. God lesing!"
 
 msgid "Error getting basic server info."
-msgstr "Feil ved henting av grunnlegende serverinformasjon."
+msgstr ""
 
 msgid "You're running in Debug Mode!"
-msgstr "Du kjører i Feilsøkingsmodus!"
+msgstr ""
 
 msgid "Advanced server statistics can be viewed <a href=\"\${url}\")>here</a>."
-msgstr "Avanserte serverstatistikker kan vises <a href=\"${url}\">her</a>."
+msgstr ""
 
 msgid "Enter a tag namespace for this column"
-msgstr "Skriv inn en tagg-navnerom for denne kolonnen"
+msgstr ""
 
 msgid "Enter a full namespace without the colon, e.g \"artist\"."
-msgstr "Skriv inn et fullstendig navnerom uten kolon, f.eks. \"artist\"."
+msgstr ""
 
 msgid "If you have multiple tags with the same namespace, only the last one will be shown in the column."
 msgstr ""
-"Hvis du har flere tagger med samme navnerom, vil bare den siste vises i "
-"kolonnen."
 
 msgid "Tag namespace"
-msgstr "Tagg-navnerom"
+msgstr ""
 
 msgid "Please enter a tag namespace."
-msgstr "Vennligst skriv inn et tagg-navnerom."
+msgstr ""
 
 msgid "Randomly Picked"
-msgstr "Tilfeldig Utplukket"
+msgstr ""
 
 msgid "New Archives"
-msgstr "Nye Arkiver"
+msgstr ""
 
 msgid "Untagged Archives"
-msgstr "Arkiver uten tagger"
+msgstr ""
 
 msgid "On Deck"
-msgstr "Klar til lesing"
+msgstr ""
 
 msgid "Error getting carousel data!"
-msgstr "Feil ved henting av karusell-data!"
+msgstr ""
 
 msgid "Edit this column"
-msgstr "Rediger denne kolonnen"
+msgstr ""
 
 msgid "Title"
-msgstr "Tittel"
+msgstr ""
 
 msgid "Tags"
-msgstr "Tagger"
+msgstr ""
 
 msgid "Header"
-msgstr "Topptekst"
+msgstr ""
 
 msgid "A new version of LANraragi (\${version}) is available!"
-msgstr "En ny versjon av LANraragi (${version}) er tilgjengelig!"
+msgstr ""
 
 msgid "Click here to check it out."
-msgstr "Klikk her for å sjekke den ut."
+msgstr ""
 
 msgid "Error getting changelog for new version"
-msgstr "Feil ved henting av endringslogg for ny versjon"
+msgstr ""
 
 msgid "Couldn't load data for \${id}!"
-msgstr "Kunne ikke laste inn data for ${id}!"
+msgstr ""
 
 msgid "Github API rate limit exceeded."
-msgstr "Grensen for GitHub API-forespørsler er overskredet."
+msgstr ""
 
 msgid "Github API returned status: \${status}"
-msgstr "GitHub API returnerte status: ${status}"
+msgstr ""
 
 msgid "This archive isn't in any category."
-msgstr "Dette arkivet er ikke i noen kategori."
+msgstr ""
 
 msgid "No Categories yet..."
-msgstr "Ingen Kategorier enda..."
+msgstr ""
 
 msgid "Remove rating"
-msgstr "Fjerner vurdering"
+msgstr ""
 
 msgid "Click here to display new archives only."
-msgstr "Klikk her for å vise kun nye arkiver."
+msgstr ""
 
 msgid "Click here to display untagged archives only."
-msgstr "Klikk her for å vise kun arkiver uten tagger."
+msgstr ""
 
 msgid "Click here to display archives in this category only."
-msgstr "Klikk her for å vise kun arkiver i denne kategorien."
+msgstr ""
 
 msgid "Your Reading Progression is now saved on the server!"
-msgstr "Din leseprogresjon er nå lagret på serveren!"
+msgstr ""
 
 msgid "You seem to have some local progression hanging around -- Please wait warmly while we migrate it to the server for you."
 msgstr ""
-"Det ser ut som du har noe lokal leseprogresjon som henger og slenger -- "
-"Vennligst vent mens vi trygt overfører den til serveren for deg."
 
 msgid "Error while migrating local progression to server"
-msgstr "Feil ved overføring av lokal leseprogresjon til server"
+msgstr ""
 
 msgid "Reading Progression has been fully migrated"
-msgstr "Leseprogresjon har blitt fullstendig overført"
+msgstr ""
 
 msgid "You'll have to reopen archives in the Reader to see the migrated progression values."
 msgstr ""
-"Du må åpne arkivene på nytt i Leseren for å se de overførte leseverdiene."
 
 msgid "Plugin uploaded successfully!"
-msgstr "Programvaretillegg lastet opp!"
+msgstr ""
 
 msgid "The plugin \${name} has been successfully added. Refresh the page to see it."
-msgstr "Programvaretillegget ${name} er lagt til. Oppdater siden for å se det."
+msgstr ""
 
 msgid "Error uploading plugin"
-msgstr "Feil ved opplastning av programvaretillegg"
+msgstr ""
 
 msgid "Successfully set page \${page} as the thumbnail!"
-msgstr "Siden ${page} er nå satt som miniatyrbilde!"
+msgstr ""
 
 msgid "Error updating thumbnail"
-msgstr "Feil ved oppdatering av miniatyrbilde"
+msgstr ""
 
 msgid "Error clearing new flag"
-msgstr "Feil ved tilbakestilling av ny-flagget"
+msgstr ""
 
 msgid "Error getting the archive's imagelist."
-msgstr "Feil ved henting av arkivets bildeliste."
+msgstr ""
 
 msgid "This archive seems to be in RAR format!"
-msgstr "Dette arkivet ser ut til å være i RAR-format!"
+msgstr ""
 
 msgid "RAR archives might not work properly in LANraragi depending on how they were made. If you encounter errors while reading, consider converting your archive to zip."
 msgstr ""
-"RAR-arkiver fungerer muligens ikke som de skal i LANraragi, avhengig av "
-"hvordan de ble laget. Hvis du støter på feil under lesing, vurder å "
-"konvertere arkivet til ZIP-format."
 
 msgid "EPUB support in LANraragi is minimal"
-msgstr "EPUB støtte i LANraragi er minimal"
+msgstr ""
 
 msgid "EPUB books will only show images in the Web Reader, and potentially out of order. If you want text support, consider pairing LANraragi with an OPDS reader."
 msgstr ""
-"EPUB-bøker vil kun vise bilder i nettleserleseren, og de kan vises i feil "
-"rekkefølge. Hvis du ønsker støtte for tekst, vurder å bruke LANraragi sammen "
-"med en <a href='https://sugoi.gitbook.io/lanraragi/advanced-usage/external-"
-"readers#generic-opds-readers'>OPDS leser.</a>"
 
 msgid "Navigation Help"
-msgstr "Navigasjonshjelp"
+msgstr ""
 
 msgid "Error updating reading progression"
-msgstr "Feil ved oppdatering av leseprogresjon"
+msgstr ""
 
 msgid "Page \${page}"
-msgstr "Side ${page}"
+msgstr ""
 
 msgid "The page thumbnailing job didn't conclude properly. Your archive might be corrupted."
 msgstr ""
-"Jobben for å lage miniatyrbilde av siden ble ikke fullført riktig. Arkivet "
-"ditt kan være ødelagt."
 
 msgid "A script is already running."
-msgstr "Et skript kjører allerede."
+msgstr ""
 
 msgid "Please wait for it to finish before starting a new one."
-msgstr "Vannligst vent til det er ferdig før du starter et nytt."
+msgstr ""
 
 msgid "An error occured while running the script"
-msgstr "Det oppstod en feil under kjøring av skriptet"
+msgstr ""
 
 msgid "Script result"
-msgstr "Skript resultat"
+msgstr ""
 
 msgid "Script failed with error: \${error}"
-msgstr "Skriptet mislyktes med feilen: ${error}"
+msgstr ""
 
 msgid "Temporary folder cleaned!"
-msgstr "Midlertidig lagring tømt!"
+msgstr ""
 
 msgid "Error cleaning temporary folder"
-msgstr "Feil ved tømming av midlertidig lagring"
+msgstr ""
 
 msgid "Threw away the cache!"
-msgstr "Cacheen ble kastet!"
+msgstr ""
 
 msgid "Error clearing the cache"
-msgstr "Feil ved tømming av cacheen"
+msgstr ""
 
 msgid "Threw away the search cache!"
-msgstr "Søkecacheen ble kastet!"
+msgstr ""
 
 msgid "All archives are no longer new!"
-msgstr "Alle arkiver er ikke lenger nye!"
+msgstr ""
 
 msgid "Error during cleanup procedure"
-msgstr "Feil under oppryddingsprosedyre"
+msgstr ""
 
 msgid "Are you sure you want to wipe the database?"
-msgstr "Er du sikker på at du vil tømme databasen?"
+msgstr ""
 
 msgid "Sayonara! Redirecting you..."
-msgstr "Hade på badet! Sender deg videre..."
+msgstr ""
 
 msgid "Successfully cleaned the database and removed \${entries} entries."
-msgstr "Databasen ble ryddet og ${entries} oppføringer ble fjernet."
+msgstr ""
 
 msgid "\${entries} other entries have been unlinked from the database and will be deleted on the next cleanup!"
 msgstr ""
-"${entries} andre oppføringer har blitt koblet fra databasen og vil bli "
-"slettet ved neste opprydding!"
 
 msgid "Do a backup now if some files disappeared from your archive index."
 msgstr ""
-"Ta en sikkerhetskopi nå hvis noen filer har forsvunnet fra arkivindeksen din."
 
 msgid "Queued up a job to regenerate thumbnails! Stay tuned for updates or check the Minion console."
 msgstr ""
-"Jobb for å regenerere miniatyrbilder er satt i kø! Følg med for "
-"oppdateringer, eller sjekk Tjener-konsollen."
 
 msgid "All thumbnails generated! Errors will be listed below if there were any."
-msgstr "Alle miniatyrbilder er generert! Eventuelle feil vil vises nedenfor."
+msgstr ""
 
 msgid "Added \${id} to category \${cat}!"
-msgstr "La ${id} til i kategori ${cat}!"
+msgstr ""
 
 msgid "Removed \${id} from category \${cat}!"
-msgstr "Fjernet ${id} fra kategori ${cat}!"
+msgstr ""
 
 msgid "Couldn't delete archive file. <br/> (Maybe it has already been deleted beforehand?)"
 msgstr ""
-"Kunne ikke slette arkiv fil. <br/> (Kanskje den allerede har blitt slettet?)"
 
 msgid "Archive metadata has been deleted properly. <br> Please delete the file manually before returning to the archive index."
 msgstr ""
-"Arkiv metadata har blitt slettet riktig. <br> Vennligst slett filen manuelt "
-"før du returnerer til arkivindeksen."
 
 msgid "Archive successfully deleted. Redirecting you..."
-msgstr "Arkiv slettet! Sender deg videre..."
+msgstr ""
 
 msgid "Error while deleting archive"
-msgstr "Feil under sletting av arkiv"
+msgstr ""
 
 msgid "Processing your upload... (Job #\${jobid})"
-msgstr "Behandler opplastingen din... (Jobb #${jobid})"
+msgstr ""
 
 msgid "Downloading file... (Job #\${jobid})"
-msgstr "Laster ned fil... (Jobb #${jobid})"
+msgstr ""
 
 msgid "Processing"
-msgstr "Behandler"
+msgstr ""
 
 msgid "Completed"
-msgstr "Ferdig"
+msgstr ""
 
 msgid "Failed"
-msgstr "Feilet"
+msgstr ""
 
 msgid "Total"
-msgstr "Totalt"
+msgstr ""
 
 msgid "Click here to edit metadata."
-msgstr "Klikk her for å redigere metadata."
+msgstr ""
 
 msgid "Error while processing file."
-msgstr "Feil under behandling av fil."
+msgstr ""
 
 msgid "Error while downloading file."
-msgstr "Feil under nedlastning av fil."
+msgstr ""
 
 msgid "Error sending job to Minion"
-msgstr "Feil ved sending av jobb til Tjener"
+msgstr ""
 
 # ------End of i18n.html.tt2------
 # ------Start of Duplicates.html.tt2------
 msgid "Duplicate Detection"
-msgstr "Duplikatdeteksjon"
+msgstr ""
 
 msgid "This page allows you to search for potential duplicates in your library."
-msgstr "Denne siden lar deg søke etter mulige duplikater i biblioteket ditt."
+msgstr ""
 
 msgid "Clicking \"Start searching\" will start a background job to scan the entire library for dupes."
 msgstr ""
-"Å klikke på \"Start søk\" vil starte en bakgrunnsjobb som skanner hele "
-"biblioteket ditt etter duplikater."
 
 msgid "After which, you can select which archives to delete, and then delete them in bulk."
 msgstr ""
-"Deretter kan du velge hvilke arkiver som skal slettes, og slette dem samlet."
 
 msgid "Found %1 duplicate group(s)."
-msgstr "Fant %1 duplikatgruppe(r)."
+msgstr ""
 
 msgid "You can use the rules dropdown below to pre-select archives for deletion."
 msgstr ""
-"Du kan bruke regelmenyen nedenfor for å forhåndsvelge arkiver til sletting."
 
 msgid "For every duplicate group..."
-msgstr "For hver duplikatgruppe..."
+msgstr ""
 
 msgid "Keep all files"
-msgstr "Behold alle filer"
+msgstr ""
 
 msgid "Keep the file with the most tags"
-msgstr "Behold filen med mest tagger"
+msgstr ""
 
 msgid "Keep the file with the most pages"
-msgstr "Behold filen med flest sider"
+msgstr ""
 
 msgid "Keep the largest file"
-msgstr "Behold den største filen"
+msgstr ""
 
 msgid "Keep the youngest file"
-msgstr "Behold den yngste filen"
+msgstr ""
 
 msgid "Keep the oldest file"
-msgstr "Behold den eldste filen"
+msgstr ""
 
 msgid "Start searching for duplicates"
-msgstr "Start søk etter dupliketer"
+msgstr ""
 
 msgid "Search for duplicates again"
-msgstr "Søk etter duplikater igjen"
+msgstr ""
 
 msgid "Delete all selected items"
-msgstr "Slet alle valgte filer"
+msgstr ""
 
 msgid "Filename"
-msgstr "Filnavn"
+msgstr ""
 
 msgid "Filesize"
-msgstr "Filstørrelse"
+msgstr ""
 
 msgid "Action"
-msgstr "Handling"
+msgstr ""
 
 msgid "Searching for duplicates..."
-msgstr "Søker etter duplikater..."
+msgstr ""
 
 # ------End of Duplicates.html.tt2------
