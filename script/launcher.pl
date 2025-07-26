@@ -32,10 +32,14 @@ die extract_usage if $help || !( my $app = shift || $ENV{HYPNOTOAD_APP} );
 
 my @listen;
 if ( $ENV{LRR_NETWORK} ) {
-    @listen = [ $ENV{LRR_NETWORK} ];
+    @listen = ( $ENV{LRR_NETWORK} );
 } else {
-    @listen = ["http://*:3000"];
+    @listen = ("http://*:3000");
 }
+
+# Always add metrics port 9030 if metrics are enabled
+# We'll check the metrics setting in the app startup
+push @listen, "http://*:9030";
 
 # Relocate the Prefork PID file
 my $hypno_pid;
@@ -52,14 +56,14 @@ my $backend;
 if ($morbo) {
     $backend = Mojo::Server::Morbo->new( keep_alive_timeout => 30 );
     $ENV{MOJO_MODE} = "development";
-    $backend->daemon->listen(@listen);
+    $backend->daemon->listen(\@listen);
     $backend->run($app);
 } else {
     print "Server PID will be at " . $hypno_pid . "\n";
 
     $backend = Mojo::Server::Prefork->new( keep_alive_timeout => 30 );
     $backend->pid_file($hypno_pid);
-    $backend->listen(@listen);
+    $backend->listen(\@listen);
 
     $backend->load_app($app);
 

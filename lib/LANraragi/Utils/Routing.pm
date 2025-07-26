@@ -91,9 +91,17 @@ sub apply_routes {
 
     $logged_in->get('/duplicates')->to('duplicates#index');
 
-    # Metrics API
+    # Metrics API - only available on port 9030 at /metrics endpoint
     if ( $self->LRR_CONF->enable_metrics ) {
-        $public_api->get('/api/metrics')->to('api-metrics#serve_metrics');
+        # Add custom condition to check for port 9030
+        $self->routes->add_condition(metrics_port => sub {
+            my ($route, $c, $captures, $expected_port) = @_;
+            my $local_port = $c->tx->local_port || 0;
+            return $local_port == $expected_port;
+        });
+        
+        # Metrics endpoint only on port 9030
+        $public_api->get('/metrics')->requires(metrics_port => 9030)->to('api-metrics#serve_metrics');
     }
 
     # OPDS API

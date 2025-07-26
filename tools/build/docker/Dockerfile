@@ -21,8 +21,8 @@ HEALTHCHECK --interval=1m --timeout=10s --retries=3 \
   CMD wget --quiet --tries=1 --no-check-certificate --spider -Y off \
   http://127.0.0.1:3000 || exit 1
 
-#Default mojo server port
-EXPOSE 3000
+#Default mojo server port and metrics port
+EXPOSE 3000 9030
 
 # Enable UTF-8 (might not do anything extra on alpine tho)
 ENV LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 \
