@@ -6,7 +6,8 @@ Param(
   [Parameter(Mandatory=$true)]
   [string]$Thumb,
   [Parameter(Mandatory=$true)]
-  [string]$Database
+  [string]$Database,
+  [string]$RedisPort = "6379"
 )
 
 Push-Location $([Environment]::CurrentDirectory)
@@ -18,6 +19,7 @@ if ([string]::IsNullOrEmpty($Network)) {
 }
 
 $Env:LRR_DATA_DIRECTORY = $Data
+$Env:LRR_REDIS_ADDRESS = "127.0.0.1:$RedisPort"
 $Env:LRR_THUMB_DIRECTORY = $Thumb
 $Env:Path = "$PWD\runtime\bin;$PWD\runtime\redis;$($Env:Path)"
 
@@ -27,7 +29,7 @@ $Env:Path = "$PWD\runtime\bin;$PWD\runtime\redis;$($Env:Path)"
 # redis on windows has broken absolute paths to config files so define it as relative instead
 # "$PWD\runtime\redis\redis.conf"
 
-Start-Process -FilePath "redis-server" -ArgumentList "./runtime/redis/redis.conf", "--pidfile", "$PWD\temp\redis.pid", "--dir", "$Database", "--logfile", "$PWD\log\redis.log"
+Start-Process -FilePath "redis-server" -ArgumentList "./runtime/redis/redis.conf", "--port", $RedisPort, "--pidfile", "$PWD\temp\redis.pid", "--dir", "$Database", "--logfile", "$PWD\log\redis.log"
 Start-Process -FilePath "perl" -ArgumentList "script\launcher.pl", "-d", "script\lanraragi"
 
 Pop-Location
