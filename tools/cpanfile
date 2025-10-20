@@ -10,6 +10,7 @@ requires 'Archive::Libarchive::Peek',    0.04;
 requires 'Archive::Zip',                 1.68;
 requires 'Digest::SHA',                  6.02;
 requires 'List::MoreUtils',              0.430;
+requires 'Devel::SimpleTrace',           0.08;
 
 # Not required by LRR itself but needs this version for Alpine support
 requires 'Crypt::Rijndael', 1.14;
