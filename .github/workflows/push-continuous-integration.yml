@@ -26,9 +26,11 @@ jobs:
       repo: ${{ steps.select-aio-lrr.outputs.repo }}
       ref: ${{ steps.select-aio-lrr.outputs.ref }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - name: Select integration test source
         id: select-aio-lrr
-        run: ./.github/action-run-tests/determine_integration_test_origin.sh
+        run: bash ./.github/action-run-tests/determine_integration_test_origin.sh
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           BODY: ${{ github.event.pull_request.body }}
