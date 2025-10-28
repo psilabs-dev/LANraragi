@@ -1,4 +1,8 @@
 #!/bin/sh
+
+# Determine the integration testing origin based on pull request description.
+# Example usage: "!integration-test-override https://github.com/psilabs-dev/aio-lanraragi.git@dev-openapi"
+
 set -eu
 
 EVENT_NAME="${GITHUB_EVENT_NAME:-}"
