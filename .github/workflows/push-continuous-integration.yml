@@ -18,10 +18,28 @@ jobs:
       with:
           args: ./lib/* ./script/* ./tools/install.pl
 
+  determineIntegrationTestOrigin:
+    name: Determine Integration Test Origin
+    runs-on: ubuntu-latest
+    needs: testSuite
+    outputs:
+      repo: ${{ steps.select-aio-lrr.outputs.repo }}
+      ref: ${{ steps.select-aio-lrr.outputs.ref }}
+    steps:
+      - name: Select integration test source
+        id: select-aio-lrr
+        run: ./.github/action-run-tests/determine_integration_test_origin.sh
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          BODY: ${{ github.event.pull_request.body }}
+          AUTHOR_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
+          DEFAULT_REPO: psilabs-dev/aio-lanraragi
+          DEFAULT_REF: a6b6780fe89698a133c0f5561f60a55ab0f75dcb
+
   integrationTestsDocker:
     name: Run Docker Integration Tests
     runs-on: ubuntu-latest
-    needs: testSuite
+    needs: [testSuite, determineIntegrationTestOrigin]
     steps:
       - name: Checkout LANraragi repository
         uses: actions/checkout@v4
@@ -30,8 +48,8 @@ jobs:
       - name: Checkout aio-lanraragi integration tests
         uses: actions/checkout@v4
         with:
-          repository: psilabs-dev/aio-lanraragi
-          ref: a6b6780fe89698a133c0f5561f60a55ab0f75dcb
+          repository: ${{ needs.determineIntegrationTestOrigin.outputs.repo }}
+          ref: ${{ needs.determineIntegrationTestOrigin.outputs.ref }}
           path: aio-lanraragi
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,7 +78,7 @@ jobs:
   integrationTestsWindows:
     name: Run Windows Integration Tests
     runs-on: windows-2025
-    needs: testSuite
+    needs: [testSuite, determineIntegrationTestOrigin]
     steps:
       - name: Checkout LANraragi repository
         uses: actions/checkout@v4
@@ -90,8 +108,8 @@ jobs:
       - name: Checkout aio-lanraragi integration tests
         uses: actions/checkout@v4
         with:
-          repository: psilabs-dev/aio-lanraragi
-          ref: a6b6780fe89698a133c0f5561f60a55ab0f75dcb
+          repository: ${{ needs.determineIntegrationTestOrigin.outputs.repo }}
+          ref: ${{ needs.determineIntegrationTestOrigin.outputs.ref }}
           path: aio-lanraragi
       - name: Setup Python
         uses: actions/setup-python@v5
