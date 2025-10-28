@@ -15,11 +15,15 @@ selected_repo="$DEFAULT_REPO"
 selected_ref="$DEFAULT_REF"
 
 if [ "${EVENT_NAME}" = "pull_request" ] && [ -n "$BODY" ]; then
-  line=$(printf '%s\n' "$BODY" | grep -Eim1 '^!integration-test-override[[:space:]]+') || true
+  line=$(printf '%s\n' "$BODY" | grep -Eim1 '^[[:space:]]*!integration-test-override[[:space:]]+') || true
   if [ -n "${line:-}" ]; then
-    raw=$(printf '%s' "$line" | sed -E 's/^!integration-test-override[[:space:]]+//')
+    raw=$(printf '%s' "$line" | sed -E 's/^[[:space:]]*!integration-test-override[[:space:]]+//')
     repo_part="${raw%@*}"
     ref_part="${raw##*@}"
+
+    # Trim potential CR/LF or trailing spaces
+    repo_part=$(printf '%s' "$repo_part" | sed -E 's/[[:space:]]+$//')
+    ref_part=$(printf '%s' "$ref_part" | sed -E 's/[[:space:]]+$//')
 
     case "$repo_part" in
       https://github.com/*)
@@ -32,7 +36,7 @@ if [ "${EVENT_NAME}" = "pull_request" ] && [ -n "$BODY" ]; then
 
     if printf '%s' "$repo_part" | grep -Eq '^[^/]+/[^/]+$'; then
       owner="${repo_part%%/*}"
-      if [ "$owner" = "$AUTHOR_OWNER" ] && [ -n "$ref_part" ] && [ "$ref_part" != "$raw" ]; then
+      if [ "$owner" = "$AUTHOR_OWNER" ] && [ -n "$ref_part" ]; then
         selected_repo="$repo_part"
         selected_ref="$ref_part"
       fi
