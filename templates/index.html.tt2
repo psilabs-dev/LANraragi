@@ -47,6 +47,7 @@
 	<script src="[% c.url_for("/js/common.js?$version") %]" type="text/JAVASCRIPT"></script>
 	<script src="[% c.url_for("/js/server.js?$version") %]" type="text/JAVASCRIPT"></script>
 	<script src="[% c.url_for("/js/index_datatables.js?$version") %]" type="text/JAVASCRIPT"></script>
+	<script src="[% c.url_for("/js/integrations.js?$version") %]" type="text/JAVASCRIPT"></script>
 
 </head>
 

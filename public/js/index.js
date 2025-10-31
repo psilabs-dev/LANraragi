@@ -157,6 +157,8 @@ Index.initializeAll = function () {
             hideAfter: false,
         });
     });
+
+    Integrations.initialize();
 };
 
 // Turn bookmark icons to OFF for all archives.

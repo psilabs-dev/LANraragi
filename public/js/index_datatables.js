@@ -13,13 +13,18 @@ IndexTable.currentSearch = "";
  */
 IndexTable.initializeAll = function () {
     // Bind events to DOM
-    $(document).on("click.apply-search", "#apply-search", () => { IndexTable.currentSearch = $("#search-input").val(); IndexTable.doSearch(); });
+    $(document).on("click.apply-search", "#apply-search", () => {
+        IndexTable.currentSearch = $("#search-input").val();
+        Integrations.updateSearchOptions();
+        IndexTable.doSearch();
+    });
     $(document).on("click.clear-search", "#clear-search", () => { IndexTable.currentSearch = ""; IndexTable.doSearch(); });
     $(document).on("keyup.search-input", "#search-input", (e) => {
         if (e.defaultPrevented) {
             return;
         } else if (e.key === "Enter") {
             IndexTable.currentSearch = $("#search-input").val();
+            Integrations.updateSearchOptions();
             IndexTable.doSearch();
         }
         e.preventDefault();
@@ -41,6 +46,7 @@ IndexTable.initializeAll = function () {
 
     // Clear searchbar cache
     $("#search-input").val("");
+    Integrations.updateSearchOptions();
 
     // Classes for even/odd lines
     $.fn.dataTableExt.oStdClasses.sStripeOdd = "gtr0";
@@ -107,6 +113,7 @@ IndexTable.doSearch = function (page) {
 
     // Update search input field
     $("#search-input").val(IndexTable.currentSearch);
+    Integrations.updateSearchOptions();
     IndexTable.dataTable.search(IndexTable.currentSearch);
 
     // Add the current search terms to the title tab
