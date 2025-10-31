@@ -183,6 +183,12 @@ sub apply_routes {
     $logged_in_api->put('/api/tankoubons/:id/:archive')->to('api-tankoubon#add_to_tankoubon');
     $logged_in_api->delete('/api/tankoubons/:id/:archive')->to('api-tankoubon#remove_from_tankoubon');
 
+    # Integrations API
+    $public_api->get('/api/integrations/pixiv/status')->to('api-integrations#get_pixiv_server_status');
+    $public_api->get('/api/integrations/twitterdl/status')->to('api-integrations#get_twitterdl_server_status');
+    $logged_in_api->post('/api/integrations/pixiv/download_by_member/:member_id')->to('api-integrations#queue_pixiv_download_artworks_by_artist');
+    $logged_in_api->post('/api/integrations/twitterdl/download_by_user_id/:user_id')->to('api-integrations#queue_twitterdl_download_posts_by_user_id');
+
 }
 
 1;
