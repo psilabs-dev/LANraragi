@@ -2,6 +2,8 @@
 
 const Integrations = {};
 Integrations.queueDownloadButtonValue = null;
+Integrations.downloadServerRunning = false;
+Integrations.checkedDownloadServerStatus = false;
 
 /**
  * Initialize button behavior.
@@ -93,6 +95,22 @@ Integrations.updateSearchOptions = function () {
     }
 
     if (namespace == 'pixiv_user_id') {
+        if (!Integrations.checkedDownloadServerStatus) {
+            const pixiv_endpoint = new LRR.apiURL(`/api/integrations/pixiv/status`);
+            Integrations.downloadServerRunning = fetch(pixiv_endpoint, { method: "GET" })
+            .then(async (response) => {
+                if (response.ok) {
+                    console.log("Response is OK.");
+                    return true;
+                }
+                console.log("Response not OK.");
+                return false;
+            });
+        }
+        if (!Integrations.downloadServerRunning) {
+            console.log("Skip (pdl server not running)");
+            return;
+        }
         console.log("Applying Pixiv download button.");
         $('<input>', {
             id: 'queue-download-pixiv-by-user-id',
@@ -102,6 +120,23 @@ Integrations.updateSearchOptions = function () {
         }).insertAfter('#clear-search')
 
     } else if (namespace == 'twitter_user_id') {
+        if (!Integrations.checkedDownloadServerStatus) {
+            const twitterdl_endpoint = new LRR.apiURL(`/api/integrations/twitterdl/status`);
+            Integrations.downloadServerRunning = fetch(twitterdl_endpoint, { method: "GET" })
+            .then(async (response) => {
+                if (response.ok) {
+                    console.log("Response is OK.");
+                    return true;
+                }
+                console.log("Response not OK.");
+                return false;
+            });
+            Integrations.checkedDownloadServerStatus = true;
+        }
+        if (!Integrations.downloadServerRunning) {
+            console.log("Skip (tdl server not running)");
+            return;
+        }
         console.log("Applying Twitter download button.");
         $('<input>', {
             id: 'queue-download-twitter-by-user-id',
