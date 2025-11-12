@@ -6,6 +6,7 @@ use Redis;
 
 use LANraragi::Model::Stats;
 use LANraragi::Model::Opds;
+use LANraragi::Utils::Logging    qw(get_logger);
 use LANraragi::Utils::Generic    qw(render_api_response);
 use LANraragi::Utils::Plugins    qw(get_plugin get_plugins use_plugin);
 
@@ -40,6 +41,25 @@ sub serve_serverinfo {
             total_archives         => $arc_stat,
             cache_last_cleared     => $last_clear
         }
+    );
+}
+
+# Test logging by logging a log
+sub test_logging {
+    my $self        = shift;
+    my $logger      = get_logger( "Log Test API ", "lanraragi" );
+
+    # now log
+    $logger->info("info logging now 1");
+    $logger->info("info logging now 2");
+    $logger->info("info logging now 3");
+
+    return $self->render(
+        json => {
+            operation => "test_logging",
+            success   => 1,
+        },
+        status => 200
     );
 }
 
