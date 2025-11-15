@@ -34,15 +34,17 @@ our %LOGGER_CACHE;
 # Ensure logfile created, and the mojo logger cached and returned, or die trying.
 sub _ensure_logger {
     my $logpath     = $_[0];
-    my $operation   = $_[1];
-    my $cache_key   = $_[2];
-    my $pgname      = $_[3];
-    my $devmode     = $_[4];
+    my $logfile     = $_[1];
+    my $operation   = $_[2];
+    my $cache_key   = $_[3];
+    my $pgname      = $_[4];
+    my $devmode     = $_[5];
     my $log;
 
     eval {
         $log = LANraragi::Utils::RotatingLog->new(
             path    => $logpath,
+            logfile => $logfile,
             level   => 'info',
         );
         $log->handle;
@@ -161,7 +163,7 @@ sub get_logger {
                 $gz->gzclose();
                 close $handle;
                 unlink $tmp or die "error: could not delete $tmp: $!";
-                $log = _ensure_logger( $logpath, "rotation" , $cache_key, $pgname, $devmode );
+                $log = _ensure_logger( $logpath, $logfile, "rotation" , $cache_key, $pgname, $devmode );
                 $log->info("Rotated log files.");
                 1;
             };
@@ -191,7 +193,7 @@ sub get_logger {
             # This happens during start of app (if no logfile exists).
             say "Creating logfile $logfile.";
             eval {
-                $log = _ensure_logger( $logpath, "create", $cache_key, $pgname, $devmode );
+                $log = _ensure_logger( $logpath, $logfile, "create", $cache_key, $pgname, $devmode );
                 $log->info("Created logfile.");
                 1;
             };
@@ -208,7 +210,7 @@ sub get_logger {
                     $tries++;
                 } else {
                     eval {
-                        $log = _ensure_logger( $logpath, "wait", $cache_key, $pgname, $devmode );
+                        $log = _ensure_logger( $logpath, $logfile, "wait", $cache_key, $pgname, $devmode );
                         1;
                     };
                     $logfile_create_error   = $@;
@@ -226,7 +228,7 @@ sub get_logger {
 
     } else {
         eval {
-            $log = _ensure_logger( $logpath, "default", $cache_key, $pgname, $devmode );
+            $log = _ensure_logger( $logpath, $logfile, "default", $cache_key, $pgname, $devmode );
             1;
         };
 

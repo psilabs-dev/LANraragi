@@ -27,9 +27,10 @@ BEGIN {
 }
 
 has 'pgname';
-has 'devmode';
+has 'logfile';
 has 'init_error';       # initialization error
 
+has devmode             => sub { LANraragi::Model::Config->enable_devmode };
 has maxrotationsize     => sub { 1048576 }; # 1 MiB
 has counter             => sub { 0 };
 
@@ -67,8 +68,9 @@ sub append {
     # every 1k lines, check size of path for log rotation
     if ( $self->counter % 1000 == 0 ) {
         return unless my $path = $self->path;
-        if ( -s $path > $self->maxrotationsize ) {
-            # TODO: do log rotation.
+        if ( -s $path > $self->maxrotationsize && (my $logfile = $self->logfile) ) {
+            my $lock_name = "log-rotate:$logfile";
+            rotate( $self, $lock_name, "rotation" );
         }
     }
 
@@ -80,8 +82,9 @@ sub new {
     my $self = shift->SUPER::new(@_);
 
     my $pgname  = $self->pgname // 'LANraragi';
-    my $devmode = $self->devmode ? 1 : 0;
+    my $devmode = $self->devmode;
     my $path    = $self->path;
+    my $logfile = $self->logfile;
 
     #Tell logger to store debug logs as well in debug mode
     if ($devmode) {
@@ -134,6 +137,63 @@ sub get_win32_fh {
     Win32API::File::OsFHandleOpen( *FH, $h, "a" ) or die "OsFHandleOpen failed for $logfile; $!";
     binmode *FH, ':encoding(UTF-8)';
     return *FH;
+}
+
+# Do log rotation.
+sub rotate {
+    my $self        = shift;
+    my $lock_name   = shift;
+    my $operation   = shift;
+
+    # Rotate log if it's > 1MB
+    my $redis       = LANraragi::Model::Config->get_redis_config;
+    my $lock           = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
+    my $rotation_error;
+
+    if ( $lock ) {
+        my $logpath = $self->path;
+        eval {
+            say "Rotating logpath $logpath";
+
+            # Based on Logfile::Rotate
+            # Rotate existing logs
+            for ( my $i = 7; $i > 1; $i-- ) {
+                my $j = $i - 1;
+                my $next = "$logpath.$i.gz";
+                my $prev = "$logpath.$j.gz";
+                if ( -r $prev && -f $prev ) {
+                    rename( $prev, $next ) or die "error: rename failed: ($prev,$next)";
+                }
+            }
+
+            # Move current logs to tempfile to stop new writes to it
+            my $tmp = "$logpath.rotate";
+            unlink $tmp if -e $tmp;
+            rename( $logpath, $tmp ) or die "error: could not detach $logpath to $tmp: $!";
+
+            # Gzip the detached tempfile
+            my $gz = gzopen( "$logpath.1.gz", "wb" ) or die "error: could not gzopen $logpath.1.gz: $!";
+            open( my $handle, '<', $tmp ) or die "Couldn't open $tmp: $!";
+            my $buffer;
+            $gz->gzwrite($buffer) while read( $handle, $buffer, 4096 ) > 0;
+            $gz->gzclose();
+            close $handle;
+            unlink $tmp or die "error: could not delete $tmp: $!";
+
+            # Invalidate the handler.
+            $self->handle(undef);
+            $self->info("Rotated log files.");
+            1;
+        };
+
+        $rotation_error = $@;
+        $redis->del($lock_name);
+
+    }
+
+    $redis->quit();
+    die $rotation_error if $rotation_error;
+
 }
 
 1;
