@@ -4,11 +4,13 @@ use strict;
 use warnings;
 use utf8;
 
+use Fcntl qw(:flock);
 use POSIX;
 use Compress::Zlib;
 use Config;
 
 use Mojo::Base 'Mojo::Log';
+use Mojo::Util      qw(encode);
 use Mojo::File;
 use LANraragi::Utils::Redis qw(redis_decode);
 use LANraragi::Model::Config;
@@ -23,7 +25,26 @@ BEGIN {
 
 has 'pgname';
 has 'devmode';
-has maxrotationsize => sub { 1048576 }; # 1 MiB
+has maxrotationsize     => sub { 1048576 }; # 1 MiB
+has counter             => sub { 0 };
+
+# override: https://docs.mojolicious.org/Mojo/Log#append
+# include logic which checks every 1k lines whether to rotate logs.
+sub append {
+    my ($self, $msg) = @_;
+
+    $self->counter( $self->counter+1 );
+
+    # every 1k lines, check size of path for log rotation
+    if ( $self->counter % 1000 == 0 ) {
+        return unless my $path = $self->path;
+        if ( -s $path > $self->maxrotationsize ) {
+            # TODO: do log rotation.
+        }
+    }
+
+    return $self->SUPER::append($msg);
+}
 
 # override: https://docs.mojolicious.org/Mojo/Log#new
 sub new {
