@@ -22,13 +22,55 @@ use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 use Exporter 'import';
 our @EXPORT_OK = qw(get_logger get_plugin_logger get_logdir get_lines_from_file);
 
-# TODO: remove the cache until the windows problem is solved.
-# our %LOGGER_CACHE;
-
 BEGIN {
     if ( !IS_UNIX ) {
         require Win32API::File;
     }
+}
+
+our %LOGGER_CACHE;
+
+# Get file handler in Windows.
+# https://perldoc.perl.org/Win32API::File#createFile
+sub _get_win32_fh {
+    my $logfile = shift;
+    my $h = Win32API::File::createFile( $logfile, "rw", "rwd" ) or die "createFile failed for $logfile; win32 says: $^E; errno: $!";
+    my $fh = Win32API::File::OsFHandleOpen( $h, "a" ) or die "OsFHandleOpen failed for $logfile; $!";
+    binmode $fh, ':encoding(UTF-8)';
+    return $fh;
+}
+
+# Ensure logfile created, and the mojo logger cached and returned, or die trying.
+sub _ensure_logger {
+    my $pgname      = $_[0];
+    my $logpath     = $_[1];
+    my $operation   = $_[2];
+    my $cache_key   = $_[3];
+    my $log;
+
+    eval {
+        if ( IS_UNIX ) {
+            open( my $fh, '>>', $logpath ) or die "Could not create logfile '$logpath': $!";
+            $log = Mojo::Log->new(
+                path  => $logpath,
+                level => 'info'
+            );
+            $log->handle;
+        } else {
+            my $fh = _get_win32_fh( $logpath );
+            $log = Mojo::Log->new(
+                level => 'info'
+            );
+            $log->handle( $fh );
+        }
+        1;
+    };
+
+    my $error = $@;
+    die $error if $error;
+
+    $LOGGER_CACHE{$cache_key} = $log;
+    return $log;
 }
 
 # Get the Log folder.
@@ -55,22 +97,22 @@ sub get_logger {
     my $cache_key   = "$logfile|$pgname";
     my $log;
 
-    # # Reuse cached logger if exists
-    # if ( exists $LOGGER_CACHE{$cache_key} && -e $logpath && -s $logpath <= 1048576 ) {
-    #     my $cached          = $LOGGER_CACHE{$cache_key};
+    # Reuse cached logger if exists
+    if ( exists $LOGGER_CACHE{$cache_key} && -e $logpath && -s $logpath <= 1048576 ) {
+        my $cached          = $LOGGER_CACHE{$cache_key};
 
-    #     unless ( IS_UNIX ) {
-    #         return $cached;
-    #     }
+        unless ( IS_UNIX ) {
+            return $cached;
+        }
 
-    #     my $cached_inode    = ( stat( $cached->handle ) )[1];
-    #     my $path_inode      = ( stat($logpath) )[1];
-    #     if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
-    #         open( my $fh, '>>', $logpath ) or die "Could not open logfile '$logpath': $!";
-    #         $cached->handle($fh);
-    #     }
-    #     return $cached;
-    # }
+        my $cached_inode    = ( stat( $cached->handle ) )[1];
+        my $path_inode      = ( stat($logpath) )[1];
+        if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
+            open( my $fh, '>>', $logpath ) or die "Could not open logfile '$logpath': $!";
+            $cached->handle($fh);
+        }
+        return $cached;
+    }
 
     # Logfile lock owners have exclusive ability to create a logfile.
     # Non-owners may only append or wait for logfile availability.
@@ -85,7 +127,6 @@ sub get_logger {
         my $rotation_error;
 
         if ( $lock ) {
-
             eval {
                 say "Rotating logfile $logfile";
 
@@ -112,26 +153,10 @@ sub get_logger {
                 $gz->gzwrite($buffer) while read( $handle, $buffer, 4096 ) > 0;
                 $gz->gzclose();
                 close $handle;
-
                 unlink $tmp or die "error: could not delete $tmp: $!";
-
-                open( my $fh, '>>', $logpath ) or die "Could not create logfile '$logpath': $!";
-                close $fh;
-                my $newlog;
-                eval {
-                    $newlog = Mojo::Log->new(
-                        path  => $logpath,
-                        level => 'info'
-                    );
-                    $newlog->handle;
-                    $newlog->info("Rotated log files.");
-                    1;
-                } or do {
-                    my $e = $@ || 'unknown error';
-                    die "Failed to instantiate Mojo::Log for '$pgname' at '$logpath' (rotation): $e";
-                };
-                $log = $newlog;
-                # $LOGGER_CACHE{$cache_key} = $log;
+                $log = _ensure_logger( $pgname, $logpath, "rotation" , $cache_key );
+                $log->info("Rotated log files.");
+                1;
             };
 
             $rotation_error = $@;
@@ -155,78 +180,51 @@ sub get_logger {
         $lock           = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
 
         my $logfile_create_error;
-        if ( !$lock ) {
-            # Another worker is rotating/creating the logfile.
-            my $tries = 0;
-            while ( $tries < 100 && !-e $logpath ) {
-                Time::HiRes::sleep(0.1);
-                $tries++;
-            }
-            if ( -e $logpath ) {
-                my $newlog;
-                eval {
-                    $newlog = Mojo::Log->new(
-                        path  => $logpath,
-                        level => 'info'
-                    );
-                    $newlog->handle;
-                    $newlog->info("Created log file.");
-                    1;
-                } or do {
-                    my $e = $@;
-                    die "Failed to instantiate Mojo::Log for '$pgname' at '$logpath' (wait branch): $@";
-                };
-                $log = $newlog;
-                # $LOGGER_CACHE{$cache_key} = $log;
-            } else {
-                $logfile_create_error = "Timed out waiting for logfile to be created: $logpath"
-            }
-        } else {
+        if ( $lock ) {
             # This happens during start of app (if no logfile exists).
+            say "Creating logfile $logfile.";
             eval {
-                say "Creating logfile $logfile.";
-
-                open( my $fh, '>>', $logpath ) or die "Could not create logfile '$logpath': $!";
-                close $fh;
-                my $newlog;
-                eval {
-                    $newlog = Mojo::Log->new(
-                        path  => $logpath,
-                        level => 'info'
-                    );
-                    $newlog->handle;
-                    1;
-                } or do {
-                    my $e = $@ || 'unknown error';
-                    die "Failed to instantiate Mojo::Log for '$pgname' at '$logpath' (create branch): $e";
-                };
-                $log = $newlog;
-                # $LOGGER_CACHE{$cache_key} = $log;
+                $log = _ensure_logger( $pgname, $logpath, "create", $cache_key );
+                $log->info("Created logfile.");
                 1;
             };
 
             $logfile_create_error = $@;
             $redis->del($lock_name);
+        } else {
+            # Another worker is rotating/creating the logfile.
+            my $tries       = 0;
+            my $acquired    = 0;
+            while ( $tries < 100 ) {
+                if ( !-e $logpath ) {
+                    Time::HiRes::sleep(0.1);
+                    $tries++;
+                } else {
+                    eval {
+                        $log = _ensure_logger( $pgname, $logpath, "wait", $cache_key );
+                        1;
+                    };
+                    $logfile_create_error   = $@;
+                    $acquired               = 1;
+                    last;
+                }
+            }
+            if ( !$acquired ) {
+                $logfile_create_error = "Timed out waiting for logfile to be created: $logpath";
+            }
         }
 
         $redis->quit();
         die $logfile_create_error if $logfile_create_error;
 
     } else {
-        my $newlog;
         eval {
-            $newlog = Mojo::Log->new(
-                path  => $logpath,
-                level => 'info'
-            );
-            $newlog->handle;
+            $log = _ensure_logger( $pgname, $logpath, "default", $cache_key );
             1;
-        } or do {
-            my $e = $@ || 'unknown error';
-            die "Failed to instantiate Mojo::Log for '$pgname' at '$logpath' (default branch): $e";
         };
-        $log = $newlog;
-        # $LOGGER_CACHE{$cache_key} = $log;
+
+        my $logfile_exist_error = $@;
+        die $logfile_exist_error if $logfile_exist_error;
     }
 
     my $devmode = LANraragi::Model::Config->enable_devmode;
