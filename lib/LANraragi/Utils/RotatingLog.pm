@@ -28,7 +28,6 @@ BEGIN {
 
 has 'pgname';
 has 'logfile';
-has 'init_error';       # initialization error
 
 has devmode             => sub { LANraragi::Model::Config->enable_devmode };
 has maxrotationsize     => sub { 1048576 }; # 1 MiB
@@ -43,14 +42,8 @@ has handle => sub {
 
     # File
     if ( !IS_UNIX ) {
-        my $fh = eval {
-            get_win32_fh($path)
-        };
-        if ( my $error = $@ ) {
-            $self->init_error($error);
-        } else {
-            return $fh if $fh;
-        }
+        my $fh = get_win32_fh($path);
+        return $fh if $fh;
     }
 
     # Fallback with default handle.
