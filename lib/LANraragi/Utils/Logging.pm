@@ -41,32 +41,11 @@ sub _ensure_logger {
     my $log;
 
     eval {
-        if ( IS_UNIX ) {
-            open( my $fh, '>>', $logpath ) or die "Could not create logfile '$logpath': $!";
-            $log = LANraragi::Utils::RotatingLog->new(
-                path    => $logpath,
-                level   => 'info',
-            );
-            $log->handle;
-        } else {
-            # get windows logger and fallback to generic logger
-            eval {
-                my $fh = LANraragi::Utils::RotatingLog::get_win32_fh( $logpath );
-                $log = LANraragi::Utils::RotatingLog->new(
-                    level => 'info'
-                );
-                $log->handle( $fh );
-                1;
-            } or do {
-                my $error = $@;
-                $log = LANraragi::Utils::RotatingLog->new(
-                    path    => $logpath,
-                    level   => 'info'
-                );
-                $log->handle;
-                $log->error("Failed to create logger from win32API handle: $@");
-            };
-        }
+        $log = LANraragi::Utils::RotatingLog->new(
+            path    => $logpath,
+            level   => 'info',
+        );
+        $log->handle;
         1;
     };
 
@@ -74,6 +53,12 @@ sub _ensure_logger {
     die $error if $error;
 
     $LOGGER_CACHE{$cache_key} = $log;
+
+    # Raise an error if log initialization failed (but is still able to emit files).
+    if ( my $init_error = $log->init_error ) {
+        $log->error("Failed to initialize logger: $init_error ");
+    }
+
     return $log;
 }
 

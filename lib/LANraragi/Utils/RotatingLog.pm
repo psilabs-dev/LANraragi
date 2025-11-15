@@ -28,8 +28,31 @@ BEGIN {
 
 has 'pgname';
 has 'devmode';
+has 'init_error';       # initialization error
+
 has maxrotationsize     => sub { 1048576 }; # 1 MiB
 has counter             => sub { 0 };
+
+# override: https://docs.mojolicious.org/Mojo/Log#handle
+has handle => sub {
+
+    # STDERR
+    return \*STDERR unless my $path = shift->path;
+
+    # File
+    if ( !IS_UNIX ) {
+        eval {
+            return get_win32_fh($path);
+        } or do {
+            my $error = $@;
+            shift->init_error($error);
+        }
+    }
+
+    # Fallback with default handle.
+    return Mojo::File->new($path)->open('>>');
+
+};
 
 # override: https://docs.mojolicious.org/Mojo/Log#append
 # include logic which checks every 1k lines whether to rotate logs.
