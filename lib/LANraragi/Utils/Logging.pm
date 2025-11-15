@@ -21,7 +21,9 @@ use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 # Contains all functions related to logging.
 use Exporter 'import';
 our @EXPORT_OK = qw(get_logger get_plugin_logger get_logdir get_lines_from_file);
-our %LOGGER_CACHE;
+
+# TODO: remove the cache until the windows problem is solved.
+# our %LOGGER_CACHE;
 
 BEGIN {
     if ( !IS_UNIX ) {
@@ -53,22 +55,22 @@ sub get_logger {
     my $cache_key   = "$logfile|$pgname";
     my $log;
 
-    # Reuse cached logger if exists
-    if ( exists $LOGGER_CACHE{$cache_key} && -e $logpath && -s $logpath <= 1048576 ) {
-        my $cached          = $LOGGER_CACHE{$cache_key};
+    # # Reuse cached logger if exists
+    # if ( exists $LOGGER_CACHE{$cache_key} && -e $logpath && -s $logpath <= 1048576 ) {
+    #     my $cached          = $LOGGER_CACHE{$cache_key};
 
-        unless ( IS_UNIX ) {
-            return $cached;
-        }
+    #     unless ( IS_UNIX ) {
+    #         return $cached;
+    #     }
 
-        my $cached_inode    = ( stat( $cached->handle ) )[1];
-        my $path_inode      = ( stat($logpath) )[1];
-        if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
-            open( my $fh, '>>', $logpath ) or die "Could not open logfile '$logpath': $!";
-            $cached->handle($fh);
-        }
-        return $cached;
-    }
+    #     my $cached_inode    = ( stat( $cached->handle ) )[1];
+    #     my $path_inode      = ( stat($logpath) )[1];
+    #     if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
+    #         open( my $fh, '>>', $logpath ) or die "Could not open logfile '$logpath': $!";
+    #         $cached->handle($fh);
+    #     }
+    #     return $cached;
+    # }
 
     # Logfile lock owners have exclusive ability to create a logfile.
     # Non-owners may only append or wait for logfile availability.
@@ -129,7 +131,7 @@ sub get_logger {
                     die "Failed to instantiate Mojo::Log for '$pgname' at '$logpath' (rotation): $e";
                 };
                 $log = $newlog;
-                $LOGGER_CACHE{$cache_key} = $log;
+                # $LOGGER_CACHE{$cache_key} = $log;
             };
 
             $rotation_error = $@;
@@ -175,7 +177,7 @@ sub get_logger {
                     die "Failed to instantiate Mojo::Log for '$pgname' at '$logpath' (wait branch): $@";
                 };
                 $log = $newlog;
-                $LOGGER_CACHE{$cache_key} = $log;
+                # $LOGGER_CACHE{$cache_key} = $log;
             } else {
                 $logfile_create_error = "Timed out waiting for logfile to be created: $logpath"
             }
@@ -199,7 +201,7 @@ sub get_logger {
                     die "Failed to instantiate Mojo::Log for '$pgname' at '$logpath' (create branch): $e";
                 };
                 $log = $newlog;
-                $LOGGER_CACHE{$cache_key} = $log;
+                # $LOGGER_CACHE{$cache_key} = $log;
                 1;
             };
 
@@ -224,7 +226,7 @@ sub get_logger {
             die "Failed to instantiate Mojo::Log for '$pgname' at '$logpath' (default branch): $e";
         };
         $log = $newlog;
-        $LOGGER_CACHE{$cache_key} = $log;
+        # $LOGGER_CACHE{$cache_key} = $log;
     }
 
     my $devmode = LANraragi::Model::Config->enable_devmode;
