@@ -35,17 +35,20 @@ has counter             => sub { 0 };
 
 # override: https://docs.mojolicious.org/Mojo/Log#handle
 has handle => sub {
+    my $self = shift;
 
     # STDERR
-    return \*STDERR unless my $path = shift->path;
+    return \*STDERR unless my $path = $self->path;
 
     # File
     if ( !IS_UNIX ) {
-        eval {
-            return get_win32_fh($path);
-        } or do {
-            my $error = $@;
-            shift->init_error($error);
+        my $fh = eval {
+            get_win32_fh($path)
+        };
+        if ( my $error = $@ ) {
+            $self->init_error($error);
+        } else {
+            return $fh if $fh;
         }
     }
 

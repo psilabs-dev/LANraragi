@@ -49,16 +49,27 @@ sub _ensure_logger {
         1;
     };
 
-    my $error = $@;
-    die $error if $error;
-
-    $LOGGER_CACHE{$cache_key} = $log;
+    if ( my $error = $@ ) {
+        my $msg = "Logger initialization failed during $operation: $error";
+        eval {
+            my $timestamp = strftime( "%Y-%m-%d %H:%M:%S", localtime(time) );
+            my $formatted = "[$timestamp] [$pgname] [error] Fatal error while initializing logger ($operation): $error\n";
+            if ( open my $fh, '>>', $logpath ) {
+                print $fh $formatted;
+                close $fh;
+            } else {
+                warn "Could not write to logfile $logpath: $!";
+            }
+        };
+        die $msg;
+    }
 
     # Raise an error if log initialization failed (but is still able to emit files).
     if ( my $init_error = $log->init_error ) {
         $log->error("Failed to initialize logger: $init_error ");
     }
 
+    $LOGGER_CACHE{$cache_key} = $log;
     return $log;
 }
 
