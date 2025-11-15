@@ -30,14 +30,16 @@ BEGIN {
 
 our %LOGGER_CACHE;
 
-# Get file handler in Windows.
+# Get perl file handler via Win32 native file handle of a logfile.
 # https://perldoc.perl.org/Win32API::File#createFile
+# https://perldoc.perl.org/Win32API::File#OsFHandleOpen
 sub _get_win32_fh {
     my $logfile = shift;
     my $h = Win32API::File::createFile( $logfile, "rw", "rwd" ) or die "createFile failed for $logfile; win32 says: $^E; errno: $!";
-    my $fh = Win32API::File::OsFHandleOpen( $h, "a" ) or die "OsFHandleOpen failed for $logfile; $!";
-    binmode $fh, ':encoding(UTF-8)';
-    return $fh;
+    local *FH;
+    Win32API::File::OsFHandleOpen( *FH, $h, "a" ) or die "OsFHandleOpen failed for $logfile; $!";
+    binmode *FH, ':encoding(UTF-8)';
+    return *FH;
 }
 
 # Ensure logfile created, and the mojo logger cached and returned, or die trying.
@@ -115,12 +117,12 @@ sub get_logger {
 
         eval {
             if ( IS_UNIX ) {
-        my $cached_inode    = ( stat( $cached->handle ) )[1];
-        my $path_inode      = ( stat($logpath) )[1];
-        if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
-            open( my $fh, '>>', $logpath ) or die "Could not open logfile '$logpath': $!";
-            $cached->handle($fh);
-        }
+                my $cached_inode    = ( stat( $cached->handle ) )[1];
+                my $path_inode      = ( stat($logpath) )[1];
+                if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
+                    open( my $fh, '>>', $logpath ) or die "Could not open logfile '$logpath': $!";
+                    $cached->handle($fh);
+                }
             } else {
                 my $fh = _get_win32_fh( $logpath );
                 $cached->handle($fh);
