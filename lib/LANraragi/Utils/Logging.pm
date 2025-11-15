@@ -53,7 +53,7 @@ sub _ensure_logger {
     eval {
         if ( IS_UNIX ) {
             open( my $fh, '>>', $logpath ) or die "Could not create logfile '$logpath': $!";
-            $log = Mojo::Log->new(
+            $log = LANraragi::Utils::RotatingLog->new(
                 path  => $logpath,
                 level => 'info'
             );
@@ -62,14 +62,14 @@ sub _ensure_logger {
             # get windows logger and fallback to generic logger
             eval {
                 my $fh = _get_win32_fh( $logpath );
-                $log = Mojo::Log->new(
+                $log = LANraragi::Utils::RotatingLog->new(
                     level => 'info'
                 );
                 $log->handle( $fh );
                 1;
             } or do {
                 my $error = $@;
-                $log = Mojo::Log->new(
+                $log = LANraragi::Utils::RotatingLog->new(
                     path    => $logpath,
                     level   => 'info'
                 );
