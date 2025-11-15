@@ -57,11 +57,23 @@ sub _ensure_logger {
             );
             $log->handle;
         } else {
-            my $fh = _get_win32_fh( $logpath );
-            $log = Mojo::Log->new(
-                level => 'info'
-            );
-            $log->handle( $fh );
+            # get windows logger and fallback to generic logger
+            eval {
+                my $fh = _get_win32_fh( $logpath );
+                $log = Mojo::Log->new(
+                    level => 'info'
+                );
+                $log->handle( $fh );
+                1;
+            } or do {
+                my $error = $@;
+                $log = Mojo::Log->new(
+                    path    => $logpath,
+                    level   => 'info'
+                );
+                $log->handle;
+                $log->error("Failed to create logger from win32API handle: $@");
+            };
         }
         1;
     };
