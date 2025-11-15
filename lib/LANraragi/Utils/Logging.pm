@@ -113,24 +113,24 @@ sub get_logger {
 
     # Reuse cached logger if exists
     if ( exists $LOGGER_CACHE{$cache_key} && -e $logpath && -s $logpath <= 1048576 ) {
-        my $cached          = $LOGGER_CACHE{$cache_key};
+        $log = $LOGGER_CACHE{$cache_key};
 
         eval {
             if ( IS_UNIX ) {
-                my $cached_inode    = ( stat( $cached->handle ) )[1];
+                my $cached_inode    = ( stat( $log->handle ) )[1];
                 my $path_inode      = ( stat($logpath) )[1];
                 if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
                     open( my $fh, '>>', $logpath ) or die "Could not open logfile '$logpath': $!";
-                    $cached->handle($fh);
+                    $log->handle($fh);
                 }
             } else {
                 my $fh = _get_win32_fh( $logpath );
-                $cached->handle($fh);
+                $log->handle($fh);
             }
             1;
         };
 
-        return $cached;
+        return $log;
     }
 
     # Logfile lock owners have exclusive ability to create a logfile.
