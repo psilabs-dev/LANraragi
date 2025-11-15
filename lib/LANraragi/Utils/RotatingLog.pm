@@ -128,13 +128,25 @@ sub new {
 }
 
 # Get perl file handler via Win32 native file handle of a logfile.
-# https://perldoc.perl.org/Win32API::File#createFile
+# https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew
+# https://perldoc.perl.org/Win32API::File#CreateFile
 # https://perldoc.perl.org/Win32API::File#OsFHandleOpen
 sub get_win32_fh {
-    my $logfile = shift;
-    my $h = Win32API::File::createFile( $logfile, "rw", "rwd" ) or die "createFile failed for $logfile; win32 says: $^E; errno: $!";
+    my $sPath    = shift;
+    my $uAccess  = Win32API::File::FILE_APPEND_DATA();
+    my $uShare   = Win32API::File::FILE_SHARE_READ()
+        | Win32API::File::FILE_SHARE_WRITE()
+        | Win32API::File::FILE_SHARE_DELETE();
+    my $pSecAttr = [];
+    my $uCreate  = Win32API::File::OPEN_ALWAYS();
+    my $uFlags   = 0;
+    my $hModel   = [];
+    my $h = Win32API::File::CreateFile( $sPath, $uAccess, $uShare, $pSecAttr, $uCreate, $uFlags, $hModel )
+        or die "CreateFile failed for $sPath; win32 says: $^E; errno: $!";
+
     local *FH;
-    Win32API::File::OsFHandleOpen( *FH, $h, "a" ) or die "OsFHandleOpen failed for $logfile; $!";
+
+    Win32API::File::OsFHandleOpen( *FH, $h, "w" ) or die "OsFHandleOpen failed for $sPath; $!";
     binmode *FH, ':encoding(UTF-8)';
     return *FH;
 }
