@@ -15,6 +15,9 @@ use Mojo::File;
 use LANraragi::Utils::Redis qw(redis_decode);
 use LANraragi::Model::Config;
 
+use Exporter 'import';
+our @EXPORT_OK = qw(get_win32_fh);
+
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
 BEGIN {
@@ -93,6 +96,18 @@ sub new {
     );
 
     return $self;
+}
+
+# Get perl file handler via Win32 native file handle of a logfile.
+# https://perldoc.perl.org/Win32API::File#createFile
+# https://perldoc.perl.org/Win32API::File#OsFHandleOpen
+sub get_win32_fh {
+    my $logfile = shift;
+    my $h = Win32API::File::createFile( $logfile, "rw", "rwd" ) or die "createFile failed for $logfile; win32 says: $^E; errno: $!";
+    local *FH;
+    Win32API::File::OsFHandleOpen( *FH, $h, "a" ) or die "OsFHandleOpen failed for $logfile; $!";
+    binmode *FH, ':encoding(UTF-8)';
+    return *FH;
 }
 
 1;

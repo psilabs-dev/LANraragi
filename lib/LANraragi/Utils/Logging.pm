@@ -31,18 +31,6 @@ BEGIN {
 
 our %LOGGER_CACHE;
 
-# Get perl file handler via Win32 native file handle of a logfile.
-# https://perldoc.perl.org/Win32API::File#createFile
-# https://perldoc.perl.org/Win32API::File#OsFHandleOpen
-sub _get_win32_fh {
-    my $logfile = shift;
-    my $h = Win32API::File::createFile( $logfile, "rw", "rwd" ) or die "createFile failed for $logfile; win32 says: $^E; errno: $!";
-    local *FH;
-    Win32API::File::OsFHandleOpen( *FH, $h, "a" ) or die "OsFHandleOpen failed for $logfile; $!";
-    binmode *FH, ':encoding(UTF-8)';
-    return *FH;
-}
-
 # Ensure logfile created, and the mojo logger cached and returned, or die trying.
 sub _ensure_logger {
     my $logpath     = $_[0];
@@ -63,7 +51,7 @@ sub _ensure_logger {
         } else {
             # get windows logger and fallback to generic logger
             eval {
-                my $fh = _get_win32_fh( $logpath );
+                my $fh = LANraragi::Utils::RotatingLog::get_win32_fh( $logpath );
                 $log = LANraragi::Utils::RotatingLog->new(
                     level => 'info'
                 );
@@ -126,7 +114,7 @@ sub get_logger {
                     $log->handle($fh);
                 }
             } else {
-                my $fh = _get_win32_fh( $logpath );
+                my $fh = LANraragi::Utils::RotatingLog::get_win32_fh( $logpath );
                 $log->handle($fh);
             }
             1;
