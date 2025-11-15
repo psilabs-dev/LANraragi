@@ -14,6 +14,7 @@ use Encode;
 use File::ReadBackwards;
 use Compress::Zlib;
 use LANraragi::Model::Config;
+use LANraragi::Utils::RotatingLog;
 use LANraragi::Utils::Redis qw(redis_decode);
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
