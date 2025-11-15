@@ -16,12 +16,18 @@ use Compress::Zlib;
 use LANraragi::Model::Config;
 use LANraragi::Utils::Redis qw(redis_decode);
 
+use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
+
 # Contains all functions related to logging.
 use Exporter 'import';
 our @EXPORT_OK = qw(get_logger get_plugin_logger get_logdir get_lines_from_file);
-
-use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 our %LOGGER_CACHE;
+
+BEGIN {
+    if ( !IS_UNIX ) {
+        require Win32API::File;
+    }
+}
 
 # Get the Log folder.
 sub get_logdir {
