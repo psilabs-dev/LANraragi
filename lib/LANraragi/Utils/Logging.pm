@@ -113,16 +113,21 @@ sub get_logger {
     if ( exists $LOGGER_CACHE{$cache_key} && -e $logpath && -s $logpath <= 1048576 ) {
         my $cached          = $LOGGER_CACHE{$cache_key};
 
-        unless ( IS_UNIX ) {
-            return $cached;
-        }
-
+        eval {
+            if ( IS_UNIX ) {
         my $cached_inode    = ( stat( $cached->handle ) )[1];
         my $path_inode      = ( stat($logpath) )[1];
         if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
             open( my $fh, '>>', $logpath ) or die "Could not open logfile '$logpath': $!";
             $cached->handle($fh);
         }
+            } else {
+                my $fh = _get_win32_fh( $logpath );
+                $cached->handle($fh);
+            }
+            1;
+        };
+
         return $cached;
     }
 
