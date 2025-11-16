@@ -14,6 +14,7 @@ use Encode;
 use File::ReadBackwards;
 use Compress::Zlib;
 use LANraragi::Model::Config;
+use LANraragi::Utils::RotatingLog;
 use LANraragi::Utils::Redis qw(redis_decode);
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
@@ -30,57 +31,33 @@ BEGIN {
 
 our %LOGGER_CACHE;
 
-# Get perl file handler via Win32 native file handle of a logfile.
-# https://perldoc.perl.org/Win32API::File#createFile
-# https://perldoc.perl.org/Win32API::File#OsFHandleOpen
-sub _get_win32_fh {
-    my $logfile = shift;
-    my $h = Win32API::File::createFile( $logfile, "rw", "rwd" ) or die "createFile failed for $logfile; win32 says: $^E; errno: $!";
-    local *FH;
-    Win32API::File::OsFHandleOpen( *FH, $h, "a" ) or die "OsFHandleOpen failed for $logfile; $!";
-    binmode *FH, ':encoding(UTF-8)';
-    return *FH;
-}
-
 # Ensure logfile created, and the mojo logger cached and returned, or die trying.
 sub _ensure_logger {
     my $logpath     = $_[0];
-    my $operation   = $_[1];
-    my $cache_key   = $_[2];
+    my $logfile     = $_[1];
+    my $operation   = $_[2];
+    my $cache_key   = $_[3];
+    my $pgname      = $_[4];
+    my $devmode     = $_[5];
     my $log;
 
     eval {
-        if ( IS_UNIX ) {
-            open( my $fh, '>>', $logpath ) or die "Could not create logfile '$logpath': $!";
-            $log = Mojo::Log->new(
-                path  => $logpath,
-                level => 'info'
-            );
-            $log->handle;
-        } else {
-            # get windows logger and fallback to generic logger
-            eval {
-                my $fh = _get_win32_fh( $logpath );
-                $log = Mojo::Log->new(
-                    level => 'info'
-                );
-                $log->handle( $fh );
-                1;
-            } or do {
-                my $error = $@;
-                $log = Mojo::Log->new(
-                    path    => $logpath,
-                    level   => 'info'
-                );
-                $log->handle;
-                $log->error("Failed to create logger from win32API handle: $@");
-            };
-        }
+        $log = LANraragi::Utils::RotatingLog->new(
+            path    => $logpath,
+            logfile => $logfile,
+            level   => 'info',
+        );
+        $log->handle;
         1;
     };
 
-    my $error = $@;
-    die $error if $error;
+    if ( my $error = $@ ) {
+        $log = Mojo::Log->new(
+            path    => $logpath,
+            level   => 'info',
+        );
+        $log->error("RotatingLog initialization failed, falling back to Mojo::Log ($operation): $error");
+    }
 
     $LOGGER_CACHE{$cache_key} = $log;
     return $log;
@@ -123,7 +100,7 @@ sub get_logger {
                     $log->handle($fh);
                 }
             } else {
-                my $fh = _get_win32_fh( $logpath );
+                my $fh = LANraragi::Utils::RotatingLog::get_win32_fh( $logpath );
                 $log->handle($fh);
             }
             1;
@@ -131,6 +108,8 @@ sub get_logger {
 
         return $log;
     }
+
+    my $devmode = LANraragi::Model::Config->enable_devmode;
 
     # Logfile lock owners have exclusive ability to create a logfile.
     # Non-owners may only append or wait for logfile availability.
@@ -172,7 +151,7 @@ sub get_logger {
                 $gz->gzclose();
                 close $handle;
                 unlink $tmp or die "error: could not delete $tmp: $!";
-                $log = _ensure_logger( $logpath, "rotation" , $cache_key );
+                $log = _ensure_logger( $logpath, $logfile, "rotation" , $cache_key, $pgname, $devmode );
                 $log->info("Rotated log files.");
                 1;
             };
@@ -202,7 +181,7 @@ sub get_logger {
             # This happens during start of app (if no logfile exists).
             say "Creating logfile $logfile.";
             eval {
-                $log = _ensure_logger( $logpath, "create", $cache_key );
+                $log = _ensure_logger( $logpath, $logfile, "create", $cache_key, $pgname, $devmode );
                 $log->info("Created logfile.");
                 1;
             };
@@ -219,7 +198,7 @@ sub get_logger {
                     $tries++;
                 } else {
                     eval {
-                        $log = _ensure_logger( $logpath, "wait", $cache_key );
+                        $log = _ensure_logger( $logpath, $logfile, "wait", $cache_key, $pgname, $devmode );
                         1;
                     };
                     $logfile_create_error   = $@;
@@ -237,53 +216,13 @@ sub get_logger {
 
     } else {
         eval {
-            $log = _ensure_logger( $logpath, "default", $cache_key );
+            $log = _ensure_logger( $logpath, $logfile, "default", $cache_key, $pgname, $devmode );
             1;
         };
 
         my $logfile_exist_error = $@;
         die $logfile_exist_error if $logfile_exist_error;
     }
-
-    my $devmode = LANraragi::Model::Config->enable_devmode;
-
-    #Tell logger to store debug logs as well in debug mode
-    if ($devmode) {
-        $log->level('debug');
-    }
-
-    # Step down into trace if we're launched from npm run dev-server-verbose
-    if ( $ENV{LRR_DEVSERVER} ) {
-        $log->level('trace');
-    }
-
-    #Copy logged messages to STDOUT with the matching name
-    $log->on(
-        message => sub {
-            my ( $time, $level, @lines ) = @_;
-
-            #Like with logging to file, debug logs are only printed in debug mode
-            unless ( $devmode == 0 && ( $level eq 'debug' || $level eq 'trace' ) ) {
-                print "[$pgname] [$level] ";
-                say $lines[0];
-            }
-        }
-    );
-
-    $log->format(
-        sub {
-            my ( $time, $level, @lines ) = @_;
-            my $time2 = strftime( "%Y-%m-%d %H:%M:%S", localtime($time) );
-
-            my $logstring = join( "\n", @lines );
-
-            # We'd like to make sure we always show proper UTF-8.
-            # redis_decode, while not initially designed for this, does the job.
-            $logstring = redis_decode($logstring);
-
-            return "[$time2] [$pgname] [$level] $logstring\n";
-        }
-    );
 
     return $log;
 }
