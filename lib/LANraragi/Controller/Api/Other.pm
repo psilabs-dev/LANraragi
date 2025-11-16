@@ -72,6 +72,24 @@ sub test_logging {
     );
 }
 
+# Test append-time rotation: logs the same message 100k times at info level
+sub test_append_logrotate {
+    my $self   = shift;
+    my $logger = get_logger( "Log Test API ", "lanraragi" );
+
+    for ( my $i = 0 ; $i < 100000 ; $i++ ) {
+        $logger->info("append-rotation-test");
+    }
+
+    return $self->render(
+        json => {
+            operation => "test_append_logrotate",
+            success   => 1,
+        },
+        status => 200
+    );
+}
+
 # Basic OPDS catalog
 sub serve_opds_catalog {
     my $self = shift;
