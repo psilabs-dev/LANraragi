@@ -44,15 +44,24 @@ sub serve_serverinfo {
     );
 }
 
-# Test logging by logging a log
+# Test logging endpoint: takes a JSON array of strings and logs each at info level
 sub test_logging {
-    my $self        = shift;
-    my $logger      = get_logger( "Log Test API ", "lanraragi" );
+    my $self   = shift;
+    my $logger = get_logger( "Log Test API ", "lanraragi" );
 
-    # now log
-    $logger->info("info logging now 1");
-    $logger->info("info logging now 2");
-    $logger->info("info logging now 3");
+    my $payload = $self->req->json;
+    my @messages;
+    if ( ref($payload) eq 'ARRAY' ) {
+        @messages = @{$payload};
+    } elsif ( ref($payload) eq 'HASH' && ref( $payload->{messages} ) eq 'ARRAY' ) {
+        @messages = @{ $payload->{messages} };
+    } else {
+        @messages = ();
+    }
+
+    for my $message (@messages) {
+        $logger->info($message);
+    }
 
     return $self->render(
         json => {
