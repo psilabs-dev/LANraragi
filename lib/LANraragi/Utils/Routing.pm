@@ -105,8 +105,7 @@ sub apply_routes {
     $logged_in->get('/duplicates')->to('duplicates#index');
 
     # log testing API
-    $public_api->post('/api/logs/test')->to('api-other#test_logging');
-    $public_api->post('/api/logs/test_append')->to('api-other#test_append_logrotate');
+    $public_api->post('/api/logs/test')->to('api-other#log_messages_test');
 
     # OPDS API
     $public_api->get('/api/opds')->to('api-other#serve_opds_catalog');

@@ -44,50 +44,24 @@ sub serve_serverinfo {
     );
 }
 
-# Test logging endpoint: takes a JSON array of strings and logs each at info level
-sub test_logging {
-    my $self   = shift;
-    my $logger = get_logger( "Log Test API ", "lanraragi" );
+sub log_messages_test {
 
-    my $payload = $self->req->json;
-    my @messages;
-    if ( ref($payload) eq 'ARRAY' ) {
-        @messages = @{$payload};
-    } elsif ( ref($payload) eq 'HASH' && ref( $payload->{messages} ) eq 'ARRAY' ) {
-        @messages = @{ $payload->{messages} };
-    } else {
-        @messages = ();
-    }
+    my $self        = shift;
+    my $data        = $self->req->json;
+    my $messages    = $data->{messages};
+    my $logger      = get_logger( "LANraragi", "lanraragi" ); # second arg MUST be "lanraragi".
 
-    for my $message (@messages) {
+    foreach my $message ( @$messages ) {
         $logger->info($message);
     }
 
-    return $self->render(
+    $self->render(
         json => {
-            operation => "test_logging",
-            success   => 1,
-        },
-        status => 200
+            operation   => "log_messages_test",
+            success     => 1
+        }
     );
-}
 
-# Test append-time rotation: logs the same message 100k times at info level
-sub test_append_logrotate {
-    my $self   = shift;
-    my $logger = get_logger( "Log Test API ", "lanraragi" );
-
-    for ( my $i = 0 ; $i < 100000 ; $i++ ) {
-        $logger->info("append-rotation-test");
-    }
-
-    return $self->render(
-        json => {
-            operation => "test_append_logrotate",
-            success   => 1,
-        },
-        status => 200
-    );
 }
 
 # Basic OPDS catalog
