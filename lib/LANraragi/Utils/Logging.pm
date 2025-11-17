@@ -13,6 +13,7 @@ use Config;
 use Encode;
 use File::ReadBackwards;
 use Compress::Zlib;
+use Mojo::Log;
 use LANraragi::Model::Config;
 use LANraragi::Utils::RotatingLog;
 use LANraragi::Utils::Redis qw(redis_decode);
@@ -117,7 +118,7 @@ sub get_logger {
         configure_logger( $log, $pgname );
         $log->error("RotatingLog init failed, falling back to Mojo::Log. First error: $first_error");
     } elsif ( $tries > 0 ) {
-        $log->error("RotatingLog initialized after $tries failures. First error: $first_error");
+        $log->warn("RotatingLog initialized after $tries failures. First error: $first_error");
     }
 
     # Report cache refresh error if exists
@@ -223,7 +224,7 @@ sub refresh_handle {
             $logger->handle($fh);
         }
     } else {
-        my $fh = get_win32_fh( $logger->path );
+        my $fh = LANraragi::Utils::RotatingLog::get_win32_fh( $logger->path );
         $logger->handle($fh);
     }
 }

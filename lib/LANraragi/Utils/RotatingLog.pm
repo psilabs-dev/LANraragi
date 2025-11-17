@@ -8,6 +8,7 @@ use Fcntl qw(:flock);
 use POSIX;
 use Compress::Zlib;
 use Config;
+use Time::HiRes;
 
 use Mojo::Base 'Mojo::Log';
 use Mojo::Util      qw(encode);
@@ -137,7 +138,7 @@ sub new {
         my $logfile_create_error;
         if ( $lock ) {
             # This happens during start of app (if no logfile exists).
-            say "Creating logfile $logfile.";
+                say "Creating logfile $logfile.";
             eval {
                 $self->handle;
                 1;
@@ -213,7 +214,7 @@ sub rotate {
     my $logpath         = shift;
     my $retention_count = shift;
 
-    say "Rotating logpath $logpath";
+        say "Rotating logpath $logpath";
 
     # Based on Logfile::Rotate
     # Rotate existing logs
