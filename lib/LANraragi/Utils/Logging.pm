@@ -56,7 +56,7 @@ sub get_logger {
     my $log;
 
     # Reuse cached logger if exists
-    if ( exists $LOGGER_CACHE{$cache_key} && -e $logpath && -s $logpath <= 1048576 ) {
+    if ( exists $LOGGER_CACHE{$cache_key} && -e $logpath ) {
         $log = $LOGGER_CACHE{$cache_key};
 
         eval {

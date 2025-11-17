@@ -28,7 +28,8 @@ BEGIN {
 
 has 'logfile';
 
-has maxrotationsize     => sub { 1048576 }; # 1 MiB
+has retention_count     => sub { 0 + ($ENV{LRR_LOGROTATE_FILES} // 7) };        # max number of archived logfiles to retain for log rotation (defaults to 7 files).
+has max_rotation_size   => sub { 0 + ($ENV{LRR_LOGROTATE_SIZE} // 1048576) };   # max size of logfile (in bytes) before triggering rotation on next scan (defaults to 1 MB).
 has counter             => sub { 0 };
 
 # override: https://docs.mojolicious.org/Mojo/Log#handle
@@ -50,7 +51,7 @@ has handle => sub {
 };
 
 # override: https://docs.mojolicious.org/Mojo/Log#append
-# include logic which checks every 1k lines whether to rotate logs.
+# Includes logic which checks every 1k lines whether to rotate logs.
 sub append {
     my ($self, $msg) = @_;
 
@@ -60,7 +61,7 @@ sub append {
     if ( $self->counter % 1000 == 0 ) {
 
         my $path = $self->path;
-        if ( -s $path > $self->maxrotationsize && (my $logfile = $self->logfile) ) {
+        if ( -s $path > $self->max_rotation_size && (my $logfile = $self->logfile) ) {
             my $lock_name   = "log-rotate:$logfile";
             my $redis       = LANraragi::Model::Config->get_redis_config;
             my $lock        = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
@@ -68,7 +69,7 @@ sub append {
 
             if ( $lock ) {
                 eval {
-                    rotate( $path );
+                    rotate( $path, $self->retention_count );
                     delete $self->{handle};
                     $self->handle;
                 };
@@ -86,6 +87,8 @@ sub append {
 }
 
 # override: https://docs.mojolicious.org/Mojo/Log#new
+# Inherits Mojo::Log to provide log rotation during `new` and `append`, as well as eager handle loading.
+# Complete data logging is not guaranteed: ~0.05-0.1% of logs may be lost during rotation.
 sub new {
     my $self = shift->SUPER::new(@_);
 
@@ -97,7 +100,7 @@ sub new {
     my $lock_name   = "log-rotate:$logfile";
     my $lock;
 
-    if ( -e $path && -s $path > 1048576 ) {
+    if ( -e $path && -s $path > $self->max_rotation_size ) {
 
         # Rotate log if it's > 1MB
         my $redis       = LANraragi::Model::Config->get_redis_config;
@@ -106,7 +109,7 @@ sub new {
 
         if ( $lock ) {
             eval {
-                LANraragi::Utils::RotatingLog::rotate( $path );
+                rotate( $path, $self->retention_count );
                 $self->handle;
                 1;
             };
@@ -207,13 +210,14 @@ sub get_win32_fh {
 
 # Do log rotation.
 sub rotate {
-    my $logpath = shift;
+    my $logpath         = shift;
+    my $retention_count = shift;
 
     say "Rotating logpath $logpath";
 
     # Based on Logfile::Rotate
     # Rotate existing logs
-    for ( my $i = 7; $i > 1; $i-- ) {
+    for ( my $i = $retention_count; $i > 1; $i-- ) {
         my $j = $i - 1;
         my $next = "$logpath.$i.gz";
         my $prev = "$logpath.$j.gz";
