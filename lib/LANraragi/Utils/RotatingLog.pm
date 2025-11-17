@@ -60,11 +60,28 @@ sub append {
 
     # every 1k lines, check size of path for log rotation
     if ( $self->counter % 1000 == 0 ) {
-        return unless my $path = $self->path;
+
+        my $path = $self->path;
         if ( -s $path > $self->maxrotationsize && (my $logfile = $self->logfile) ) {
-            my $lock_name = "log-rotate:$logfile";
-            rotate( $self, $lock_name, "rotation" );
+            my $lock_name   = "log-rotate:$logfile";
+            my $redis       = LANraragi::Model::Config->get_redis_config;
+            my $lock        = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
+            my $rotation_error;
+
+            if ( $lock ) {
+                eval {
+                    rotate( $path );
+                    delete $self->{handle};
+                    $self->info("Rotated log files.");
+                };
+                $rotation_error = $@;
+                $redis->del($lock_name);
+            }
+
+            $redis->quit();
+            die $rotation_error if $rotation_error;
         }
+
     }
 
     return $self->SUPER::append($msg);
@@ -146,60 +163,34 @@ sub get_win32_fh {
 
 # Do log rotation.
 sub rotate {
-    my $self        = shift;
-    my $lock_name   = shift;
-    my $operation   = shift;
+    my $logpath = shift;
 
-    # Rotate log if it's > 1MB
-    my $redis       = LANraragi::Model::Config->get_redis_config;
-    my $lock        = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
-    my $rotation_error;
+    say "Rotating logpath $logpath";
 
-    if ( $lock ) {
-        my $logpath = $self->path;
-        my $logfile = $self->logfile;
-        eval {
-            say "Rotating logfile $logfile";
-
-            # Based on Logfile::Rotate
-            # Rotate existing logs
-            for ( my $i = 7; $i > 1; $i-- ) {
-                my $j = $i - 1;
-                my $next = "$logpath.$i.gz";
-                my $prev = "$logpath.$j.gz";
-                if ( -r $prev && -f $prev ) {
-                    rename( $prev, $next ) or die "error: rename failed: ($prev,$next)";
-                }
-            }
-
-            # Move current logs to tempfile to stop new writes to it
-            my $tmp = "$logpath.rotate";
-            unlink $tmp if -e $tmp;
-            rename( $logpath, $tmp ) or die "error: could not detach $logpath to $tmp: $!";
-
-            # Gzip the detached tempfile
-            my $gz = gzopen( "$logpath.1.gz", "wb" ) or die "error: could not gzopen $logpath.1.gz: $!";
-            open( my $handle, '<', $tmp ) or die "Couldn't open $tmp: $!";
-            my $buffer;
-            $gz->gzwrite($buffer) while read( $handle, $buffer, 4096 ) > 0;
-            $gz->gzclose();
-            close $handle;
-            unlink $tmp or die "error: could not delete $tmp: $!";
-
-            # Refresh the handler.
-            delete $self->{handle};
-            $self->info("Rotated log files.");
-            1;
-        };
-
-        $rotation_error = $@;
-        $redis->del($lock_name);
-
+    # Based on Logfile::Rotate
+    # Rotate existing logs
+    for ( my $i = 7; $i > 1; $i-- ) {
+        my $j = $i - 1;
+        my $next = "$logpath.$i.gz";
+        my $prev = "$logpath.$j.gz";
+        if ( -r $prev && -f $prev ) {
+            rename( $prev, $next ) or die "error: rename failed: ($prev,$next)";
+        }
     }
 
-    $redis->quit();
-    die $rotation_error if $rotation_error;
+    # Move current logs to tempfile to stop new writes to it
+    my $tmp = "$logpath.rotate";
+    unlink $tmp if -e $tmp;
+    rename( $logpath, $tmp ) or die "error: could not detach $logpath to $tmp: $!";
 
+    # Gzip the detached tempfile
+    my $gz = gzopen( "$logpath.1.gz", "wb" ) or die "error: could not gzopen $logpath.1.gz: $!";
+    open( my $handle, '<', $tmp ) or die "Couldn't open $tmp: $!";
+    my $buffer;
+    $gz->gzwrite($buffer) while read( $handle, $buffer, 4096 ) > 0;
+    $gz->gzclose();
+    close $handle;
+    unlink $tmp or die "error: could not delete $tmp: $!";
 }
 
 1;
