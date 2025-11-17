@@ -152,13 +152,14 @@ sub rotate {
 
     # Rotate log if it's > 1MB
     my $redis       = LANraragi::Model::Config->get_redis_config;
-    my $lock           = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
+    my $lock        = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
     my $rotation_error;
 
     if ( $lock ) {
         my $logpath = $self->path;
+        my $logfile = $self->logfile;
         eval {
-            say "Rotating logpath $logpath";
+            say "Rotating logfile $logfile";
 
             # Based on Logfile::Rotate
             # Rotate existing logs
@@ -185,8 +186,8 @@ sub rotate {
             close $handle;
             unlink $tmp or die "error: could not delete $tmp: $!";
 
-            # Invalidate the handler.
-            $self->handle(undef);
+            # Refresh the handler.
+            delete $self->{handle};
             $self->info("Rotated log files.");
             1;
         };
