@@ -26,7 +26,6 @@ BEGIN {
     }
 }
 
-has 'pgname';
 has 'logfile';
 
 has maxrotationsize     => sub { 1048576 }; # 1 MiB
@@ -90,7 +89,6 @@ sub append {
 sub new {
     my $self = shift->SUPER::new(@_);
 
-    my $pgname  = $self->pgname;
     my $path    = $self->path;
     my $logfile = $self->logfile;
 

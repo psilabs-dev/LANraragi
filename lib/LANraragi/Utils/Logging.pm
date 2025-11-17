@@ -79,9 +79,8 @@ sub get_logger {
     eval {
         $log = LANraragi::Utils::RotatingLog->new(
             path    => $logpath,
-            logfile => $logfile,
-            pgname  => $pgname,
             level   => 'info',
+            logfile => $logfile,
         );
         configure_logger( $log, $pgname );
         $LOGGER_CACHE{$cache_key} = $log;
