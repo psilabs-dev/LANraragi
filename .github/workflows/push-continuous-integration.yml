@@ -64,12 +64,17 @@ jobs:
           cd aio-lanraragi/integration_tests
           pip install .
           playwright install
+      - name: Create staging directory
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/staging"
       - name: Run integration tests against local LANraragi build
         run: |
           cd aio-lanraragi/integration_tests
           export CI=true
+          export DOCKER_BUILDKIT=1
           pytest tests --log-cli-level=INFO \
             --build "$GITHUB_WORKSPACE/lanraragi" \
+            --staging "$GITHUB_WORKSPACE/staging" \
             --playwright \
             --docker-api \
             --npseed 42
