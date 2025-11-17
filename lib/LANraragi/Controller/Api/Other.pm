@@ -6,6 +6,7 @@ use Redis;
 
 use LANraragi::Model::Stats;
 use LANraragi::Model::Opds;
+use LANraragi::Utils::Logging    qw(get_logger);
 use LANraragi::Utils::Generic    qw(render_api_response);
 use LANraragi::Utils::Plugins    qw(get_plugin get_plugins use_plugin);
 
@@ -41,6 +42,26 @@ sub serve_serverinfo {
             cache_last_cleared     => $last_clear
         }
     );
+}
+
+sub log_messages_test {
+
+    my $self        = shift;
+    my $data        = $self->req->json;
+    my $messages    = $data->{messages};
+    my $logger      = get_logger( "LANraragi", "lanraragi" ); # second arg MUST be "lanraragi".
+
+    foreach my $message ( @$messages ) {
+        $logger->info($message);
+    }
+
+    $self->render(
+        json => {
+            operation   => "log_messages_test",
+            success     => 1
+        }
+    );
+
 }
 
 # Basic OPDS catalog
