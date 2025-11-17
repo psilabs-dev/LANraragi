@@ -60,7 +60,7 @@ sub get_logger {
         $log = $LOGGER_CACHE{$cache_key};
 
         eval {
-            LANraragi::Utils::RotatingLog::refresh_handle($log);
+            refresh_handle($log);
             1;
         } or do {
             # handle cannot be refreshed; invalidate cache and serve normal logger
@@ -178,6 +178,24 @@ sub configure_logger {
             return "[$time2] [$pgname] [$level] $logstring\n";
         }
     );
+}
+
+# Refresh a logger's cached handle.
+sub refresh_handle {
+    my $logger = shift;
+
+    if ( IS_UNIX ) {
+        my $path            = $logger->path;
+        my $cached_inode    = ( stat( $logger->handle ) )[1];
+        my $path_inode      = ( stat( $path ) )[1];
+        if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
+            open( my $fh, '>>', $path ) or die "Could not open logfile '$path': $!";
+            $logger->handle($fh);
+        }
+    } else {
+        my $fh = get_win32_fh( $logger->path );
+        $logger->handle($fh);
+    }
 }
 
 1;
