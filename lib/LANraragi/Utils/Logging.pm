@@ -55,44 +55,75 @@ sub get_logger {
     my $cache_key   = "$logfile|$pgname";
     my $log;
 
-    # Reuse cached logger if exists
+    # Reuse cached logger if exists, otherwise clean cache and recreate
+    my $cache_refresh_error;
     if ( exists $LOGGER_CACHE{$cache_key} && -e $logpath ) {
         $log = $LOGGER_CACHE{$cache_key};
 
-        eval {
-            refresh_handle($log);
-            1;
-        } or do {
-            # handle cannot be refreshed; invalidate cache and serve normal logger
-            delete $LOGGER_CACHE{$cache_key};
-            $log = Mojo::Log->new(
-                path    => $logpath,
-                level   => 'info'
-            );
-            $log->error("RotatingLog cached handle refresh failed, falling back to Mojo::Log: $@");
-        };
+        my $ok;
+        {
+            local $@;
+            $ok = eval {
+                refresh_handle($log);
+                1;
+            };
+            $cache_refresh_error = $@ unless $ok;
+        }
 
-        return $log;
+        if ($ok) {
+            return $log;
+        } else {
+            delete $LOGGER_CACHE{$cache_key};
+            undef $log;  # avoid returning a stale handle
+        }
     }
 
-    # Create and cache logger
-    eval {
-        $log = LANraragi::Utils::RotatingLog->new(
-            path    => $logpath,
-            level   => 'info',
-            logfile => $logfile,
-        );
-        configure_logger( $log, $pgname );
-        $LOGGER_CACHE{$cache_key} = $log;
-        1;
-    } or do {
+    # Create and cache logger with retry + backoff + jitter
+    # Report the first logger init failure if exists
+    my $tries       = 0;
+    my $first_error;
+    while ( $tries < 3 ) {
+        my $ok;
+        my $err;
+        {
+            local $@;
+            $ok = eval {
+                $log = LANraragi::Utils::RotatingLog->new(
+                    path    => $logpath,
+                    level   => 'info',
+                    logfile => $logfile,
+                );
+                1;
+            };
+            $err = $@ unless $ok;
+        }
+        if ($ok) {
+            configure_logger($log, $pgname);
+            $LOGGER_CACHE{$cache_key} = $log;
+            last;
+        } else {
+            $first_error //= $err;
+            Time::HiRes::sleep(rand());
+            $tries++;
+        }
+    }
+
+    # Fall back to Mojo::Log if retry doesn't work
+    if ( !$log ) {
         $log = Mojo::Log->new(
             path    => $logpath,
             level   => 'info'
         );
         configure_logger( $log, $pgname );
-        $log->error("RotatingLog initialization failed, falling back to Mojo::Log: $@");
-    };
+        $log->error("RotatingLog init failed, falling back to Mojo::Log. First error: $first_error");
+    } elsif ( $tries > 0 ) {
+        $log->error("RotatingLog initialized after $tries failures. First error: $first_error");
+    }
+
+    # Report cache refresh error if exists
+    if ( $cache_refresh_error ) {
+        $log->error($cache_refresh_error);
+    }
 
     return $log;
 }
