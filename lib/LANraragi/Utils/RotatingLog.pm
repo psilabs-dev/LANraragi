@@ -91,7 +91,7 @@ sub append {
 sub new {
     my $self = shift->SUPER::new(@_);
 
-    my $pgname  = $self->pgname // 'LANraragi';
+    my $pgname  = $self->pgname;
     my $devmode = $self->devmode;
     my $path    = $self->path;
     my $logfile = $self->logfile;
@@ -191,6 +191,24 @@ sub rotate {
     $gz->gzclose();
     close $handle;
     unlink $tmp or die "error: could not delete $tmp: $!";
+}
+
+# Refreshed cached handle.
+sub refresh_handle {
+    my $self = shift;
+
+    if ( IS_UNIX ) {
+        my $path            = $self->path;
+        my $cached_inode    = ( stat( $self->handle ) )[1];
+        my $path_inode      = ( stat( $path ) )[1];
+        if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
+            open( my $fh, '>>', $path ) or die "Could not open logfile '$path': $!";
+            $self->handle($fh);
+        }
+    } else {
+        my $fh = get_win32_fh( $self->path );
+        $self->handle($fh);
+    }
 }
 
 1;

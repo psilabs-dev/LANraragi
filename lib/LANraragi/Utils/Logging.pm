@@ -38,13 +38,13 @@ sub _ensure_logger {
     my $operation   = $_[2];
     my $cache_key   = $_[3];
     my $pgname      = $_[4];
-    my $devmode     = $_[5];
     my $log;
 
     eval {
         $log = LANraragi::Utils::RotatingLog->new(
             path    => $logpath,
             logfile => $logfile,
+            pgname  => $pgname,
             level   => 'info',
         );
         $log->handle;
@@ -92,24 +92,12 @@ sub get_logger {
         $log = $LOGGER_CACHE{$cache_key};
 
         eval {
-            if ( IS_UNIX ) {
-                my $cached_inode    = ( stat( $log->handle ) )[1];
-                my $path_inode      = ( stat($logpath) )[1];
-                if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
-                    open( my $fh, '>>', $logpath ) or die "Could not open logfile '$logpath': $!";
-                    $log->handle($fh);
-                }
-            } else {
-                my $fh = LANraragi::Utils::RotatingLog::get_win32_fh( $logpath );
-                $log->handle($fh);
-            }
+            LANraragi::Utils::RotatingLog::refresh_handle($log);
             1;
         };
 
         return $log;
     }
-
-    my $devmode = LANraragi::Model::Config->enable_devmode;
 
     # Logfile lock owners have exclusive ability to create a logfile.
     # Non-owners may only append or wait for logfile availability.
@@ -125,34 +113,15 @@ sub get_logger {
 
         if ( $lock ) {
             eval {
-                say "Rotating logfile $logfile";
-
-                # Based on Logfile::Rotate
-                # Rotate existing logs
-                for ( my $i = 7; $i > 1; $i-- ) {
-                    my $j = $i - 1;
-                    my $next = "$logpath.$i.gz";
-                    my $prev = "$logpath.$j.gz";
-                    if ( -r $prev && -f $prev ) {
-                        rename( $prev, $next ) or die "error: rename failed: ($prev,$next)";
-                    }
-                }
-
-                # Move current logs to tempfile to stop new writes to it
-                my $tmp = "$logpath.rotate";
-                unlink $tmp if -e $tmp;
-                rename( $logpath, $tmp ) or die "error: could not detach $logpath to $tmp: $!";
-
-                # Gzip the detached tempfile
-                my $gz = gzopen( "$logpath.1.gz", "wb" ) or die "error: could not gzopen $logpath.1.gz: $!";
-                open( my $handle, '<', $tmp ) or die "Couldn't open $tmp: $!";
-                my $buffer;
-                $gz->gzwrite($buffer) while read( $handle, $buffer, 4096 ) > 0;
-                $gz->gzclose();
-                close $handle;
-                unlink $tmp or die "error: could not delete $tmp: $!";
-                $log = _ensure_logger( $logpath, $logfile, "rotation" , $cache_key, $pgname, $devmode );
+                LANraragi::Utils::RotatingLog::rotate( $logpath );
+                $log = LANraragi::Utils::RotatingLog->new(
+                    path    => $logpath,
+                    logfile => $logfile,
+                    pgname  => $pgname,
+                    level   => 'info',
+                );
                 $log->info("Rotated log files.");
+                $LOGGER_CACHE{$cache_key} = $log;
                 1;
             };
 
@@ -181,8 +150,14 @@ sub get_logger {
             # This happens during start of app (if no logfile exists).
             say "Creating logfile $logfile.";
             eval {
-                $log = _ensure_logger( $logpath, $logfile, "create", $cache_key, $pgname, $devmode );
+                $log = LANraragi::Utils::RotatingLog->new(
+                    path    => $logpath,
+                    logfile => $logfile,
+                    pgname  => $pgname,
+                    level   => 'info',
+                );
                 $log->info("Created logfile.");
+                $LOGGER_CACHE{$cache_key} = $log;
                 1;
             };
 
@@ -198,7 +173,14 @@ sub get_logger {
                     $tries++;
                 } else {
                     eval {
-                        $log = _ensure_logger( $logpath, $logfile, "wait", $cache_key, $pgname, $devmode );
+                        $log = LANraragi::Utils::RotatingLog->new(
+                            path    => $logpath,
+                            logfile => $logfile,
+                            pgname  => $pgname,
+                            level   => 'info',
+                        );
+                        $log->handle;
+                        $LOGGER_CACHE{$cache_key} = $log;
                         1;
                     };
                     $logfile_create_error   = $@;
@@ -216,7 +198,14 @@ sub get_logger {
 
     } else {
         eval {
-            $log = _ensure_logger( $logpath, $logfile, "default", $cache_key, $pgname, $devmode );
+            $log = LANraragi::Utils::RotatingLog->new(
+                path    => $logpath,
+                logfile => $logfile,
+                pgname  => $pgname,
+                level   => 'info',
+            );
+            $log->handle;
+            $LOGGER_CACHE{$cache_key} = $log;
             1;
         };
 
