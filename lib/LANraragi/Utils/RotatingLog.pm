@@ -70,7 +70,7 @@ sub append {
                 eval {
                     rotate( $path );
                     delete $self->{handle};
-                    $self->info("Rotated log files.");
+                    $self->handle;
                 };
                 $rotation_error = $@;
                 $redis->del($lock_name);
@@ -107,7 +107,7 @@ sub new {
         if ( $lock ) {
             eval {
                 LANraragi::Utils::RotatingLog::rotate( $path );
-                $self->info("Rotated log files.");
+                $self->handle;
                 1;
             };
 
@@ -136,7 +136,7 @@ sub new {
             # This happens during start of app (if no logfile exists).
             say "Creating logfile $logfile.";
             eval {
-                $self->info("Created logfile.");
+                $self->handle;
                 1;
             };
 
