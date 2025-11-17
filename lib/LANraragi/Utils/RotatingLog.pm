@@ -29,7 +29,6 @@ BEGIN {
 has 'pgname';
 has 'logfile';
 
-has devmode             => sub { LANraragi::Model::Config->enable_devmode };
 has maxrotationsize     => sub { 1048576 }; # 1 MiB
 has counter             => sub { 0 };
 
@@ -92,47 +91,94 @@ sub new {
     my $self = shift->SUPER::new(@_);
 
     my $pgname  = $self->pgname;
-    my $devmode = $self->devmode;
     my $path    = $self->path;
     my $logfile = $self->logfile;
 
-    #Tell logger to store debug logs as well in debug mode
-    if ($devmode) {
-        $self->level('debug');
+    # Logfile lock owners have exclusive ability to create a logfile.
+    # Non-owners may only append or wait for logfile availability.
+    my $lock_name   = "log-rotate:$logfile";
+    my $lock;
+
+    if ( -e $path && -s $path > 1048576 ) {
+
+        # Rotate log if it's > 1MB
+        my $redis       = LANraragi::Model::Config->get_redis_config;
+        $lock           = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
+        my $rotation_error;
+
+        if ( $lock ) {
+            eval {
+                LANraragi::Utils::RotatingLog::rotate( $path );
+                $self->info("Rotated log files.");
+                1;
+            };
+
+            $rotation_error = $@;
+            $redis->del($lock_name);
+
+        }
+
+        $redis->quit();
+        die $rotation_error if $rotation_error;
+
     }
 
-    # Step down into trace if we're launched from npm run dev-server-verbose
-    if ( $ENV{LRR_DEVSERVER} ) {
-        $self->level('trace');
-    }
+    # handle logpath existence cases.
+    # case 1 (logfile exist):                   no action needed, just get the logfile handle
+    # case 2 (logfile DNE, lock not acquired):  wait 10s logfile to be available
+    # case 3 (logfile DNE, lock acquired):      create new logfile
+    if ( !-e $path ) {
+        # handle cases where a logfile doesn't exist.
 
-    # Copy logged messages to STDOUT with the matching name
-    $self->on(
-        message => sub {
-            my ( $log, $level, @lines ) = @_;
+        my $redis       = LANraragi::Model::Config->get_redis_config;
+        $lock           = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
 
-            # Like with logging to file, debug logs are only printed in debug mode
-            unless ( $devmode == 0 && ( $level eq 'debug' || $level eq 'trace' ) ) {
-                print "[$pgname] [$level] ";
-                say $lines[0];
+        my $logfile_create_error;
+        if ( $lock ) {
+            # This happens during start of app (if no logfile exists).
+            say "Creating logfile $logfile.";
+            eval {
+                $self->info("Created logfile.");
+                1;
+            };
+
+            $logfile_create_error = $@;
+            $redis->del($lock_name);
+        } else {
+            # Another worker is rotating/creating the logfile.
+            my $tries       = 0;
+            my $acquired    = 0;
+            while ( $tries < 100 ) {
+                if ( !-e $path ) {
+                    Time::HiRes::sleep(0.1);
+                    $tries++;
+                } else {
+                    eval {
+                        $self->handle;
+                        1;
+                    };
+                    $logfile_create_error   = $@;
+                    $acquired               = 1;
+                    last;
+                }
+            }
+            if ( !$acquired ) {
+                $logfile_create_error = "Timed out waiting for logfile to be created: $path";
             }
         }
-    );
 
-    $self->format(
-        sub {
-            my ( $time, $level, @lines ) = @_;
-            my $time2 = strftime( "%Y-%m-%d %H:%M:%S", localtime($time) );
+        $redis->quit();
+        die $logfile_create_error if $logfile_create_error;
 
-            my $logstring = join( "\n", @lines );
+    } else {
+        eval {
+            $self->handle;
+            1;
+        };
 
-            # We'd like to make sure we always show proper UTF-8.
-            # redis_decode, while not initially designed for this, does the job.
-            $logstring = redis_decode($logstring);
-
-            return "[$time2] [$pgname] [$level] $logstring\n";
-        }
-    );
+        my $logfile_exist_error = $@;
+        die $logfile_exist_error if $logfile_exist_error;
+    }
 
     return $self;
 }
