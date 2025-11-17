@@ -23,12 +23,6 @@ use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 use Exporter 'import';
 our @EXPORT_OK = qw(get_logger get_plugin_logger get_logdir get_lines_from_file);
 
-BEGIN {
-    if ( !IS_UNIX ) {
-        require Win32API::File;
-    }
-}
-
 our %LOGGER_CACHE;
 
 # Get the Log folder.
@@ -192,7 +186,8 @@ sub refresh_handle {
             $logger->handle($fh);
         }
     } else {
-        my $fh = get_win32_fh( $logger->path );
+        my $path = $logger->path;
+        open( my $fh, '>>', $path ) or die "Could not open logfile '$path': $!";
         $logger->handle($fh);
     }
 }
