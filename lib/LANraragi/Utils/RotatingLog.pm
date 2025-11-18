@@ -13,9 +13,6 @@ use Mojo::File;
 use LANraragi::Model::Config;
 use LANraragi::Utils::TempFolder qw(get_temp);
 
-use Exporter 'import';
-our @EXPORT_OK = qw(get_win32_fh);
-
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
 BEGIN {
