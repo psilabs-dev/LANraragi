@@ -166,7 +166,7 @@ sub maybe_rotate {
         if ( should_rotate($self, $path) ) {
             my $logfile = $self->logfile;
             eval {
-                rotate_under_lock( $path, $logfile, $self->retention_count );
+                rotate_under_lock( $self );
                 delete $self->{handle};
                 $self->handle;
                 1;
@@ -190,27 +190,48 @@ sub should_rotate {
     return -e $path && -s $path > $self->max_rotation_size;
 }
 
-# Do log rotation under Redis lock (flock is not sufficient to guard against rotation race conditions)
+# Do log rotation under Redis lock (flock provides assurance, but not sufficient to guard against rotation races)
+# On redis connection error, skip rotation. Redis is assumed to be available, and temporary connection errors should not necessarily stop logging.
+# Alternatively, we can ignore redis locking and continue rotate, risking flock race. Both events are highly unlikely.
 sub rotate_under_lock {
-    my $logpath         = shift;
-    my $logfile         = shift;
-    my $retention_count = shift;
+    my $self            = shift;
+    my $logpath         = $self->path;
+    my $logfile         = $self->logfile;
+    my $retention_count = $self->retention_count;
 
     my $lock_name       = "log-rotate:$logfile";
-    my $redis           = LANraragi::Model::Config->get_redis_config;
-    my $lock            = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
-    my $rotation_error;
+    my $redis_error;
+    my $redis;
+    my $lock;
 
+    eval {
+        $redis  = LANraragi::Model::Config->get_redis_config;
+        $lock   = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
+    };
+    if ( my $acquire_lock_error = $@ ) {
+        $self->error("Failed to acquire redis lock; skipping rotation: $acquire_lock_error");
+        return;
+    }
+
+    my $rotation_error;
     if ( $lock ) {
         eval {
             rotate_files( $logpath, $retention_count );
+        } or do {
+            $rotation_error = $@;
         };
-
-        $rotation_error = $@;
-        $redis->del($lock_name);
+        eval {
+            $redis->del($lock_name);
+        } or do {
+            $self->error("Failed to release rotation lock: $@");
+        };
     }
 
-    $redis->quit();
+    eval {
+        $redis->quit();
+    } or do {
+        $self->error("Failed to disconnect redis during rotation: $@");
+    };
     die $rotation_error if $rotation_error;
 }
 
