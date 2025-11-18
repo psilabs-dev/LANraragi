@@ -279,7 +279,7 @@ sub refresh_logger_handle {
             $logger->handle($fh);
         }
     } else {
-        my $fh = LANraragi::Utils::RotatingLog::get_win32_fh( $logger->path );
+        my $fh = get_win32_fh( $logger->path );
         $logger->handle($fh);
     }
 }
