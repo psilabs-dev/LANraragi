@@ -74,8 +74,8 @@ has handle => sub {
 # Clean everything up when logger is gone
 sub DESTROY {
     my $self = shift;
-    eval close $self->lockfh if defined $self->{lockfh};
-    eval close $self->handle if defined $self->{handle};
+    eval { close $self->lockfh } if defined $self->{lockfh};
+    eval { close $self->handle } if defined $self->{handle};
 }
 
 # override: https://docs.mojolicious.org/Mojo/Log#append
