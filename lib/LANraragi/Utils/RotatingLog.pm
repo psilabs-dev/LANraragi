@@ -44,7 +44,7 @@ has lockpath => sub {
     my $path        = $self->path;
     my $mf          = Mojo::File->new($path);
     my $base        = $mf->basename;
-    my $lockpath    = self->tempdir . "/$base.lock";
+    my $lockpath    = $self->tempdir . "/$base.lock";
     return $lockpath;
 };
 
