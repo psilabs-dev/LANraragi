@@ -98,8 +98,9 @@ sub append {
 
             my $rotation_error;
             if ( -e $path && -s $path > $self->max_rotation_size ) {
+                my $logfile = $self->logfile;
                 eval {
-                    rotate( $path, $self->retention_count );
+                    rotate_under_lock( $path, $logfile, $self->retention_count );
                     delete $self->{handle};
                     $self->handle;
                     1;
@@ -139,7 +140,7 @@ sub new {
         flock( $lockfh, LOCK_EX ) or die "Failed to acquire exclusive log lock: $!";
         my $rotation_error;
         eval {
-            rotate( $path, $self->retention_count );
+            rotate_under_lock( $path, $logfile, $self->retention_count );
             $self->handle;
             1;
         } or do {
@@ -203,12 +204,36 @@ sub get_win32_fh {
     return *FH;
 }
 
+# Do log rotation (under Redis lock)
+sub rotate_under_lock {
+    my $logpath         = shift;
+    my $logfile         = shift;
+    my $retention_count = shift;
+
+    my $lock_name       = "log-rotate:$logfile";
+    my $redis           = LANraragi::Model::Config->get_redis_config;
+    my $lock            = $redis->set( $lock_name, 1, 'NX', 'EX', 10 );
+    my $rotation_error;
+
+    if ( $lock ) {
+        eval {
+            rotate( $logpath, $retention_count );
+        };
+
+        $rotation_error = $@;
+        $redis->del($lock_name);
+    }
+
+    $redis->quit();
+    die $rotation_error if $rotation_error;
+}
+
 # Do log rotation.
 sub rotate {
     my $logpath         = shift;
     my $retention_count = shift;
 
-        say "Rotating logpath $logpath";
+    say "Rotating logpath $logpath";
 
     # Based on Logfile::Rotate
     # Rotate existing logs
