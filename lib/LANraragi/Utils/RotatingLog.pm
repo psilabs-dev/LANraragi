@@ -171,7 +171,8 @@ sub maybe_rotate {
         if ( should_rotate($self, $path) ) {
             my $logfile = $self->logfile;
             eval {
-                rotate_under_lock( $self );
+                # rotate_under_lock( $self );
+                rotate_files( $path, $self->retention_count );
                 delete $self->{handle};
                 $self->handle;
                 1;
