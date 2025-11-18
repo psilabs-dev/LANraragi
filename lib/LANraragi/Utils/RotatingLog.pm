@@ -125,8 +125,7 @@ sub new {
     # handle logpath existence cases.
     # case 1 (logfile DNE):     create new logfile under exclusive lock
     # case 2 (logfile exist):   no action needed, just get the logfile handle
-    if ( !-e $path ) {
-        flock( $lockfh, LOCK_EX ) or die "Failed to acquire exclusive log lock: $!";
+    if ( !-e $path && flock( $lockfh, LOCK_EX | LOCK_NB ) ) {
         my $logfile_create_error;
         eval {
             # Re-check inside lock in case another process created the file
@@ -182,8 +181,16 @@ sub maybe_rotate {
 
     # Try to acquire a file lock between two rotation condition checks.
     if ( should_rotate($self, $path) ) {
-        # flock( $lockfh, LOCK_UN );
-        flock( $lockfh, LOCK_EX ) or die "Failed to acquire exclusive log lock: $!";
+        # unlock-then-lock to upgrade from shared to exclusive lock; 
+        # "Converting a lock (shared to exclusive, or vice versa) is not guaranteed to be atomic"
+        # - https://man7.org/linux/man-pages/man2/flock.2.html
+        flock( $lockfh, LOCK_UN );
+        if ( !flock( $lockfh, LOCK_EX | LOCK_NB ) ) {
+            # Another process is rotating, skip rotation attempt
+            # Re-acquire shared lock and continue
+            flock( $lockfh, LOCK_SH ) or die "Failed to re-acquire shared log lock: $!";
+            return;
+        }
 
         my $rotation_error;
         if ( should_rotate($self, $path) ) {
