@@ -201,9 +201,9 @@ sub cover_resize($buffer, $target_width, $target_height) {
 # Resize the image, respecting aspect ratio
 sub resize_to_width($buffer, $target_width) {
     my $out;
-    my $func = $vips_ffi->function( 'vips_thumbnail_buffer' => ['string', 'uint64', 'VipsImage*', 'int', 'opaque'] => 'int' );
+    # my $func = $vips_ffi->function( 'vips_thumbnail_buffer' => ['string', 'uint64', 'VipsImage*', 'int', 'opaque'] => 'int' );
 
-    my $ret = $func->call($buffer, length($buffer), \$out, $target_width, undef);
+    my $ret = vips_thumbnail_buffer($buffer, length($buffer), \$out, $target_width, undef);
     die "Error resizing image to width: ".fetch_and_clear_error() if ($ret != 0);
     return $out;
 }
