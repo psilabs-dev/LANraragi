@@ -58,6 +58,14 @@ has handle => sub {
     } or die "Could not open logfile '$path': $!";
 };
 
+# https://perldoc.perl.org/perlobj#Destructors
+# Clean everything up when logger is gone
+sub DESTROY {
+    my $self = shift;
+    close $self->lockfh if $self->has_lockfh;
+    close $self->handle if $self->has_handle;
+}
+
 # override: https://docs.mojolicious.org/Mojo/Log#append
 # Includes logic which checks every 1k lines whether to rotate logs.
 sub append {
@@ -71,16 +79,22 @@ sub append {
     # Acquire shared lock to serialize with rotation EX lock.
     flock( $lockfh, LOCK_SH ) or die "Failed to acquire shared log lock: $!";
 
-    # Refresh handle if inode changed due to rotation from another process
-    refresh_logger_handle($self);
+    my $ret;
+    eval {
+        # Refresh handle if inode changed due to rotation from another process
+        refresh_logger_handle($self);
 
-    # every 1k lines, check size of path for log rotation
-    if ( $self->counter % 1000 == 0 ) {
-        maybe_rotate($self);
-    }
+        # every 1k lines, check size of path for log rotation
+        if ( $self->counter % 1000 == 0 ) {
+            maybe_rotate($self);
+        }
 
-    my $ret = $self->SUPER::append($msg);
+        $ret = $self->SUPER::append($msg);
+    };
+    my $error = $@;
     flock( $lockfh, LOCK_UN );
+    die $error if $error;
+
     return $ret;
 }
 
