@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use utf8;
 
-use Fcntl qw(:flock);
+use Fcntl qw(:flock O_CREAT O_RDWR);
 use Compress::Zlib;
 use Config;
 
@@ -44,10 +44,7 @@ has lockpath            => sub {
 has lockfh => sub {
     my $self = shift;
     my $lockpath = $self->lockpath;
-    my $fh;
-    eval {
-        $fh = get_handle($lockpath);
-    } or die "Could not open lockfile '$lockpath': $!";
+    open( my $fh, '>>', $lockpath ) or die "Could not open lockfile '$lockpath': $!";
     return $fh;
 };
 
@@ -96,7 +93,7 @@ sub new {
     my $path    = $self->path;
     my $logfile = $self->logfile;
 
-    my $lockfh = $self->lockfh;
+    my $lockfh  = $self->lockfh;
     maybe_rotate($self);
 
     # handle logpath existence cases.
