@@ -67,7 +67,9 @@ has handle => sub {
     my $fh;
     eval {
         $fh = get_handle($path);
-    } or die "Could not open logfile '$path': $!";
+        1;
+    } or die "Could not open logfile '$path': $@";
+    return $fh;
 };
 
 # https://perldoc.perl.org/perlobj#Destructors
@@ -188,7 +190,7 @@ sub maybe_rotate {
         if ( !flock( $lockfh, LOCK_EX | LOCK_NB ) ) {
             # Another process is rotating, skip rotation attempt
             # Re-acquire shared lock and continue
-            flock( $lockfh, LOCK_SH ) or die "Failed to re-acquire shared log lock: $!";
+            flock( $lockfh, LOCK_SH ) or die "Failed to re-acquire shared log lock (1): $!";
             return;
         }
 
@@ -209,8 +211,11 @@ sub maybe_rotate {
 
         # Downgrade back to SH for the write
         flock( $lockfh, LOCK_UN );
-        die $rotation_error if $rotation_error;
-        flock( $lockfh, LOCK_SH ) or die "Failed to re-acquire shared log lock: $!";
+        if ( $rotation_error ) {
+            flock( $lockfh, LOCK_SH ) or die "Failed to re-acquire shared log lock (2): $!";
+            die $rotation_error;
+        }
+        flock( $lockfh, LOCK_SH ) or die "Failed to re-acquire shared log lock (3): $!";
     }
 }
 
@@ -314,6 +319,7 @@ sub refresh_logger_handle {
         }
     } else {
         my $fh = get_win32_fh( $logger->path );
+        eval { close $logger->handle } if defined $logger->{handle};
         $logger->handle($fh);
     }
 }
