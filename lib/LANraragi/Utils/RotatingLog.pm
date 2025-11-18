@@ -27,7 +27,7 @@ has 'logfile';
 has retention_count     => sub { 0 + ($ENV{LRR_LOGROTATE_FILES} // 7) };        # max number of archived logfiles to retain for log rotation (defaults to 7 files).
 has max_rotation_size   => sub { 0 + ($ENV{LRR_LOGROTATE_SIZE} // 1048576) };   # max size of logfile (in bytes) before triggering rotation on next scan (defaults to 1 MB).
 has counter             => sub { 0 };
-has lockfh => sub {
+has lockpath            => sub {
     my $self = shift;
     my $path = $self->path;
     my $mf   = Mojo::File->new($path);
@@ -35,6 +35,11 @@ has lockfh => sub {
     my $real = $dir->realpath // $dir;
     my $base = $mf->basename;
     my $lockpath = Mojo::File->new($real, "$base.lock")->to_string;
+    return $lockpath;
+};
+has lockfh => sub {
+    my $self = shift;
+    my $lockpath = $self->lockpath;
     open( my $fh, '>>', $lockpath ) or die "Could not open lockfile '$lockpath': $!";
     return $fh;
 };
@@ -98,8 +103,11 @@ sub append {
                     delete $self->{handle};
                     $self->handle;
                     1;
+                } or do {
+                    my $lockpath = $self->lockpath;
+                    $rotation_error = "Failed to rotate logs during append-time under lock $lockpath: $@";
                 };
-                $rotation_error = $@;
+                die $rotation_error if $rotation_error;
             }
 
             # Downgrade back to SH for the write
@@ -134,10 +142,12 @@ sub new {
             rotate( $path, $self->retention_count );
             $self->handle;
             1;
+        } or do {
+            my $lockpath = $self->lockpath;
+            $rotation_error = "Failed to rotate logs during append-time under lock $lockpath: $@";
         };
-        $rotation_error = $@;
-        flock( $lockfh, LOCK_UN );
         die $rotation_error if $rotation_error;
+        flock( $lockfh, LOCK_UN );
 
     }
 
@@ -207,7 +217,7 @@ sub rotate {
         my $next = "$logpath.$i.gz";
         my $prev = "$logpath.$j.gz";
         if ( -r $prev && -f $prev ) {
-            rename( $prev, $next ) or die "error: rename failed: ($prev,$next)";
+            rename( $prev, $next ) or die "error: rename failed: ($prev,$next): $!";
         }
     }
 
