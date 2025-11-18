@@ -79,47 +79,11 @@ sub append {
     flock( $lockfh, LOCK_SH ) or die "Failed to acquire shared log lock: $!";
 
     # Refresh handle if inode changed due to rotation from another process
-    if ( IS_UNIX ) {
-        my $cached_inode = ( stat( $self->handle ) )[1];
-        my $path_inode   = ( stat( $path ) )[1];
-        if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
-            open( my $fh, '>>', $path ) or die "Could not open logfile '$path': $!";
-            $self->handle($fh);
-        }
-    } else {
-        my $fh = get_win32_fh($path);
-        $self->handle($fh);
-    }
+    refresh_logger_handle($self);
 
     # every 1k lines, check size of path for log rotation
     if ( $self->counter % 1000 == 0 ) {
-
-        if ( -e $path && -s $path > $self->max_rotation_size ) {
-            # Upgrade: release SH then acquire EX, re-check, rotate
-            flock( $lockfh, LOCK_UN );
-            flock( $lockfh, LOCK_EX ) or die "Failed to acquire exclusive log lock: $!";
-
-            my $rotation_error;
-            if ( -e $path && -s $path > $self->max_rotation_size ) {
-                my $logfile = $self->logfile;
-                eval {
-                    rotate_under_lock( $path, $logfile, $self->retention_count );
-                    delete $self->{handle};
-                    $self->handle;
-                    1;
-                } or do {
-                    my $lockpath = $self->lockpath;
-                    $rotation_error = "Failed to rotate logs during append-time under lock $lockpath: $@";
-                };
-                die $rotation_error if $rotation_error;
-            }
-
-            # Downgrade back to SH for the write
-            flock( $lockfh, LOCK_UN );
-            die $rotation_error if $rotation_error;
-            flock( $lockfh, LOCK_SH ) or die "Failed to re-acquire shared log lock: $!";
-        }
-
+        maybe_rotate($self);
     }
 
     my $ret = $self->SUPER::append($msg);
@@ -137,23 +101,7 @@ sub new {
     my $logfile = $self->logfile;
 
     my $lockfh = $self->lockfh;
-
-    if ( -e $path && -s $path > $self->max_rotation_size ) {
-
-        flock( $lockfh, LOCK_EX ) or die "Failed to acquire exclusive log lock: $!";
-        my $rotation_error;
-        eval {
-            rotate_under_lock( $path, $logfile, $self->retention_count );
-            $self->handle;
-            1;
-        } or do {
-            my $lockpath = $self->lockpath;
-            $rotation_error = "Failed to rotate logs during init-time under lock $lockpath: $@";
-        };
-        die $rotation_error if $rotation_error;
-        flock( $lockfh, LOCK_UN );
-
-    }
+    maybe_rotate($self);
 
     # handle logpath existence cases.
     # case 1 (logfile DNE):     create new logfile under exclusive lock
@@ -207,6 +155,45 @@ sub get_win32_fh {
     return *FH;
 }
 
+# Rotate logfiles if conditions met, otherwise do nothing.
+sub maybe_rotate {
+    my $self    = shift;
+    my $path    = $self->path;
+    my $lockfh  = $self->lockfh;
+
+    # Try to acquire a file lock between two rotation condition checks.
+    if ( should_rotate($self, $path) ) {
+        flock( $lockfh, LOCK_UN );
+        flock( $lockfh, LOCK_EX ) or die "Failed to acquire exclusive log lock: $!";
+
+        my $rotation_error;
+        if ( should_rotate($self, $path) ) {
+            my $logfile = $self->logfile;
+            eval {
+                rotate_under_lock( $path, $logfile, $self->retention_count );
+                delete $self->{handle};
+                $self->handle;
+                1;
+            } or do {
+                my $lockpath = $self->lockpath;
+                $rotation_error = "Failed to rotate logs during append-time under lock $lockpath: $@";
+            };
+            die $rotation_error if $rotation_error;
+        }
+
+        # Downgrade back to SH for the write
+        flock( $lockfh, LOCK_UN );
+        die $rotation_error if $rotation_error;
+        flock( $lockfh, LOCK_SH ) or die "Failed to re-acquire shared log lock: $!";
+    }
+}
+
+sub should_rotate {
+    my $self = shift;
+    my $path = $self->path;
+    return -e $path && -s $path > $self->max_rotation_size;
+}
+
 # Do log rotation under Redis lock (flock is not sufficient to guard against rotation race conditions)
 sub rotate_under_lock {
     my $logpath         = shift;
@@ -220,7 +207,7 @@ sub rotate_under_lock {
 
     if ( $lock ) {
         eval {
-            rotate( $logpath, $retention_count );
+            rotate_files( $logpath, $retention_count );
         };
 
         $rotation_error = $@;
@@ -231,8 +218,8 @@ sub rotate_under_lock {
     die $rotation_error if $rotation_error;
 }
 
-# Do log rotation.
-sub rotate {
+# Do logfile rotation.
+sub rotate_files {
     my $logpath         = shift;
     my $retention_count = shift;
 
@@ -262,6 +249,25 @@ sub rotate {
     $gz->gzclose();
     close $handle;
     unlink $tmp or die "error: could not delete $tmp: $!";
+}
+
+
+# Refresh a logger's cached handle to prevent stale handles pointing to missing files.
+sub refresh_logger_handle {
+    my $logger = shift;
+
+    if ( IS_UNIX ) {
+        my $path            = $logger->path;
+        my $cached_inode    = ( stat( $logger->handle ) )[1];
+        my $path_inode      = ( stat( $path ) )[1];
+        if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
+            open( my $fh, '>>', $path ) or die "Could not open logfile '$path': $!";
+            $logger->handle($fh);
+        }
+    } else {
+        my $fh = LANraragi::Utils::RotatingLog::get_win32_fh( $logger->path );
+        $logger->handle($fh);
+    }
 }
 
 1;
