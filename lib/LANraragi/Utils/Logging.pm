@@ -17,6 +17,7 @@ use Mojo::Log;
 use LANraragi::Model::Config;
 use LANraragi::Utils::RotatingLog;
 use LANraragi::Utils::Redis qw(redis_decode);
+use LANraragi::Utils::TempFolder qw(get_temp);
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -93,6 +94,7 @@ sub get_logger {
                     path    => $logpath,
                     level   => 'info',
                     logfile => $logfile,
+                    tempdir => get_temp()
                 );
                 1;
             };
