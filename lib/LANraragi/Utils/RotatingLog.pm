@@ -26,12 +26,24 @@ BEGIN {
 
 has 'logfile';
 
-has retention_count     => sub { 0 + ($ENV{LRR_LOGROTATE_FILES} // 7) };        # max number of archived logfiles to retain for log rotation (defaults to 7 files).
-has max_rotation_size   => sub { 0 + ($ENV{LRR_LOGROTATE_SIZE} // 1048576) };   # max size of logfile (in bytes) before triggering rotation on next scan (defaults to 1 MB).
-has counter             => sub { 0 };                                           # number of logs emitted
+has counter => sub { 0 }; # number of logs emitted
+
+# max number of archived logfiles to retain for log rotation (defaults to 7 files).
+has retention_count => sub {
+    my $count = 0 + ($ENV{LRR_LOGROTATE_FILES} // 7);
+    die "retention_count must be positive" if $count < 1;
+    return $count;
+};
+
+# max size of logfile (in bytes) before triggering rotation on next scan (defaults to 1 MB, min. 1kB).
+has max_rotation_size => sub {
+    my $size = 0 + ($ENV{LRR_LOGROTATE_SIZE} // 1048576);
+    die "max_rotation_size must be greater than 1kb (1024)" if $size < 1024;
+    return $size;
+};
 
 # Logfile lock path
-has lockpath            => sub {
+has lockpath => sub {
     my $self        = shift;
     my $path        = $self->path;
     my $mf          = Mojo::File->new($path);
@@ -62,8 +74,8 @@ has handle => sub {
 # Clean everything up when logger is gone
 sub DESTROY {
     my $self = shift;
-    close $self->lockfh if $self->has_lockfh;
-    close $self->handle if $self->has_handle;
+    eval close $self->lockfh if defined $self->{lockfh};
+    eval close $self->handle if defined $self->{handle};
 }
 
 # override: https://docs.mojolicious.org/Mojo/Log#append
@@ -170,7 +182,7 @@ sub maybe_rotate {
 
     # Try to acquire a file lock between two rotation condition checks.
     if ( should_rotate($self, $path) ) {
-        flock( $lockfh, LOCK_UN );
+        # flock( $lockfh, LOCK_UN );
         flock( $lockfh, LOCK_EX ) or die "Failed to acquire exclusive log lock: $!";
 
         my $rotation_error;
@@ -289,6 +301,7 @@ sub refresh_logger_handle {
         my $cached_inode    = ( stat( $logger->handle ) )[1];
         my $path_inode      = ( stat( $path ) )[1];
         if ( !defined $cached_inode || !defined $path_inode || $cached_inode != $path_inode ) {
+            close($logger->handle) if defined $logger->{handle};
             open( my $fh, '>>', $path ) or die "Could not open logfile '$path': $!";
             $logger->handle($fh);
         }
@@ -304,13 +317,16 @@ sub get_handle {
     return \*STDERR unless $path;
 
     # File
+    my $fh;
     if ( !IS_UNIX ) {
-        my $fh = get_win32_fh($path);
+        $fh = get_win32_fh($path);
         return $fh if $fh;
     }
 
-    # Fallback with default handle.
-    return Mojo::File->new($path)->open('>>');
+    # Fallback with default UTF-8 handle.
+    $fh = Mojo::File->new($path)->open('>>');
+    $fh->binmode(':encoding(UTF-8)');
+    return $fh;
 }
 
 1;
