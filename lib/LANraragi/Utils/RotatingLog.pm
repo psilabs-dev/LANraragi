@@ -109,8 +109,7 @@ sub append {
 }
 
 # override: https://docs.mojolicious.org/Mojo/Log#new
-# Inherits Mojo::Log to provide redis-locked log rotation during `new` and `append`,
-# as well as prevention of log loss during concurrent append-time rotations with flock.
+# Inherits Mojo::Log to provide guarded log rotation during `new` and `append`.
 sub new {
     my $self = shift->SUPER::new(@_);
 
