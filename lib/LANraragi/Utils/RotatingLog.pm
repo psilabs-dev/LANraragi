@@ -11,6 +11,7 @@ use Config;
 use Mojo::Base 'Mojo::Log';
 use Mojo::File;
 use LANraragi::Model::Config;
+use LANraragi::Utils::TempFolder qw(get_temp);
 
 use Exporter 'import';
 our @EXPORT_OK = qw(get_win32_fh);
@@ -27,15 +28,15 @@ has 'logfile';
 
 has retention_count     => sub { 0 + ($ENV{LRR_LOGROTATE_FILES} // 7) };        # max number of archived logfiles to retain for log rotation (defaults to 7 files).
 has max_rotation_size   => sub { 0 + ($ENV{LRR_LOGROTATE_SIZE} // 1048576) };   # max size of logfile (in bytes) before triggering rotation on next scan (defaults to 1 MB).
-has counter             => sub { 0 };
+has counter             => sub { 0 };                                           # number of logs emitted
+
+# Logfile lock path
 has lockpath            => sub {
-    my $self = shift;
-    my $path = $self->path;
-    my $mf   = Mojo::File->new($path);
-    my $dir  = $mf->dirname;
-    my $real = $dir->realpath // $dir;
-    my $base = $mf->basename;
-    my $lockpath = Mojo::File->new($real, "$base.lock")->to_string;
+    my $self        = shift;
+    my $path        = $self->path;
+    my $mf          = Mojo::File->new($path);
+    my $base        = $mf->basename;
+    my $lockpath    = get_temp . "/$base.lock";
     return $lockpath;
 };
 
@@ -43,26 +44,21 @@ has lockpath            => sub {
 has lockfh => sub {
     my $self = shift;
     my $lockpath = $self->lockpath;
-    open( my $fh, '>>', $lockpath ) or die "Could not open lockfile '$lockpath': $!";
+    my $fh;
+    eval {
+        $fh = get_handle($lockpath);
+    } or die "Could not open lockfile '$lockpath': $!";
     return $fh;
 };
 
 # override: https://docs.mojolicious.org/Mojo/Log#handle
 has handle => sub {
     my $self = shift;
-
-    # STDERR
-    return \*STDERR unless my $path = $self->path;
-
-    # File
-    if ( !IS_UNIX ) {
-        my $fh = get_win32_fh($path);
-        return $fh if $fh;
-    }
-
-    # Fallback with default handle.
-    return Mojo::File->new($path)->open('>>');
-
+    my $path = $self->path;
+    my $fh;
+    eval {
+        $fh = get_handle($path);
+    } or die "Could not open logfile '$path': $!";
 };
 
 # override: https://docs.mojolicious.org/Mojo/Log#append
@@ -268,6 +264,21 @@ sub refresh_logger_handle {
         my $fh = LANraragi::Utils::RotatingLog::get_win32_fh( $logger->path );
         $logger->handle($fh);
     }
+}
+
+sub get_handle {
+    my $path = shift;
+    # STDERR
+    return \*STDERR unless $path;
+
+    # File
+    if ( !IS_UNIX ) {
+        my $fh = get_win32_fh($path);
+        return $fh if $fh;
+    }
+
+    # Fallback with default handle.
+    return Mojo::File->new($path)->open('>>');
 }
 
 1;
