@@ -10,6 +10,7 @@ use Config;
 
 use Mojo::Base 'Mojo::Log';
 use Mojo::File;
+use LANraragi::Model::Config;
 
 use Exporter 'import';
 our @EXPORT_OK = qw(get_win32_fh);
@@ -37,6 +38,8 @@ has lockpath            => sub {
     my $lockpath = Mojo::File->new($real, "$base.lock")->to_string;
     return $lockpath;
 };
+
+# File handle for logger's lock file
 has lockfh => sub {
     my $self = shift;
     my $lockpath = $self->lockpath;
@@ -125,8 +128,8 @@ sub append {
 }
 
 # override: https://docs.mojolicious.org/Mojo/Log#new
-# Inherits Mojo::Log to provide log rotation during `new` and `append`, as well as eager handle loading.
-# Complete data logging is not guaranteed: ~0.05-0.1% of logs may be lost during rotation.
+# Inherits Mojo::Log to provide redis-locked log rotation during `new` and `append`,
+# as well as prevention of log loss during concurrent append-time rotations with flock.
 sub new {
     my $self = shift->SUPER::new(@_);
 
@@ -153,8 +156,8 @@ sub new {
     }
 
     # handle logpath existence cases.
-    # case 1 (logfile exist):                   no action needed, just get the logfile handle
-    # case 2 (logfile DNE):                      create new logfile under exclusive lock
+    # case 1 (logfile DNE):     create new logfile under exclusive lock
+    # case 2 (logfile exist):   no action needed, just get the logfile handle
     if ( !-e $path ) {
         flock( $lockfh, LOCK_EX ) or die "Failed to acquire exclusive log lock: $!";
         my $logfile_create_error;
@@ -204,7 +207,7 @@ sub get_win32_fh {
     return *FH;
 }
 
-# Do log rotation (under Redis lock)
+# Do log rotation under Redis lock (flock is not sufficient to guard against rotation race conditions)
 sub rotate_under_lock {
     my $logpath         = shift;
     my $logfile         = shift;
