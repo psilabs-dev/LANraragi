@@ -144,7 +144,7 @@ sub new {
             1;
         } or do {
             my $lockpath = $self->lockpath;
-            $rotation_error = "Failed to rotate logs during append-time under lock $lockpath: $@";
+            $rotation_error = "Failed to rotate logs during init-time under lock $lockpath: $@";
         };
         die $rotation_error if $rotation_error;
         flock( $lockfh, LOCK_UN );
