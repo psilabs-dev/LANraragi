@@ -20,7 +20,8 @@ BEGIN {
 }
 
 has 'logfile';
-has 'tempdir';
+has 'tempdir';  # Where to store lockfiles
+has 'lockpid';  # Track which PID opened the current lock file handle.
 
 has counter => sub { 0 }; # number of logs emitted
 
@@ -53,6 +54,7 @@ has lockfh => sub {
     my $self = shift;
     my $lockpath = $self->lockpath;
     open( my $fh, '>>', $lockpath ) or die "Could not open lockfile '$lockpath': $!";
+    $self->lockpid($$);
     return $fh;
 };
 
@@ -83,6 +85,7 @@ sub append {
 
     $self->counter( $self->counter+1 );
 
+    ensure_lock($self);
     my $path   = $self->path;
     my $lockfh = $self->lockfh;
 
@@ -113,6 +116,7 @@ sub append {
 sub new {
     my $self = shift->SUPER::new(@_);
 
+    ensure_lock($self);
     my $path    = $self->path;
     my $logfile = $self->logfile;
 
@@ -152,6 +156,7 @@ sub maybe_rotate {
     my $path    = $self->path;
     my $lockfh  = $self->lockfh;
 
+    ensure_lock($self);
     # Try to acquire a file lock between two rotation condition checks.
     if ( should_rotate($self, $path) ) {
         # unlock-then-lock to upgrade from shared to exclusive lock; 
@@ -248,6 +253,23 @@ sub refresh_logger_handle {
         my $fh = get_win32_fh( $logger->path );
         eval { close $logger->handle } if defined $logger->{handle};
         $logger->handle($fh);
+    }
+}
+
+# Ensure each process owns its lock file handle after a fork.
+# If two workers have the same fd of a lock, then both of them can control the file.
+# After a fork, children of a process inherit the same open file description, even if they belong
+# to a different PID.
+# "Locks created by flock() are associated with an open file description (see open(2))."
+# - https://man7.org/linux/man-pages/man2/flock.2.html
+sub ensure_lock {
+    my $self = shift;
+    if ( !defined $self->{lockfh} || !defined $self->{lockpid} || $self->{lockpid} != $$ ) {
+        eval { close $self->{lockfh} } if defined $self->{lockfh};
+        my $lockpath = $self->lockpath;
+        open( my $fh, '>>', $lockpath ) or die "Could not open lockfile '$lockpath': $!";
+        $self->lockfh($fh);
+        $self->lockpid($$);
     }
 }
 
