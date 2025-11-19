@@ -202,7 +202,7 @@ sub rotate_files {
     my $logpath         = shift;
     my $retention_count = shift;
 
-    say "Rotating logpath $logpath";
+    # say "Rotating logpath $logpath";
 
     # Based on Logfile::Rotate
     # Rotate existing logs
