@@ -102,7 +102,6 @@ sub log_dist {
 note('testing init-time concurrent log rotation...');
 {
     my $tmpdir = tempdir( CLEANUP => 1 );
-    # Prefill so new() hits rotation in each child, and emit logs too
     my ($ok, $details, $gz) = log_dist(
         tmpdir             => $tmpdir,
         create_before_fork => 0,
