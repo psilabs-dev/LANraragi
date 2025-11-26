@@ -54,7 +54,7 @@ sub get_logger {
     my $logfile = $_[1];
 
     my $logpath     = get_logdir . "/$logfile.log";
-    my $cache_key   = "$logfile|$pgname";
+    my $cache_key   = "$logfile";
     my $log;
 
     # Reuse cached logger if exists, otherwise clean cache and recreate
