@@ -331,11 +331,11 @@ LRR.buildStatusDiv = function (arcdata) {
     const { isnew } = arcdata;
     let { progress, pagecount } = LRR.getProgress(arcdata);
 
-    if (isnew === "true") {
-        return "<div class='isnew'>🆕</div>";
-    } else if (pagecount > 0 && (progress / pagecount) > 0.85) { // Consider an archive read if progress is past 85% of total
-        return "<div class='isnew'>👑</div>";
-    }
+    // if (isnew === "true") {
+    //     return "<div class='isnew'>🆕</div>";
+    // } else if (pagecount > 0 && (progress / pagecount) > 0.85) { // Consider an archive read if progress is past 85% of total
+    //     return "<div class='isnew'>👑</div>";
+    // }
     // If there wasn't sufficient data, return an empty string
     return "";
 };
