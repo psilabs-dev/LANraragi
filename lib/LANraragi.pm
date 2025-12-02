@@ -12,7 +12,7 @@ use Sys::Hostname;
 use Config;
 use Time::HiRes qw(gettimeofday);
 
-use LANraragi::Utils::Generic    qw(start_shinobu start_minion);
+use LANraragi::Utils::Generic    qw(start_shinobu start_minion start_metrics);
 use LANraragi::Utils::Logging    qw(get_logger get_logdir);
 use LANraragi::Utils::Plugins    qw(get_plugins);
 use LANraragi::Utils::TempFolder qw(get_temp);
@@ -233,6 +233,11 @@ sub startup {
     # Process metrics collection is done actively on a periodic basis.
     if (LANraragi::Model::Config->enable_metrics) {
 
+        if ( IS_UNIX ) {
+            shutdown_from_pid( get_temp . "/metrics.pid" );
+        }
+        start_metrics($self);
+
         # Clean up metrics from previous server sessions
         LANraragi::Model::Metrics::cleanup_metrics();
 
@@ -285,6 +290,7 @@ sub add_sigint_handler {
     my $old_int = $SIG{INT};
     $SIG{INT} = sub {
         LANraragi::Model::Metrics::flush_api_metrics_to_redis() if LANraragi::Model::Config->enable_metrics;
+        shutdown_from_pid( get_temp . "/metrics.pid" );
         shutdown_from_pid( get_temp . "/shinobu.pid" );
         shutdown_from_pid( get_temp . "/minion.pid" );
 

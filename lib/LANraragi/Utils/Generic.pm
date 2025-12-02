@@ -31,7 +31,7 @@ BEGIN {
 # Generic Utility Functions.
 use Exporter 'import';
 our @EXPORT_OK = qw(is_image is_archive render_api_response get_tag_with_namespace shasum_str start_shinobu
-  split_workload_by_cpu start_minion get_css_list generate_themes_header flat get_bytelength array_difference
+  split_workload_by_cpu start_minion start_metrics get_css_list generate_themes_header flat get_bytelength array_difference
   intersect_arrays filter_hash_by_keys exec_with_lock);
 
 # Checks if the provided file is an image.
@@ -142,6 +142,32 @@ sub _spawn {
     my ( $id,  $task ) = ( $job->id, $job->task );
     my $logger = get_logger( "Minion Worker", "minion" );
     $job->app->log->debug(qq{Process $pid is performing job "$id" with task "$task"});
+}
+
+# Start Metrics Aggregator and return its Proc::Background object.
+sub start_metrics {
+    my $mojo = shift;
+    if ( IS_UNIX ) {
+        my $proc = Proc::Simple->new();
+        $proc->start( $^X, "./lib/Metrics.pm" );
+        $proc->kill_on_destroy(0);
+
+        $mojo->LRR_LOGGER->debug( "Metrics Aggregator new PID is " . $proc->pid );
+
+        store \$proc, get_temp() . "/metrics.pid";
+        open( my $fh, ">", get_temp() . "/metrics.pid-s6" );
+        print $fh $proc->pid;
+        close($fh);
+        return $proc;
+    } else {
+        my $proc;
+        Win32::Process::Create($proc, undef, "perl \"" . abs_path(".") ."/lib/Metrics.pm\"", 0, NORMAL_PRIORITY_CLASS, ".");
+        open( my $fh, ">", get_temp() . "/metrics.pid-s6" );
+        print $fh $proc->GetProcessID();
+        close($fh);
+        $mojo->LRR_LOGGER->debug( "Metrics Aggregator new PID is " . $proc->GetProcessID() );
+        return $proc;
+    }
 }
 
 # Start Shinobu and return its Proc::Background object.
