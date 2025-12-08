@@ -12,17 +12,23 @@ use File::Temp qw(tempdir tmpnam);
 use File::Basename;
 
 use LANraragi::Utils::Generic  qw(render_api_response is_archive get_bytelength exec_with_lock);
-use LANraragi::Utils::Database qw(get_archive_json set_isnew);
+use LANraragi::Utils::Database qw();
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive_json set_isnew);
 use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Redis    qw(redis_encode);
 use LANraragi::Utils::Path     qw(compat_path get_archive_path move_path);
+use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::PgPath;
 
 use LANraragi::Utils::Login qw(is_logged_in_api);
 
 use LANraragi::Model::Archive;
-use LANraragi::Model::Category;
 use LANraragi::Model::Config;
 use LANraragi::Model::Reader;
+use LANraragi::Model::PsilabsDev::PgArchive;
+use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Model::PsilabsDev::PgReader;
+use LANraragi::Model::PsilabsDev::PgUpload;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -31,32 +37,35 @@ use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
 sub serve_archivelist {
     my $self   = shift->openapi->valid_input or return;
-    my @idlist = LANraragi::Model::Archive::generate_archive_list;
+    my @idlist = LANraragi::Model::PsilabsDev::PgArchive::generate_archive_list();
     $self->render( openapi => \@idlist );
 }
 
 sub serve_untagged_archivelist {
-    my $self  = shift->openapi->valid_input or return;
-    my $redis = $self->LRR_CONF->get_redis_search;
-
-    my @untagged = $redis->smembers("LRR_UNTAGGED");
-    $redis->quit;
-
+    my $self = shift->openapi->valid_input or return;
+    my @untagged = LANraragi::Model::PsilabsDev::PgArchive::get_untagged_archives();
     $self->render( openapi => \@untagged );
 }
 
 sub serve_metadata {
     my $self  = shift->openapi->valid_input or return;
     my $id    = $self->stash('id');
-    my $redis = $self->LRR_CONF->get_redis;
+    my $dbh   = get_postgresql_dbh();
 
-    my $arcdata = get_archive_json( $redis, $id );
-    $redis->quit;
+    my $arcdata = get_archive_json( $dbh, $id );
+    $dbh->disconnect();
 
     if ($arcdata) {
         $self->render( openapi => $arcdata );
     } else {
-        render_api_response( $self, "metadata", "This ID doesn't exist on the server." );
+        $self->render(
+            json => {
+                operation => "metadata",
+                success   => 0,
+                error     => "This ID doesn't exist on the server."
+            },
+            status => 404
+        );
     }
 }
 
@@ -66,7 +75,7 @@ sub get_categories {
     my $self = shift->openapi->valid_input or return;
     my $id   = $self->stash('id');
 
-    my @categories = LANraragi::Model::Category::get_categories_containing_archive($id);
+    my @categories = LANraragi::Model::PsilabsDev::PgCategory::get_categories_containing_archive($id);
 
     $self->render(
         openapi => {
@@ -86,13 +95,13 @@ sub serve_thumbnail {
 sub update_thumbnail {
     my $self = shift->openapi->valid_input or return;
     my $id   = $self->stash('id');
-    LANraragi::Model::Archive::update_thumbnail( $self, $id );
+    LANraragi::Model::PsilabsDev::PgArchive::update_thumbnail( $self, $id );
 }
 
 sub generate_page_thumbnails {
     my $self = shift->openapi->valid_input or return;
     my $id   = $self->stash('id');
-    LANraragi::Model::Archive::generate_page_thumbnails( $self, $id );
+    LANraragi::Model::PsilabsDev::PgArchive::generate_page_thumbnails( $self, $id );
 }
 
 # Use RenderFile to get the file of the provided id to the client.
@@ -100,11 +109,11 @@ sub serve_file {
 
     my $self  = shift->openapi->valid_input or return;
     my $id    = $self->stash('id');
-    my $redis = $self->LRR_CONF->get_redis;
+    my $dbh = get_postgresql_dbh();
 
-    my $file = get_archive_path( $redis, $id );
-    $redis->quit();
-    $self->render_file( filepath => compat_path($file), filename => basename($file) );
+    my $file = LANraragi::Utils::PsilabsDev::PgPath::get_archive_path( $dbh, $id );
+    $dbh->disconnect();
+    $self->render_file( filepath => compat_path( $file ), filename => basename( $file ) );
 }
 
 # Create a file archive along with any metadata.
@@ -220,7 +229,7 @@ sub create_archive {
             }
 
             my ( $status_code, $id, $response_title, $message ) =
-              LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
+              LANraragi::Model::PsilabsDev::PgUpload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
 
             unless ( $status_code == 200 ) {
                 return $self->render(
@@ -252,7 +261,7 @@ sub serve_page {
     my $id   = $self->stash('id');
     my $path = $self->req->param('path')                 || "404.xyz";
 
-    LANraragi::Model::Archive::serve_page( $self, $id, $path );
+    LANraragi::Model::PsilabsDev::PgArchive::serve_page( $self, $id, $path );
 }
 
 sub get_file_list {
@@ -262,7 +271,7 @@ sub get_file_list {
     my $force = $self->req->param('force') eq "true" || "0";
     my $reader_json;
 
-    eval { $reader_json = LANraragi::Model::Reader::build_reader_JSON( $self, $id, $force ); };
+    eval { $reader_json = LANraragi::Model::PsilabsDev::PgReader::build_reader_JSON( $self, $id, $force ); };
     my $err = $@;
 
     if ($err) {
@@ -321,7 +330,7 @@ sub delete_archive {
         "delete_archive",
         $id,
         sub {
-            my $delStatus = LANraragi::Model::Archive::delete_archive($id);
+            my $delStatus = LANraragi::Model::PsilabsDev::PgArchive::delete_archive($id);
 
             $self->render(
                 openapi => {
@@ -343,16 +352,29 @@ sub update_metadata {
     my $tags    = $self->req->param('tags');
     my $summary = $self->req->param('summary');
 
+    # Check if archive exists before acquiring lock
+    unless ( LANraragi::Model::PsilabsDev::PgArchive::archive_exists($id) ) {
+        $self->render(
+            json => {
+                operation => "update_metadata",
+                success   => 0,
+                error     => "Archive with ID $id not found."
+            },
+            status => 404
+        );
+        return;
+    }
+
     return unless exec_with_lock(
         $self,
         "archive-write:$id",
         "update_metadata",
         $id,
         sub {
-            my $err = LANraragi::Model::Archive::update_metadata( $id, $title, $tags, $summary );
+            my $err = LANraragi::Model::PsilabsDev::PgArchive::update_metadata( $id, $title, $tags, $summary );
 
             if ( $err eq "" ) {
-                my $title          = LANraragi::Model::Archive::get_title($id);
+                my $title          = LANraragi::Model::PsilabsDev::PgArchive::get_title($id);
                 my $successMessage = "Updated metadata for \"$title\"!";
 
                 render_api_response( $self, "update_metadata", undef, $successMessage );
@@ -380,7 +402,7 @@ sub add_toc {
         "add_toc",
         $id,
         sub {
-            my $res = LANraragi::Model::Archive::add_toc_entry( $id, $page, $title );
+            my $res = LANraragi::Model::PsilabsDev::PgArchive::add_toc_entry( $id, $page, $title );
 
             if ( $res eq "" ) {
                 render_api_response( $self, "add_toc", undef, "Added ToC entry for page $page." );
@@ -408,7 +430,7 @@ sub remove_toc {
         "remove_toc",
         $id,
         sub {
-            my $res = LANraragi::Model::Archive::remove_toc_entry( $id, $page );
+            my $res = LANraragi::Model::PsilabsDev::PgArchive::remove_toc_entry( $id, $page );
 
             if ( $res eq "" ) {
                 render_api_response( $self, "remove_toc", undef, "Removed ToC entry for page $page." );
@@ -438,35 +460,12 @@ sub update_progress {
     }
 
     my $page = $self->stash('page') || 0;
-    my $time = time();
 
     # Undocumented parameter to force progress update
     my $force = $self->req->param('force') || 0;
 
-    my $redis     = $self->LRR_CONF->get_redis;
-    my $redis_cfg = $self->LRR_CONF->get_redis_config;
-    my $pagecount = $redis->hget( $id, "pagecount" );
-
     if ( LANraragi::Model::Config->enable_localprogress && !LANraragi::Model::Config->enable_authprogress ) {
         render_api_response( $self, "update_progress", "Server-side Progress Tracking is disabled on this instance." );
-        $redis->quit();
-        $redis_cfg->quit();
-        return;
-    }
-
-    # This relies on pagecount, so you can't update progress for archives that don't have a valid pagecount recorded yet.
-    unless ( $pagecount || $force ) {
-        render_api_response( $self, "update_progress", "Archive doesn't have a total page count recorded yet." );
-        $redis->quit();
-        $redis_cfg->quit();
-        return;
-    }
-
-    # Safety-check the given page value.
-    unless ( $force || ( looks_like_number($page) && $page > 0 && $page <= $pagecount ) ) {
-        render_api_response( $self, "update_progress", "Invalid progress value." );
-        $redis->quit();
-        $redis_cfg->quit();
         return;
     }
 
@@ -476,22 +475,37 @@ sub update_progress {
         "update_progress",
         $id,
         sub {
+            my $result;
 
-            # Just set the progress value.
-            $redis->hset( $id, "progress",     $page );
-            $redis->hset( $id, "lastreadtime", $time );
-            $redis->quit();
+            eval {
+                $result = LANraragi::Model::PsilabsDev::PgArchive::update_progress( $id, $page, $force );
+            };
 
-            # Update total pages read statistic
-            $redis_cfg->incr("LRR_TOTALPAGESTAT");
-            $redis_cfg->quit();
+            if ( my $error = $@ ) {
+                render_api_response( $self, "update_progress", $error );
+                return;
+            }
+
+            my $pagecount = $result->{pagecount};
+
+            # This relies on pagecount, so you can't update progress for archives that don't have a valid pagecount recorded yet.
+            unless ( $pagecount || $force ) {
+                render_api_response( $self, "update_progress", "Archive doesn't have a total page count recorded yet." );
+                return;
+            }
+
+            # Safety-check the given page value.
+            unless ( $force || ( looks_like_number($page) && $page > 0 && $page <= $pagecount ) ) {
+                render_api_response( $self, "update_progress", "Invalid progress value." );
+                return;
+            }
 
             $self->render(
                 openapi => {
                     operation    => "update_progress",
                     id           => $id,
                     page         => $page,
-                    lastreadtime => $time,
+                    lastreadtime => $result->{lastreadtime},
                     success      => 1
                 }
             );

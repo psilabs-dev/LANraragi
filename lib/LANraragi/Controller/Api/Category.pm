@@ -1,17 +1,15 @@
 package LANraragi::Controller::Api::Category;
 use Mojo::Base 'Mojolicious::Controller';
 
-use Redis;
-use Encode;
-
-use LANraragi::Model::Category;
 use LANraragi::Model::Config;
+use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Model::PsilabsDev::PgArchive;
 use LANraragi::Utils::Generic qw(render_api_response exec_with_lock);
 
 sub get_category_list {
 
     my $self = shift->openapi->valid_input or return;
-    my @cats = LANraragi::Model::Category->get_category_list;
+    my @cats = LANraragi::Model::PsilabsDev::PgCategory::get_category_list();
     $self->render( openapi => \@cats );
 
 }
@@ -20,11 +18,17 @@ sub get_category {
 
     my $self     = shift->openapi->valid_input or return;
     my $catid    = $self->stash('id');
-    my %category = LANraragi::Model::Category::get_category($catid);
+    my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($catid);
 
     unless (%category) {
-        render_api_response( $self, "get_category", "The given category does not exist." );
-        return;
+        return $self->render(
+            json => {
+                operation => "get_category",
+                success   => 0,
+                error     => "The given category does not exist."
+            },
+            status => 404
+        );
     }
 
     $self->render( openapi => \%category );
@@ -42,7 +46,7 @@ sub create_category {
         return;
     }
 
-    my $created_id = LANraragi::Model::Category::create_category( $name, $search, $pinned, "" );
+    my $created_id = LANraragi::Model::PsilabsDev::PgCategory::create_category( $name, $search, $pinned, "" );
     $self->render(
         openapi => {
             operation   => "create_category",
@@ -57,32 +61,30 @@ sub update_category {
 
     my $self     = shift->openapi->valid_input or return;
     my $catid    = $self->stash('id');
-    my %category = LANraragi::Model::Category::get_category($catid);
+    my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($catid);
 
     unless (%category) {
-        render_api_response( $self, "update_category", "The given category does not exist." );
-        return;
+        return $self->render(
+            json => {
+                operation => "update_category",
+                success   => 0,
+                error     => "The given category does not exist."
+            },
+            status => 404
+        );
     }
 
-    return unless exec_with_lock(
-        $self,
-        "category-write:$catid",
-        "update_category",
-        $catid,
-        sub {
-            my $name   = $self->req->param('name')   || $category{name};
-            my $search = $self->req->param('search') || $category{search};
-            my $pinned = ( $self->req->param('pinned') && $self->req->param('pinned') ne "false" ) ? 1 : 0;
+    my $name   = $self->req->param('name')   || $category{name};
+    my $search = $self->req->param('search') || $category{search};
+    my $pinned = ( $self->req->param('pinned') && $self->req->param('pinned') ne "false" ) ? 1 : 0;
 
-            my $updated_id = LANraragi::Model::Category::create_category( $name, $search, $pinned, $catid );
+    my $updated_id = LANraragi::Model::PsilabsDev::PgCategory::create_category( $name, $search, $pinned, $catid );
 
-            $self->render(
-                openapi => {
-                    operation   => "update_category",
-                    category_id => $updated_id,
-                    success     => 1
-                }
-            );
+    $self->render(
+        openapi => {
+            operation   => "update_category",
+            category_id => $updated_id,
+            success     => 1
         }
     );
 }
@@ -98,12 +100,19 @@ sub delete_category {
         "delete_category",
         $catid,
         sub {
-            my $result = LANraragi::Model::Category::delete_category($catid);
+            my $result = LANraragi::Model::PsilabsDev::PgCategory::delete_category($catid);
 
             if ($result) {
                 render_api_response( $self, "delete_category" );
             } else {
-                render_api_response( $self, "delete_category", "The given category does not exist." );
+                return $self->render(
+                    json => {
+                        operation => "delete_category",
+                        success   => 0,
+                        error     => "The given category does not exist."
+                    },
+                    status => 404
+                );
             }
         }
     );
@@ -121,15 +130,14 @@ sub add_to_category {
         "add_to_category",
         $catid,
         sub {
-            my ( $result, $err ) = LANraragi::Model::Category::add_to_category( $catid, $arcid );
+            my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgCategory::add_to_category( $catid, $arcid );
 
             if ($result) {
                 my $successMessage = "Added $arcid to Category $catid!";
-                my %category       = LANraragi::Model::Category::get_category($catid);
-                my $title          = LANraragi::Model::Archive::get_title($arcid);
+                my $title          = LANraragi::Model::PsilabsDev::PgArchive::get_title($arcid);
 
-                if ( %category && defined($title) ) {
-                    $successMessage = "Added \"$title\" to category \"$category{name}\"!";
+                if ( defined($title) ) {
+                    $successMessage = "Added \"$title\" to category $catid!";
                 }
 
                 render_api_response( $self, "add_to_category", undef, $successMessage );
@@ -152,12 +160,12 @@ sub remove_from_category {
         "remove_from_category",
         $catid,
         sub {
-            my ( $result, $err ) = LANraragi::Model::Category::remove_from_category( $catid, $arcid );
+            my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgCategory::remove_from_category( $catid, $arcid );
 
             if ($result) {
                 my $successMessage = "Removed $arcid from Category $catid!";
-                my %category       = LANraragi::Model::Category::get_category($catid);
-                my $title          = LANraragi::Model::Archive::get_title($arcid);
+                my %category       = LANraragi::Model::PsilabsDev::PgCategory::get_category($catid);
+                my $title          = LANraragi::Model::PsilabsDev::PgArchive::get_title($arcid);
 
                 if ( %category && defined($title) ) {
                     $successMessage = "Removed \"$title\" from category \"$category{name}\"!";
@@ -174,7 +182,7 @@ sub remove_from_category {
 sub get_bookmark_link {
 
     my $self  = shift->openapi->valid_input or return;
-    my $catid = LANraragi::Model::Category::get_bookmark_link();
+    my $catid = LANraragi::Model::PsilabsDev::PgCategory::get_bookmark_link();
     return $self->render(
         openapi => {
             operation   => "get_bookmark_link",
@@ -190,7 +198,7 @@ sub update_bookmark_link {
     my $self  = shift->openapi->valid_input or return;
     my $catid = $self->stash('id');
     my ( $status_code, $message );
-    ( $status_code, $catid, $message ) = LANraragi::Model::Category::update_bookmark_link($catid);
+    ( $status_code, $catid, $message ) = LANraragi::Model::PsilabsDev::PgCategory::update_bookmark_link($catid);
     unless ( $status_code == 200 ) {
         return $self->render(
             openapi => {
@@ -216,7 +224,7 @@ sub update_bookmark_link {
 sub remove_bookmark_link {
 
     my $self  = shift->openapi->valid_input or return;
-    my $catid = LANraragi::Model::Category::remove_bookmark_link();
+    my $catid = LANraragi::Model::PsilabsDev::PgCategory::remove_bookmark_link();
     return $self->render(
         openapi => {
             operation   => "remove_bookmark_link",

@@ -5,16 +5,23 @@ use feature qw(say signatures);
 no warnings 'experimental::signatures';
 
 use List::Util qw(min);
+use Time::HiRes qw(time);
 
-use LANraragi::Model::Search;
+use LANraragi::Model::PsilabsDev::PgSearch;
 use LANraragi::Utils::Generic  qw(render_api_response);
-use LANraragi::Utils::Database qw(invalidate_cache get_archive_json_multi);
+use LANraragi::Utils::Logging qw(get_logger);
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(invalidate_cache get_archive_json_multi);
 
 # Undocumented API matching the Datatables spec.
 sub handle_datatables ($self) {
 
     my $req = $self->req;
+    my $logger = get_logger( "Search API", "lanraragi" );
 
+    my $request_start = time();
+
+    # Request parsing phase
+    my $parse_start = time();
     my $draw   = $req->param('draw');
     my $start  = $req->param('start');
     my $length = $req->param('length');
@@ -54,12 +61,25 @@ sub handle_datatables ($self) {
     }
 
     $sortorder = ( $sortorder && $sortorder eq 'desc' ) ? 1 : 0;
+    my $parse_time = (time() - $parse_start) * 1000;
+    $logger->debug(sprintf("[PERF] Request parsing: %.2fms", $parse_time));
 
     # TODO add a parameter to datatables for grouptanks? Not really essential rn tho
+    my $search_start = time();
     my ( $total, $filtered, @ids ) =
-      LANraragi::Model::Search::do_search( $filter, $categoryfilter, $start, $sortkey, $sortorder, $newfilter, $untaggedfilter, 0 );
+      LANraragi::Model::PsilabsDev::PgSearch::do_search( $filter, $categoryfilter, $start, $sortkey, $sortorder, $newfilter, $untaggedfilter, 0 );
+    my $search_time = (time() - $search_start) * 1000;
+    $logger->debug(sprintf("[PERF] Search execution (do_search): %.2fms", $search_time));
 
-    $self->render( json => get_datatables_object( $draw, $total, $filtered, @ids ) );
+    my $format_start = time();
+    my $response = get_datatables_object( $draw, $total, $filtered, @ids );
+    my $format_time = (time() - $format_start) * 1000;
+    $logger->debug(sprintf("[PERF] Response formatting (get_datatables_object): %.2fms", $format_time));
+
+    my $total_time = (time() - $request_start) * 1000;
+    $logger->debug(sprintf("[PERF] Total request time (handle_datatables): %.2fms", $total_time));
+
+    $self->render( json => $response );
 }
 
 # Public search API with saner parameters.
@@ -79,7 +99,7 @@ sub handle_api {
 
     $sortorder = ( $sortorder && $sortorder eq 'desc' ) ? 1 : 0;
 
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
         $filter, $category, $start, $sortkey, $sortorder,
         $newfilter eq "true",
         $untaggedf eq "true",
@@ -121,7 +141,7 @@ sub get_random_archives {
     my $random_count = $req->param('count')         || 5;
 
     # Use the search engine to get IDs matching the filter/category selection, with start=-1 to get all data
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
         $filter, $category, -1, "title", 0,
         $newfilter eq "true",
         $untaggedf eq "true",
@@ -149,8 +169,13 @@ sub get_random_archives {
 # Creates a Datatables-compatible json from the given data.
 sub get_datatables_object ( $draw, $total, $totalsearched, @ids ) {
 
+    my $logger = get_logger( "Search API", "lanraragi" );
+
     # Get archive data
+    my $json_start = time();
     my @data = get_archive_json_multi(@ids);
+    my $json_time = (time() - $json_start) * 1000;
+    $logger->debug(sprintf("[PERF] get_archive_json_multi: %.2fms (id_count: %d)", $json_time, scalar @ids));
 
     # Create json object matching the datatables structure
     return {

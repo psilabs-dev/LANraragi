@@ -29,6 +29,14 @@ apk add imagemagick libwebp-tools libheif
 apk add g++ make pkgconf gnupg wget curl file
 apk add shadow s6 s6-portable-utils ghostscript
 
+# Add SQL dependencies.
+if [ $INCLUDE_POSTGRESQL ]; then
+  apk add postgresql-dev
+fi
+if [ $INCLUDE_SQLITE ]; then
+  apk add sqlite-dev
+fi
+
 # Check for alpine version
 if [ -f /etc/alpine-release ]; then
   alpine_version=$(cat /etc/alpine-release)

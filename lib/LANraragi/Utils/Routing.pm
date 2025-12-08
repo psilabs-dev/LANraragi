@@ -80,11 +80,11 @@ sub apply_routes {
         $public_routes = $logged_in;
     }
 
-    $public_routes->get('/')->to('index#index');
-    $public_routes->get('/index')->to('index#index');
-    $public_routes->get('/random')->to('index#random_archive');
-    $public_routes->get('/reader')->to('reader#index');
-    $public_routes->get('/stats')->to('stats#index');
+    $public_routes->get('/')->to('index#index');                        # TODO: require postgres migration (done)
+    $public_routes->get('/index')->to('index#index');                   # TODO: require postgres migration (done)
+    $public_routes->get('/random')->to('index#random_archive');         # TODO: require postgres migration (done)
+    $public_routes->get('/reader')->to('reader#index');                 # TODO: require postgres migration (done)
+    $public_routes->get('/stats')->to('stats#index');                   # TODO: require postgres migration (done)
     $public_routes->get('/js/i18n.js')->to('i18_n#index');
 
     # Minion Admin UI
@@ -108,18 +108,18 @@ sub apply_routes {
     $logged_in->post('/config/plugins')->to('plugins#save_config');
     $logged_in->post('/config/plugins/upload')->to('plugins#process_upload');
 
-    $logged_in->get('/config/categories')->to('category#index');
+    $logged_in->get('/config/categories')->to('category#index');        # TODO: require postgres migration (done)
 
-    $logged_in->get('/batch')->to('batch#index');
-    $logged_in->websocket('/batch/socket')->to('batch#socket');
+    $logged_in->get('/batch')->to('batch#index');                       # TODO: require postgres migration (done)
+    $logged_in->websocket('/batch/socket')->to('batch#socket');         # TODO: require postgres migration (done)
 
-    $logged_in->get('/edit')->to('edit#index');
+    $logged_in->get('/edit')->to('edit#index');                         # TODO: require postgres migration (done)
 
-    $logged_in->get('/backup')->to('backup#index');
-    $logged_in->post('/backup')->to('backup#restore');
+    $logged_in->get('/backup')->to('backup#index');                     # TODO: require postgres migration (done)
+    $logged_in->post('/backup')->to('backup#restore');                  # TODO: require postgres migration (done)
 
-    $logged_in->get('/upload')->to('upload#index');
-    $logged_in->post('/upload')->to('upload#process_upload');
+    $logged_in->get('/upload')->to('upload#index');                     # TODO: require postgres migration (done)
+    $logged_in->post('/upload')->to('upload#process_upload');           # TODO: require postgres migration (done)
 
     $logged_in->get('/logs')->to('logging#index');
     $logged_in->get('/logs/general')->to('logging#print_general');
@@ -130,9 +130,9 @@ sub apply_routes {
 
     $logged_in->get('/tankoubons')->to('tankoubon#index');
 
-    $logged_in->get('/duplicates')->to('duplicates#index');
+    $logged_in->get('/duplicates')->to('duplicates#index');             # TODO: require postgres migration (done)
 
-    $search_api->get('/search')->to('api-search#handle_datatables');
+    $search_api->get('/search')->to('api-search#handle_datatables');    # TODO: require postgres migration
 
 }
 

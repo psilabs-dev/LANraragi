@@ -4,7 +4,7 @@ use File::Temp qw(tempfile);
 
 use LANraragi::Utils::Generic    qw(generate_themes_header);
 use LANraragi::Utils::TempFolder qw(get_temp);
-use LANraragi::Model::Backup;
+use LANraragi::Model::PsilabsDev::PgBackup;
 
 # This action will render a template
 sub index {
@@ -12,7 +12,7 @@ sub index {
 
     #GET with a parameter => do backup
     if ( $self->req->param('dobackup') ) {
-        my $json = LANraragi::Model::Backup::build_backup_JSON();
+        my $json = LANraragi::Model::PsilabsDev::PgBackup::build_backup_JSON();
 
         # Write json to file in temp and serve that file through render_static
         my ( $fh, $outfile ) = tempfile();
@@ -40,7 +40,7 @@ sub restore {
     if ( $file->headers->content_type eq "application/json" ) {
 
         my $json = $file->slurp;
-        LANraragi::Model::Backup::restore_from_JSON($json);
+        LANraragi::Model::PsilabsDev::PgBackup::restore_from_JSON($json);
 
         $self->render(
             json => {
