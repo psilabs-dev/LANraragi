@@ -1,77 +1,134 @@
 package LANraragi::Controller::Duplicates;
 use Mojo::Base 'Mojolicious::Controller';
 use utf8;
-use URI::Escape;
-use Redis;
 use POSIX qw(strftime);
-use Encode;
 
 use Mojo::JSON qw(decode_json encode_json);
 
-use LANraragi::Utils::Redis    qw(redis_decode);
 use LANraragi::Utils::Generic  qw(generate_themes_header);
+use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Model::Config;
 
 # Go through the archives in the content directory and build the template at the end.
 sub index {
 
-    my $self      = shift;
-    my $redis_cfg = $self->LRR_CONF->get_redis_config;
-    my $redis     = $self->LRR_CONF->get_redis;
+    my $self = shift;
 
     if ( $self->req->param('delete') ) {
         $self->LRR_LOGGER->debug("Cleared all detected duplicates!");
-        $redis_cfg->del("LRR_DUPLICATE_GROUPS");
+        eval {
+            my $redis = LANraragi::Model::Config->get_redis_config;
+            $redis->del("LRR_DUPLICATE_GROUPS");
+            $redis->quit();
+        };
+        if (my $error = $@) {
+            $self->LRR_LOGGER->error("Error clearing duplicate groups: $error");
+        }
     }
 
-    my %duplicate_groups = $redis_cfg->hgetall("LRR_DUPLICATE_GROUPS");
+    my %duplicate_groups;
+    eval {
+        my $redis = LANraragi::Model::Config->get_redis_config;
+        if ( $redis->exists("LRR_DUPLICATE_GROUPS") ) {
+            %duplicate_groups = $redis->hgetall("LRR_DUPLICATE_GROUPS");
+        }
+        $redis->quit();
+    };
+    if (my $error = $@) {
+        $self->LRR_LOGGER->error("Error fetching duplicate groups: $error");
+    }
+
     my @duplicates;
 
-    foreach my $key ( keys %duplicate_groups ) {
+    my $dbh;
+    eval {
+        $dbh = get_postgresql_dbh();
 
-        # Decode the JSON-encoded array of IDs
-        my $deserialized = decode_json( $duplicate_groups{$key} );
-        my @ids          = @{$deserialized};
+        # Prepare statement once before loops for efficiency
+        my $sth = $dbh->prepare(q{
+            SELECT arcid, filename, title,
+                COALESCE(
+                    (SELECT string_agg(
+                        CASE
+                            WHEN t.namespace = '' THEN t.value
+                            ELSE t.namespace || ':' || t.value
+                        END,
+                        ', '
+                    )
+                    FROM lrr_archive_to_tag_map atm
+                    JOIN lrr_tag t ON atm.tagid = t.tagid
+                    WHERE atm.arcid = ?),
+                    ''
+                ) as tags
+            FROM lrr_archive
+            WHERE arcid = ?
+        });
 
-        my @archives;
-        foreach my $id (@ids) {
-            my %archive = $redis->hgetall($id);
+        foreach my $key ( keys %duplicate_groups ) {
 
-            my ( $name, $title, $tags ) = @archive{qw(name title tags)};
-            ( $_ = redis_decode($_) ) for ( $name, $title, $tags );
+            # Decode the JSON-encoded array of IDs
+            my $deserialized = decode_json( $duplicate_groups{$key} );
+            my @ids          = @{$deserialized};
 
-            # Check if archive still exists
-            if (%archive) {
-                $archive{'arcid'}     = $id;
-                $archive{'group_key'} = $key;
-                $archive{'name'}      = $name;
-                $archive{'title'}     = $title;
-                $archive{'tags'}      = $tags;
+            my @archives;
+            foreach my $id (@ids) {
+                $sth->execute($id, $id);
+                my $row = $sth->fetchrow_hashref;
 
-                if ( $tags =~ /date_added:(\d+)/ ) {
-                    $archive{'date_added'} = strftime( "%Y-%m-%d %H:%M:%S", localtime($1) );
-                }
+                # Check if archive still exists
+                if ($row) {
+                    my %archive;
+                    $archive{'arcid'}     = $id;
+                    $archive{'group_key'} = $key;
+                    $archive{'name'}      = $row->{filename};
+                    $archive{'title'}     = $row->{title} // "";
+                    $archive{'tags'}      = $row->{tags} // "";
 
-                push @archives, \%archive;
-            } else {
+                    if ( $archive{'tags'} =~ /date_added:(\d+)/ ) {
+                        $archive{'date_added'} = strftime( "%Y-%m-%d %H:%M:%S", localtime($1) );
+                    }
 
-                # if dup size of group less than 2, its not a group anymore
-                if ( scalar @ids <= 2 ) {
-                    my $size = scalar @ids;
-                    $self->LRR_LOGGER->debug("group $key: too small ($size) - removing key");
-                    $redis_cfg->hdel( "LRR_DUPLICATE_GROUPS", $key );
+                    push @archives, \%archive;
                 } else {
 
-                    # archive vanished -> remove from dupes
-                    @ids = grep { $_ ne $id } @ids;
-                    $self->LRR_LOGGER->debug("group $key: archive $id vanished - removing from group");
-                    $redis_cfg->hset( "LRR_DUPLICATE_GROUPS", $key, encode_json( \@ids ) );
+                    # if dup size of group less than 2, its not a group anymore
+                    if ( scalar @ids <= 2 ) {
+                        my $size = scalar @ids;
+                        $self->LRR_LOGGER->debug("group $key: too small ($size) - removing key");
+                        eval {
+                            my $redis = LANraragi::Model::Config->get_redis_config;
+                            $redis->hdel( "LRR_DUPLICATE_GROUPS", $key );
+                            $redis->quit();
+                        };
+                        if (my $error = $@) {
+                            $self->LRR_LOGGER->error("Error deleting duplicate group $key: $error");
+                        }
+                    } else {
+
+                        # archive vanished -> remove from dupes
+                        @ids = grep { $_ ne $id } @ids;
+                        $self->LRR_LOGGER->debug("group $key: archive $id vanished - removing from group");
+                        eval {
+                            my $redis = LANraragi::Model::Config->get_redis_config;
+                            $redis->hset( "LRR_DUPLICATE_GROUPS", $key, encode_json( \@ids ) );
+                            $redis->quit();
+                        };
+                        if (my $error = $@) {
+                            $self->LRR_LOGGER->error("Error updating duplicate group $key: $error");
+                        }
+                    }
                 }
             }
+            push @duplicates, \@archives;
         }
-        push @duplicates, \@archives;
-    }
 
-    $redis->quit();
+        $sth->finish;
+        $dbh->disconnect();
+    };
+    if ( my $error = $@ ) {
+        $self->LRR_LOGGER->error("Database error in duplicates endpoint: $error");
+        $dbh->disconnect() if $dbh;
+    }
 
     $self->render(
         template   => "duplicates",

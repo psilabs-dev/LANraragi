@@ -3,42 +3,29 @@ use Mojo::Base 'Mojolicious::Controller';
 
 use utf8;
 use URI::Escape;
-use Redis;
 use Encode;
 use File::Basename;
 
 use LANraragi::Utils::Generic qw(generate_themes_header get_authenticator);
-use LANraragi::Utils::Path    qw(get_archive_path);
+use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Model::PsilabsDev::PgArchive;
 
 # This endpoint is technically superseded by /api/search/random, but it's still useful in the Reader.
 sub random_archive {
-    my $self          = shift;
-    my $archive       = "";
-    my $archiveexists = 0;
+    my $self = shift;
 
-    my $redis = $self->LRR_CONF->get_redis;
+    # Get a random archive ID from Postgres
+    my $archive = LANraragi::Model::PsilabsDev::PgArchive::get_random_archive();
 
-    # We get a random archive ID.
-    # We check for the length to (sort-of) avoid not getting an archive ID.
-    # TODO: This will loop infinitely if there are zero archives in store.
-    until ($archiveexists) {
-        $archive = $redis->randomkey();
-
-        $self->LRR_LOGGER->debug("Found key $archive");
-
-        #We got a key, but does the matching archive still exist on the server?
-        if (   length($archive) == 40
-            && $redis->type($archive) eq "hash"
-            && $redis->hexists( $archive, "file" ) ) {
-            my $arclocation = get_archive_path( $redis, $archive );
-            if ( -e $arclocation ) { $archiveexists = 1; }
-        }
+    if ( defined($archive) ) {
+        $self->LRR_LOGGER->debug("Found random archive: $archive");
+        # Redirect to the reader with the archive ID as parameter
+        $self->redirect_to( '/reader?id=' . $archive );
+    } else {
+        # No archives available or none have valid files
+        $self->LRR_LOGGER->warn("No random archive found");
+        $self->redirect_to('/');
     }
-
-    $redis->quit();
-
-    #We redirect to the reader, with the key as parameter.
-    $self->redirect_to( '/reader?id=' . $archive );
 }
 
 # Render the index template with a few prefilled arguments.
@@ -59,7 +46,7 @@ sub index {
     my $userlogged = $self->LRR_CONF->enable_pass == 0 || $self->session('is_logged');
 
     # Get static category list to populate the right-click menu
-    my @categories = LANraragi::Model::Category->get_static_category_list;
+    my @categories = LANraragi::Model::PsilabsDev::PgCategory::get_static_category_list();
 
     $self->render(
         template     => "index",

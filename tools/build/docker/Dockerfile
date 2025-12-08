@@ -1,4 +1,9 @@
 # DOCKER-VERSION 0.3.4
+# Include SQL dependencies
+# include with build arguments: `---build-arg INCLUDE_POSTGRESQL=1` or `--build-arg INCLUDE_SQLITE=1`.
+ARG INCLUDE_POSTGRESQL=1
+ARG INCLUDE_SQLITE=0
+
 FROM  alpine:3.24 AS base
 LABEL git="https://github.com/Difegue/LANraragi"
 
@@ -59,6 +64,10 @@ RUN apk add --no-cache \
     s6-overlay \
     procps-ng
 
+# Optional base packages
+ARG INCLUDE_POSTGRESQL
+RUN if [ $INCLUDE_POSTGRESQL ]; then apk add --no-cache libpq; fi
+
 # Ensure workdir folder is owned by the user
 RUN chown koyomi:koyomi .
 
@@ -81,6 +90,12 @@ RUN apk add --no-cache \
     pkgconf \
     patch \
     perl-config-autoconf
+
+# Add SQL dependencies.
+ARG INCLUDE_POSTGRESQL
+ARG INCLUDE_SQLITE
+RUN if [ $INCLUDE_POSTGRESQL ]; then apk add --no-cache postgresql-dev; fi && \
+    if [ $INCLUDE_SQLITE ]; then apk add --no-cache sqlite-dev; fi
 
 # Copy perl build time files
 COPY --chown=koyomi:koyomi /tools/cpanfile /tools/install.pl /tools/build/docker/install-perl-deps.sh tools/

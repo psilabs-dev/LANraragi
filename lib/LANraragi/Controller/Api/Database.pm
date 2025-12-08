@@ -6,14 +6,14 @@ use Mojo::JSON qw(decode_json);
 use File::Temp qw(tempfile);
 
 use LANraragi::Model::Backup;
-use LANraragi::Model::Stats;
-use LANraragi::Utils::Generic    qw(render_api_response);
-use LANraragi::Utils::Database   qw(invalidate_cache);
-use LANraragi::Utils::TempFolder qw(get_temp);
+use LANraragi::Model::PsilabsDev::PgBackup;
+use LANraragi::Model::PsilabsDev::PgStats;
+use LANraragi::Utils::Generic qw(render_api_response);
+use LANraragi::Utils::PsilabsDev::PgDatabase;
 
 sub serve_backup {
     my $self = shift->openapi->valid_input or return;
-    $self->render( openapi => decode_json(LANraragi::Model::Backup::build_backup_JSON) );
+    $self->render( openapi => decode_json(LANraragi::Model::PsilabsDev::PgBackup::build_backup_JSON) );
 }
 
 sub queue_backup {
@@ -144,10 +144,10 @@ sub queue_restore {
 
 sub drop_database {
     my $self = shift->openapi->valid_input or return;
-    LANraragi::Utils::Database::drop_database();
+    LANraragi::Utils::PsilabsDev::PgDatabase::drop_database();
 
-    # Force a refresh
-    invalidate_cache(1);
+    # Force a refresh (no-op for Postgres but kept for compatibility)
+    LANraragi::Utils::PsilabsDev::PgDatabase::invalidate_cache(1);
 
     render_api_response( $self, "drop_database" );
 }
@@ -162,15 +162,15 @@ sub serve_tag_stats {
         @excluded = split( /\s*,\s*/, $self->LRR_CONF->get_excludednamespaces );
     }
 
-    $self->render( openapi => LANraragi::Model::Stats::build_tag_stats( $minscore, \@excluded ) );
+    $self->render( openapi => LANraragi::Model::PsilabsDev::PgStats::build_tag_stats( $minscore, \@excluded ) );
 }
 
 sub clean_database {
     my $self = shift->openapi->valid_input or return;
-    my ( $deleted, $unlinked ) = LANraragi::Utils::Database::clean_database;
+    my ( $deleted, $unlinked ) = LANraragi::Utils::PsilabsDev::PgDatabase::clean_database;
 
-    # Force a refresh
-    invalidate_cache(1);
+    # Force a refresh (no-op for Postgres but kept for compatibility)
+    LANraragi::Utils::PsilabsDev::PgDatabase::invalidate_cache(1);
 
     $self->render(
         openapi => {
@@ -185,23 +185,9 @@ sub clean_database {
 #Clear new flag in all archives.
 sub clear_new_all {
 
-    my $self         = shift->openapi->valid_input or return;
-    my $redis        = $self->LRR_CONF->get_redis;
-    my $redis_search = $self->LRR_CONF->get_redis_search;
+    my $self = shift->openapi->valid_input or return;
 
-    # Get all archives thru redis
-    # 40-character long keys only => Archive IDs
-    my @keys = $redis->keys('????????????????????????????????????????');
-
-    foreach my $idall (@keys) {
-        $redis->hset( $idall, "isnew", "false" );
-    }
-
-    $redis->quit();
-
-    # Bust isnew cache
-    $redis_search->del("LRR_NEW");
-    $redis_search->quit();
+    LANraragi::Utils::PsilabsDev::PgDatabase::clear_new_all();
 
     render_api_response( $self, "clear_new_all" );
 }

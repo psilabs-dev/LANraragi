@@ -2,14 +2,13 @@ package LANraragi::Controller::Edit;
 use Mojo::Base 'Mojolicious::Controller';
 
 use File::Basename;
-use Redis;
 use Encode;
 use Template;
 
 use LANraragi::Utils::Generic qw(generate_themes_header);
-use LANraragi::Utils::Redis   qw(redis_decode);
 use LANraragi::Utils::Plugins qw(get_plugins);
 use LANraragi::Model::Tankoubon;
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive);
 
 sub index {
     my $self = shift;
@@ -22,19 +21,13 @@ sub index {
         return $self->edit_tankoubon($id);
     }
 
-    my $redis = $self->LRR_CONF->get_redis;
+    my %hash = get_archive($id);
 
-    if ( $redis->exists($id) ) {
-        my %hash = $redis->hgetall($id);
-
+    if ( %hash ) {
         my ( $name, $title, $tags, $summary, $file, $thumbhash ) = @hash{qw(name title tags summary file thumbhash)};
-
-        ( $_ = redis_decode($_) ) for ( $name, $title, $tags, $summary );
 
         #Build plugin listing
         my @pluginlist = get_plugins("metadata");
-
-        $redis->quit();
 
         $self->render(
             template  => "edit",

@@ -13,6 +13,9 @@ use File::Path qw(make_path);
 
 use constant IS_UNIX => ( $Config{osname} ne "MSWin32" );
 
+use constant INCLUDE_POSTGRESQL => ( $ENV{INCLUDE_POSTGRESQL} );
+use constant INCLUDE_SQLITE     => ( $ENV{INCLUDE_SQLITE});
+
 #Vendor dependencies
 my @vendor_css = (
     "/blueimp-file-upload/css/jquery.fileupload.css",
@@ -189,6 +192,19 @@ if ( $back || $full ) {
         install_package( "File::ChangeNotify::Watcher::Win32", $cpanopt,
             "https://github.com/Guerra24/File-ChangeNotify-Watcher-Win32/archive/7cb4e60823569cca8e7652d19b1ba5b5cac00a16.zip" );
         install_package( "Win32API::File",                     $cpanopt );
+    }
+
+    # Build and install SQL dependencies.
+    if ( INCLUDE_POSTGRESQL ) {
+        say("Installing dependencies for PostgreSQL... (This will do nothing if the package is there already)");
+        install_package( "DBD::Pg", $cpanopt );
+        install_package( "DBI", $cpanopt );
+
+    }
+    if ( INCLUDE_SQLITE ) {
+        say("Installing dependencies for Sqlite... (This will do nothing if the package is there already)");
+        install_package( "DBD::Sqlite", $cpanopt );
+        install_package( "DBI", $cpanopt );
     }
 
     if ( system( "cpanm --installdeps ./tools/. --notest" . $cpanopt ) != 0 ) {
