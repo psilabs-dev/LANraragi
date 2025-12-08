@@ -3,26 +3,21 @@ use Mojo::Base 'Mojolicious::Controller';
 
 use utf8;
 use URI::Escape;
-use Redis;
 use Encode;
 use Mojo::Util qw(xml_escape);
 
-use LANraragi::Model::Archive;
-use LANraragi::Model::Tankoubon;
 use LANraragi::Utils::Generic qw(generate_themes_header);
-use LANraragi::Utils::Redis   qw(redis_decode);
+use LANraragi::Model::PsilabsDev::PgArchive;
+use LANraragi::Model::PsilabsDev::PgTankoubon;
 
 # Go through the archives in the content directory and build the template at the end.
 sub index {
 
     my $self  = shift;
-    my $redis = $self->LRR_CONF->get_redis;
 
     my $userlogged = $self->LRR_CONF->enable_pass == 0 || $self->session('is_logged');
 
-    $redis->quit();
-
-    my @idlist = LANraragi::Model::Archive::generate_archive_list;
+    my @idlist = LANraragi::Model::PsilabsDev::PgArchive::generate_archive_list();
     #Parse the archive list and build <li> elements accordingly.
     my $arclist = "";
 
@@ -37,7 +32,7 @@ sub index {
     }
 
     # Build tank list
-    my ( $total, $filtered, @tanks ) = LANraragi::Model::Tankoubon::get_tankoubon_list(-1);
+    my ( $total, $filtered, @tanks ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon_list(-1);
     my $tanklist = "";
 
     foreach my $tank (@tanks) {
