@@ -29,18 +29,21 @@ use File::ChangeNotify;
 use File::Basename;
 use Encode;
 
-use LANraragi::Utils::Archive    qw(extract_thumbnail);
-use LANraragi::Utils::Database   qw(invalidate_cache compute_id change_archive_id get_arcsize add_timestamp_tag add_archive_to_redis add_arcsize add_pagecount);
+use LANraragi::Utils::PsilabsDev::PgArchive qw(extract_thumbnail);
+use LANraragi::Utils::Database   qw(invalidate_cache compute_id);
 use LANraragi::Utils::Logging    qw(get_logger);
-use LANraragi::Utils::Generic    qw(is_archive exec_with_lock_pure);
-use LANraragi::Utils::Redis      qw(redis_encode);
-use LANraragi::Utils::Path       qw(create_path open_path find_path get_archive_path);
+use LANraragi::Utils::Generic    qw(is_archive);
+use LANraragi::Utils::Path       qw(create_path open_path find_path);
 
 use LANraragi::Model::Config;
-use LANraragi::Model::Plugins;
 use LANraragi::Model::Metrics;
-use LANraragi::Utils::Plugins;    # Needed here since Shinobu doesn't inherit from the main LRR package
-use LANraragi::Model::Search;     # idem
+
+# Postgres-specific imports
+use LANraragi::Model::PsilabsDev::PgUpload qw(add_timestamp_tag add_pagecount add_arcsize add_timestamp_tag_with_dbh add_pagecount_with_dbh add_arcsize_with_dbh add_archive_to_postgres);
+use LANraragi::Model::PsilabsDev::PgPlugins;
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(change_archive_id);
+use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::PgPath qw(get_archive_path);
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -180,14 +183,19 @@ sub update_filemap {
         }
     };
 
-    if ($@) {
-        $logger->error("Error while scanning content folder: $@");
+    if ( my $error = $@ ) {
+        $logger->error("Error while scanning content folder: $error");
     }
 }
 
 sub add_to_filemap ( $redis_cfg, $file ) {
 
-    my $redis_arc = LANraragi::Model::Config->get_redis;
+    my $dbh = get_postgresql_dbh();
+    unless ($dbh) {
+        $logger->error("Failed to connect to PostgreSQL database");
+        return;
+    }
+
     if ( is_archive($file) ) {
 
         $logger->debug("Adding $file to Shinobu filemap.");
@@ -218,25 +226,104 @@ sub add_to_filemap ( $redis_cfg, $file ) {
         if ($compute_error && -e $file) {
             $logger->error("Couldn't open $file for ID computation: $compute_error");
             $logger->error("Giving up on adding it to the filemap.");
+            $dbh->disconnect();
             return;
         } elsif ($compute_error) {
             $logger->warn("File $file no longer exists; giving up on adding it to the filemap.");
+            $dbh->disconnect();
             return;
         }
 
-        # Acquire exclusive metadata and file write access for archive by ID with 1m timeout
-        my ($acquired, $is_new) = exec_with_lock_pure(
-            [ "archive-write:$id" ],
-            sub { update_filemap_entry( $logger, $id, $file, $redis_cfg, $redis_arc ) },
-            undef, 60
-        );
+        $logger->debug("Computed ID is $id.");
 
-        if ( !$acquired ) {
-            $logger->warn("Write lock already acquired for archive $file with ID $id, skipping.");
+        # If the id already exists on the server, throw a warning about duplicates
+        if ( $redis_cfg->hexists( "LRR_FILEMAP", $file ) ) {
+
+            my $filemap_id = $redis_cfg->hget( "LRR_FILEMAP", $file );
+
+            $logger->debug("$file was logged but is already in the filemap!");
+
+            if ( $filemap_id ne $id ) {
+                $logger->debug("$file has a different ID than the one in the filemap! ($filemap_id)");
+                $logger->info("$file has been modified, updating its ID from $filemap_id to $id.");
+
+                change_archive_id( $filemap_id, $id );
+
+                # Don't forget to update the filemap, later operations will behave incorrectly otherwise
+                $redis_cfg->hset( "LRR_FILEMAP", $file, $id );
+            } else {
+                $logger->debug(
+                    "$file has the same ID as the one in the filemap. Duplicate inotify events? Cleaning cache just to make sure");
+                invalidate_cache();
+            }
+
+            $dbh->disconnect();
+            return;
         }
 
-        # New file handling runs outside the lock so auto-plugin can acquire its own lock.
-        if ( $acquired && $is_new ) {
+        # Filename sanity check - check if archive exists in Postgres
+        my $check_sth = $dbh->prepare('SELECT arcid, filename FROM lrr_archive WHERE arcid = ?');
+        $check_sth->execute($id);
+        my $existing = $check_sth->fetchrow_hashref;
+        $check_sth->finish;
+
+        if ( $existing ) {
+
+            my $filecheck = $existing->{filename};
+
+            #Update the real file path and title if they differ from the saved one
+            #This is meant to always track the current filename for the OS.
+            unless ( $file eq $filecheck ) {
+                $logger->debug("File name discrepancy detected between DB and filesystem!");
+                $logger->debug("Filesystem: $file");
+                $logger->debug("Database: $filecheck");
+                my ( $name, $path, $suffix ) = fileparse( $file, qr/\.[^.]*/ );
+
+                # Wrap multi-statement update in transaction
+                eval {
+                    $dbh->begin_work;
+
+                    # Update filename and title in Postgres
+                    my $update_sth = $dbh->prepare('UPDATE lrr_archive SET filename = ?, title = ? WHERE arcid = ?');
+                    $update_sth->execute($file, $name, $id);
+                    $update_sth->finish;
+
+                    $dbh->commit;
+
+                    invalidate_cache();
+                };
+
+                if ( my $error = $@ ) {
+                    $logger->error("Error updating filename/title for $id: $error");
+                    eval { $dbh->rollback };
+                }
+            }
+
+            # Check and set arcsize if not already set
+            my $arcsize_check_sth = $dbh->prepare('SELECT arcsize FROM lrr_archive WHERE arcid = ?');
+            $arcsize_check_sth->execute($id);
+            my $arcsize_row = $arcsize_check_sth->fetchrow_hashref;
+            $arcsize_check_sth->finish;
+
+            unless ( $arcsize_row && $arcsize_row->{arcsize} ) {
+                $logger->debug("arcsize is not set for $id, storing now!");
+                add_arcsize_with_dbh( $dbh, $id );
+            }
+
+            # Set pagecount in case it's not already there
+            my $pagecount_check_sth = $dbh->prepare('SELECT pagecount FROM lrr_archive WHERE arcid = ?');
+            $pagecount_check_sth->execute($id);
+            my $pagecount_row = $pagecount_check_sth->fetchrow_hashref;
+            $pagecount_check_sth->finish;
+
+            unless ( $pagecount_row && $pagecount_row->{pagecount} ) {
+                $logger->debug("Pagecount not calculated for $id, doing it now!");
+                add_pagecount_with_dbh( $dbh, $id );
+            }
+
+        } else {
+
+            # Add to Postgres if not present beforehand
             add_new_file( $id, $file );
             invalidate_cache();
         }
@@ -244,85 +331,7 @@ sub add_to_filemap ( $redis_cfg, $file ) {
     } else {
         $logger->debug("$file not recognized as archive, skipping.");
     }
-    $redis_arc->quit;
-}
-
-sub update_filemap_entry ( $logger, $id, $file, $redis_cfg, $redis_arc ) {
-
-    $logger->debug("Computed ID is $id.");
-    unless ( -e $file ) {
-        # A race condition check, if the file was deleted after ID computation but before a lock was acquired.
-        $logger->warn("File does not exist; giving up on adding it to the filemap: $file");
-        return;
-    }
-
-    # If the id already exists on the server, throw a warning about duplicates
-    if ( $redis_cfg->hexists( "LRR_FILEMAP", $file ) ) {
-
-        my $filemap_id = $redis_cfg->hget( "LRR_FILEMAP", $file );
-
-        $logger->debug("$file was logged but is already in the filemap!");
-
-        if ( $filemap_id ne $id ) {
-            $logger->debug("$file has a different ID than the one in the filemap! ($filemap_id)");
-            $logger->info("$file has been modified, updating its ID from $filemap_id to $id.");
-
-            # Note: The logic here is technically different than the one in Upload.pm.
-            # Upload.pm checks replace_duplicates and wipes the previous ID/metadata. 
-            # Shinobu just updates the ID in the database and leaves the old metadata in place.
-            # There's no way to assess user intent just from a filewatcher though, so we act non-destructively.
-            change_archive_id( $filemap_id, $id );
-
-            # Don't forget to update the filemap, later operations will behave incorrectly otherwise
-            $redis_cfg->hset( "LRR_FILEMAP", $file, $id );
-        } else {
-            $logger->debug(
-                "$file has the same ID as the one in the filemap. Duplicate inotify events? Cleaning cache just to make sure");
-            invalidate_cache();
-        }
-
-        return;
-
-    } else {
-        $redis_cfg->hset( "LRR_FILEMAP", $file, $id );    # raw FS path so no encoding/decoding whatsoever
-    }
-
-    # Filename sanity check
-    if ( $redis_arc->exists($id) ) {
-
-        my $filecheck = get_archive_path( $redis_arc, $id );
-
-        #Update the real file path and title if they differ from the saved one
-        #This is meant to always track the current filename for the OS.
-        unless ( $file eq $filecheck ) {
-            $logger->debug("File name discrepancy detected between DB and filesystem!");
-            $logger->debug("Filesystem: $file");
-            $logger->debug("Database: $filecheck");
-            my ( $name, $path, $suffix ) = fileparse( $file, qr/\.[^.]*/ );
-            $redis_arc->hset( $id, "file", $file );
-            $redis_arc->hset( $id, "name", redis_encode($name) );
-            $redis_arc->wait_all_responses;
-            invalidate_cache();
-        }
-
-        unless ( get_arcsize( $redis_arc, $id ) ) {
-            $logger->debug("arcsize is not set for $id, storing now!");
-            add_arcsize( $redis_arc, $id );
-        }
-
-        # Set pagecount in case it's not already there
-        unless ( $redis_arc->hget( $id, "pagecount" ) ) {
-            $logger->debug("Pagecount not calculated for $id, doing it now!");
-            add_pagecount( $redis_arc, $id );
-        }
-
-    } else {
-
-        # Signal that this is a new file; caller will handle add_new_file outside the lock.
-        return 1;
-    }
-
-    return 0;
+    $dbh->disconnect();
 }
 
 # Only handle new files. As per the ChangeNotify doc, it
@@ -336,8 +345,8 @@ sub new_file_callback ($name) {
         eval { add_to_filemap( $redis, $name ); };
         $redis->quit();
 
-        if ($@) {
-            $logger->error("Error while handling new file: $@");
+        if ( my $error = $@ ) {
+            $logger->error("Error while handling new file: $error");
         }
     }
 }
@@ -369,8 +378,8 @@ sub add_new_files (@files) {
         # Individual files are also eval'd so we can keep scanning
         eval { add_to_filemap( $redis, $file ); };
 
-        if ($@) {
-            $logger->error("Error scanning $file: $@");
+        if ( my $error = $@ ) {
+            $logger->error("Error scanning $file: $error");
         }
     }
 
@@ -380,28 +389,39 @@ sub add_new_files (@files) {
 
 sub add_new_file ( $id, $file ) {
 
-    my $redis        = LANraragi::Model::Config->get_redis;
-    my $redis_search = LANraragi::Model::Config->get_redis_search;
+    my $dbh = get_postgresql_dbh();
+    unless ($dbh) {
+        $logger->error("Failed to connect to PostgreSQL database");
+        return;
+    }
+
     $logger->info("Adding new file $file with ID $id");
 
     eval {
-        add_archive_to_redis( $id, $file, $redis, $redis_search );
-        add_timestamp_tag( $redis, $id );
-        add_pagecount( $redis, $id );
+        # Add archive to Postgres (equivalent to add_archive_to_redis)
+        add_archive_to_postgres( $id, $file, $dbh );
+
+        # Add timestamp tag (reuse $dbh)
+        add_timestamp_tag_with_dbh( $dbh, $id );
+
+        # Add pagecount (reuse $dbh)
+        add_pagecount_with_dbh( $dbh, $id );
+
+        # Add arcsize (reuse $dbh)
+        add_arcsize_with_dbh( $dbh, $id );
 
         # Generate thumbnail
         my $thumbdir = LANraragi::Model::Config->get_thumbdir;
         extract_thumbnail( $thumbdir, $id, 1, 1, 1 );
 
         # AutoTagging using enabled plugins goes here!
-        LANraragi::Model::Plugins::exec_enabled_plugins_on_file($id);
+        LANraragi::Model::PsilabsDev::PgPlugins::exec_enabled_plugins_on_file($id);
     };
 
-    if ($@) {
-        $logger->error("Error while adding file: $@");
+    if ( my $error = $@ ) {
+        $logger->error("Error while adding file: $error");
     }
-    $redis->quit;
-    $redis_search->quit;
+    $dbh->disconnect();
 }
 
 __PACKAGE__->initialize_from_new_process unless caller;
