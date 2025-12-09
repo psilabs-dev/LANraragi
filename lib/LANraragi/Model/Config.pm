@@ -111,6 +111,12 @@ sub get_redis_conf {
     return $default;
 }
 
+# TODO
+# Get and return a working postgreSQL handle.
+sub get_pghandle {
+
+}
+
 # Functions that return the config variables stored in Redis, or default values if they don't exist.
 # Descriptions for each one of these can be found in the web configuration page.
 sub get_userdir {

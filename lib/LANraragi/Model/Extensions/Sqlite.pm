@@ -1,71 +1,52 @@
-package LANraragi::Model::Extensions::Postgres;
+package LANraragi::Model::Extensions::Sqlite;
 
 # Metadata database interaction layer.
-# May later be refactored to PostgresArchive, PostgresCategory, etc.
-# Manages the Postgresql CRUD operations.
+# May later be refactored to SqliteArchive, SqliteCategory, etc.
+# Manages the Sqlite CRUD operations.
+# TODO: Copy from Postgresql
 
-# TODO: what constitutes an untagged archive?
 sub get_all_untagged_archive_ids {
     my $dbh = shift;
 }
 
-# TODO
 sub get_all_archives {
     my $dbh = shift;
 }
 
-# TODO: check if correct.
 sub get_archive_metadata_by_id {
-    my $dbh     = shift;
-    my $arcid   = shift;
-    my $sth = $dbh->prepare(
-        "SELECT "
-        . "arcid, filename, extension,"
-        . "isnew, lastreadtime, pagecount, progress,"
-        . "title, tags, summary"
-        . " FROM lrr_archive WHERE id=?"
-    );
-    my $result  = $sth->execute($arcid);
+    my $dbh = shift;
 }
 
-# TODO
 sub update_archive_metadata {
     my $dbh = shift;
 }
 
-# TODO
 # Also performs metadata removal
 sub delete_archive_metadata_by_id {
     my $dbh = shift;
 }
 
-# TODO
 # This will include all archives of a category if available.
 sub get_category_metadata_by_id {
     my $dbh = shift;
 }
 
-# TODO
 sub update_category_metadata {
     my $dbh = shift;
 }
 
-# TODO
 sub delete_category_metadata_by_id {
     my $dbh = shift;
 }
 
-# TODO
 sub add_archive_to_category {
     my $dbh = shift;
 }
 
-# TODO
 sub remove_archive_from_category {
     my $dbh = shift;
 }
 
-# TODO
 sub get_categories_by_arcid {
     my $dbh = shift;
 }
@@ -76,28 +57,23 @@ sub get_tank_by_id {
     my $dbh = shift;
 }
 
-# TODO
 sub get_tank_metadata_by_id {
     my $dbh = shift;
 }
 
-# TODO
 # Probably also involves update archives and order.
 sub update_tank {
     my $dbh = shift;
 }
 
-# TODO
 sub add_archive_to_tank {
     my $dbh = shift;
 }
 
-# TODO
 sub remove_archive_from_tank {
     my $dbh = shift;
 }
 
-# TODO
 sub get_tanks_by_arcid {
     my $dbh = shift;
 }

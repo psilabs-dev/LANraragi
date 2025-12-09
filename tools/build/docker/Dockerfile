@@ -3,6 +3,10 @@ FROM        alpine:3.20
 LABEL       git="https://github.com/Difegue/LANraragi"
 ARG INSTALL_PARAMETER
 
+# include SQL dependencies
+ARG INCLUDE_POSTGRESQL=1
+ARG INCLUDE_SQLITE=1
+
 ENV S6_KEEP_ENV=1
 
 # warn if we can't run stage2 (fix-attrs/cont-init)
