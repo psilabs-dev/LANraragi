@@ -53,14 +53,13 @@ sub initialize_database {
         . 'filename VARCHAR(255) NOT NULL,'
         . 'extension VARCHAR(255),'
 
-        . 'isnew BOOLEAN,'
-        . 'lastreadtime INTEGER,'
-        . 'pagecount INTEGER,'
-        . 'progress INTEGER,'
+        . 'isnew BOOLEAN NOT NULL,'
+        . 'lastreadtime INTEGER NOT NULL,'
+        . 'pagecount INTEGER NOT NULL,'
+        . 'progress INTEGER NOT NULL,'
 
-        . 'title VARCHAR(255),'
-        . 'tags TEXT,'
-        . 'summary TEXT,'
+        . 'title VARCHAR(255) NOT NULL,'
+        . 'summary TEXT'
 
         . ')'
     );
@@ -76,7 +75,7 @@ sub initialize_database {
         'CREATE TABLE IF NOT EXISTS lrr_category ('
         . 'catid VARCHAR(255) PRIMARY KEY,'
         . 'name VARCHAR(255) NOT NULL,'
-        . 'pinned BOOLEAN,'
+        . 'pinned BOOLEAN NOT NULL,'
         . 'search VARCHAR(255),'
         . ')'
     );
@@ -87,10 +86,12 @@ sub initialize_database {
     $logger->info("Created table: lrr_category");
 
     # tank metadata
-    # TODO: finish the schema.
     $dbh->do(
         'CREATE TABLE IF NOT EXISTS lrr_tank ('
         . 'tankid VARCHAR(255) PRIMARY KEY,'
+        . 'name VARCHAR(255) NOT NULL,'
+        . 'summary TEXT,'
+        . 'tags TEXT'
         . ')'
     );
     if ( defined $rv ) {
@@ -100,11 +101,10 @@ sub initialize_database {
     $logger->info("Created table: lrr_tank");
 
     # archive to category relation
-    # TODO: does arc-to-category order matter/is used anywhere?
     $dbh->do(
         'CREATE TABLE IF NOT EXISTS lrr_category_to_archive_map ('
-        . 'catid VARCHAR(255),'
-        . 'arcid VARCHAR(255),'
+        . 'catid VARCHAR(255) NOT NULL,'
+        . 'arcid VARCHAR(255) NOT NULL,'
         . 'update_date DATE,'
         . 'FOREIGN KEY arcid REFERENCES lrr_archive(arcid),'
         . 'FOREIGN KEY catid REFERENCES lrr_category(catid)'
@@ -116,17 +116,51 @@ sub initialize_database {
     }
     $logger->info("Created table: lrr_category_to_archive_map");
 
+    # tag metadata
+    $dbh->do(
+        'CREATE TABLE IF NOT EXISTS lrr_tag ('
+        . 'tagid INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,'
+        . 'namespace VARCHAR(255) NOT NULL DEFAULT \'\','
+        . 'value VARCHAR(255) NOT NULL,'
+        . 'UNIQUE(namespace, value)'
+        . ')'
+    );
+    if ( defined $rv ) {
+        my $errorcode = $dbh->err;
+        die "Failed to create lrr_tag table (code $errorcode): $@";
+    }
+    $logger->info("Created table: lrr_tag");
+
+    # archive to tag relation
+    $dbh->do(
+        'CREATE TABLE IF NOT EXISTS lrr_archive_to_tag_map ('
+        . 'arcid VARCHAR(255) NOT NULL,'
+        . 'tagid INTEGER NOT NULL,'
+        . 'update_date DATE,'
+        . 'FOREIGN KEY arcid REFERENCES lrr_archive(arcid),'
+        . 'FOREIGN KEY tagid REFERENCES lrr_tag(tagid),'
+        . 'UNIQUE(arcid, tagid)'
+        . ')'
+    );
+    if ( defined $rv ) {
+        my $errorcode = $dbh->err;
+        die "Failed to create lrr_archive_to_tag_map table (code $errorcode): $@";
+    }
+    $logger->info("Created table: lrr_archive_to_tag_map");
+
     # archive to tank relation
     # TODO: tank order probably matters, so we should think about this more
     # at the same time, writes are much less frequent than reads.
     $dbh->do(
         'CREATE TABLE IF NOT EXISTS lrr_tank_to_archive_map ('
-        . 'tankid VARCHAR(255),'
-        . 'arcid VARCHAR(255),'
-        . 'order INTEGER,'
+        . 'tankid VARCHAR(255) NOT NULL,'
+        . 'arcid VARCHAR(255) NOT NULL,'
+        . 'position INTEGER NOT NULL,'
         . 'update_date DATE,'
         . 'FOREIGN KEY arcid REFERENCES lrr_archive(arcid),'
-        . 'FOREIGN KEY tankid REFERENCES lrr_tank(tankid)'
+        . 'FOREIGN KEY tankid REFERENCES lrr_tank(tankid),'
+        . 'UNIQUE(tankid, arcid),'
+        . 'UNIQUE(tankid, position)'
         . ')'
     );
     if ( defined $rv ) {
