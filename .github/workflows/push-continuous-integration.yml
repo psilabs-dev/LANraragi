@@ -32,6 +32,7 @@ jobs:
       uses: Difegue/action-perlcritic@master
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        INCLUDE_POSTGRESQL: 1
       with:
           args: ./lib/* ./script/* ./tools/install.pl
 
