@@ -4,6 +4,6 @@ use utf8;
 
 use Test::More;
 
-BEGIN { use_ok('LANraragi::Model::Sqlite'); }
+BEGIN { use_ok('LANraragi::Model::Extensions::Sqlite'); }
 
 done_testing();

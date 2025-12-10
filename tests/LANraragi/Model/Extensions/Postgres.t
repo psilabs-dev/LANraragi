@@ -4,6 +4,6 @@ use utf8;
 
 use Test::More;
 
-BEGIN { use_ok('LANraragi::Model::Postgres'); }
+BEGIN { use_ok('LANraragi::Model::Extensions::Postgres'); }
 
 done_testing();

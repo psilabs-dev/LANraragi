@@ -4,6 +4,6 @@ use utf8;
 
 use Test::More;
 
-BEGIN { use_ok('LANraragi::Model::SqliteSearch'); }
+BEGIN { use_ok('LANraragi::Model::Extensions::SqliteSearch'); }
 
 done_testing();
