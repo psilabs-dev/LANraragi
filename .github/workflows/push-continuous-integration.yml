@@ -28,11 +28,12 @@ jobs:
         docker build --build-arg INCLUDE_POSTGRESQL=1 -t difegue/lanraragi -f ./tools/build/docker/Dockerfile .
     - name: LANraragi Test Suite
       uses: ./.github/action-run-tests
+      env:
+        INCLUDE_POSTGRESQL: 1
     - name: Perl Critic
       uses: Difegue/action-perlcritic@master
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        INCLUDE_POSTGRESQL: 1
       with:
           args: ./lib/* ./script/* ./tools/install.pl
 
