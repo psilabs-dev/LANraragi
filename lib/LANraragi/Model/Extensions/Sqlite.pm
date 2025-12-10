@@ -1,5 +1,9 @@
 package LANraragi::Model::Extensions::Sqlite;
 
+use strict;
+use warnings;
+use utf8;
+
 # Metadata database interaction layer.
 # May later be refactored to SqliteArchive, SqliteCategory, etc.
 # Manages the Sqlite CRUD operations.

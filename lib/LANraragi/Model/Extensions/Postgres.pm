@@ -1,5 +1,9 @@
 package LANraragi::Model::Extensions::Postgres;
 
+use strict;
+use warnings;
+use utf8;
+
 # Metadata database interaction layer.
 # May later be refactored to PostgresArchive, PostgresCategory, etc.
 # Manages the Postgresql CRUD operations.

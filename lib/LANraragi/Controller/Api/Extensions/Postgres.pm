@@ -1,5 +1,9 @@
 package LANraragi::Controller::Api::Extensions::Postgres;
 
+use strict;
+use warnings;
+use utf8;
+
 # APIs to check connection/health to postgres database
 
 # TODO: get status of postgres database.
