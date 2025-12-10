@@ -21,6 +21,7 @@ use LANraragi::Utils::Logging  qw(get_logger);
 
 use LANraragi::Model::Archive;
 use LANraragi::Model::Category;
+use LANraragi::Model::Extensions::Postgres;
 
 # do_search (filter, category_id, page, key, order, newonly, untaggedonly)
 # Performs a search on the database.
@@ -42,7 +43,7 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
     my $tankidscount = scalar( LANraragi::Model::Config->get_redis->keys('TANK_??????????') );
 
     # Total number of archives (as int)
-    my $total = $grouptanks ? $tankcount : $redis->zcard("LRR_TITLES") - $tankidscount;
+    my $total = LANraragi::Model::Extensions::Postgres::get_num_archives();
 
     # Look in searchcache first
     my $sortorder_inv = $sortorder ? 0 : 1;

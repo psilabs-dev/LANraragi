@@ -4,6 +4,13 @@ package LANraragi::Model::Extensions::Postgres;
 # May later be refactored to PostgresArchive, PostgresCategory, etc.
 # Manages the Postgresql CRUD operations.
 
+# Get total number of archives.
+sub get_num_archives {
+    my $dbh = shift;
+    my $response = $dbh->selectrow_array("SELECT COUNT(*) FROM lrr_archive");
+    return $response;
+}
+
 # TODO: what constitutes an untagged archive?
 sub get_all_untagged_archive_ids {
     my $dbh = shift;
@@ -16,17 +23,29 @@ sub get_all_archives {
 
 # TODO: check if correct.
 sub get_archive_metadata_by_id {
-    my $dbh     = shift;
-    my $arcid   = shift;
+    my $dbh   = shift;
+    my $arcid = shift;
+    
     my $sth = $dbh->prepare(
         "SELECT "
         . "arcid, filename, extension,"
         . "isnew, lastreadtime, pagecount, progress,"
-        . "title, tags, summary"
-        . " FROM lrr_archive WHERE id=?"
+        . "title, tags, summary "
+        . "FROM lrr_archive WHERE id=?"
     );
-    my $result  = $sth->execute($arcid);
+    
+    my $result = $sth->execute($arcid);
+    
+    # Check if execution was successful
+    if (!$result) {
+        die "Query execution failed: " . $sth->errstr;
+    }
+    
+    # Fetch and return the row
+    my $row = $sth->fetchrow_hashref();
+    return $row;
 }
+
 
 # TODO
 sub update_archive_metadata {

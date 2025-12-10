@@ -170,11 +170,14 @@ if ( $back || $full ) {
     # Build and install SQL dependencies.
     if ( INCLUDE_POSTGRESQL ) {
         say("Installing dependencies for PostgreSQL... (This will do nothing if the package is there already)");
-        install_package( "DBD::Pg" ); # 3.18.0
+        install_package( "DBD::Pg", $cpanopt );
+        install_package( "DBI", $cpanopt );
 
-    } elsif ( INCLUDE_SQLITE ) {
+    }
+    if ( INCLUDE_SQLITE ) {
         say("Installing dependencies for Sqlite... (This will do nothing if the package is there already)");
-        install_package( "DBD::Sqlite" );
+        install_package( "DBD::Sqlite", $cpanopt );
+        install_package( "DBI", $cpanopt );
     }
 
     if ( system( "cpanm --installdeps ./tools/. --notest" . $cpanopt ) != 0 ) {
