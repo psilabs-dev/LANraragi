@@ -1,4 +1,4 @@
-FROM difegue/lanraragi:nightly
+FROM difegue/lanraragi
 # Use the base LRR container to have a prepared test environment
 
 LABEL "name"="lrr-test"
