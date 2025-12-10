@@ -6,6 +6,7 @@ use utf8;
 
 use DBD::Pg;
 use DBI;
+use LANraragi::Utils::Logging  qw(get_logger);
 
 # All utilities related to establishing PostgreSQL clients, getting clients, common helper methods, etc.
 
@@ -39,7 +40,6 @@ sub get_dbh {
 # as well as mappings between the three.
 sub initialize_database {
 
-    my $self    = shift;
     my $logger  = get_logger( "Postgres", "lanraragi" );
     my $dbh     = get_dbh();
     my $rv;
@@ -63,30 +63,36 @@ sub initialize_database {
 
         . ')'
     );
-    if ( defined $rv ) {
-        my $errorcode = $dbh->err;
-        die "Failed to create lrr_archive table (code $errorcode): $@";
+    # With RaiseError => 1, any error would have thrown already.
+    # Keep a defensive check for completeness.
+    unless ( defined $rv ) {
+        my $errorcode = $dbh->err // '';
+        my $errorstr  = $dbh->errstr // '';
+        $dbh->disconnect();
+        die "Failed to create lrr_archive table (code $errorcode): $errorstr";
     }
     $logger->info("Created table: lrr_archive");
 
     # category metadata
     # TODO: category ID might be also made stricter since it's a known structure.
-    $dbh->do(
+    $rv = $dbh->do(
         'CREATE TABLE IF NOT EXISTS lrr_category ('
         . 'catid VARCHAR(255) PRIMARY KEY,'
         . 'name VARCHAR(255) NOT NULL,'
         . 'pinned BOOLEAN NOT NULL,'
-        . 'search VARCHAR(255),'
+        . 'search VARCHAR(255)'
         . ')'
     );
-    if ( defined $rv ) {
-        my $errorcode = $dbh->err;
-        die "Failed to create lrr_category table (code $errorcode): $@";
+    unless ( defined $rv ) {
+        my $errorcode = $dbh->err // '';
+        my $errorstr  = $dbh->errstr // '';
+        $dbh->disconnect();
+        die "Failed to create lrr_category table (code $errorcode): $errorstr";
     }
     $logger->info("Created table: lrr_category");
 
     # tank metadata
-    $dbh->do(
+    $rv = $dbh->do(
         'CREATE TABLE IF NOT EXISTS lrr_tank ('
         . 'tankid VARCHAR(255) PRIMARY KEY,'
         . 'name VARCHAR(255) NOT NULL,'
@@ -94,30 +100,34 @@ sub initialize_database {
         . 'tags TEXT'
         . ')'
     );
-    if ( defined $rv ) {
-        my $errorcode = $dbh->err;
-        die "Failed to create lrr_tank table (code $errorcode): $@";
+    unless ( defined $rv ) {
+        my $errorcode = $dbh->err // '';
+        my $errorstr  = $dbh->errstr // '';
+        $dbh->disconnect();
+        die "Failed to create lrr_tank table (code $errorcode): $errorstr";
     }
     $logger->info("Created table: lrr_tank");
 
     # archive to category relation
-    $dbh->do(
+    $rv = $dbh->do(
         'CREATE TABLE IF NOT EXISTS lrr_category_to_archive_map ('
         . 'catid VARCHAR(255) NOT NULL,'
         . 'arcid VARCHAR(255) NOT NULL,'
         . 'update_date DATE,'
-        . 'FOREIGN KEY arcid REFERENCES lrr_archive(arcid),'
-        . 'FOREIGN KEY catid REFERENCES lrr_category(catid)'
+        . 'FOREIGN KEY (arcid) REFERENCES lrr_archive(arcid),'
+        . 'FOREIGN KEY (catid) REFERENCES lrr_category(catid)'
         . ')'
     );
-    if ( defined $rv ) {
-        my $errorcode = $dbh->err;
-        die "Failed to create lrr_category_to_archive_map table (code $errorcode): $@";
+    unless ( defined $rv ) {
+        my $errorcode = $dbh->err // '';
+        my $errorstr  = $dbh->errstr // '';
+        $dbh->disconnect();
+        die "Failed to create lrr_category_to_archive_map table (code $errorcode): $errorstr";
     }
     $logger->info("Created table: lrr_category_to_archive_map");
 
     # tag metadata
-    $dbh->do(
+    $rv = $dbh->do(
         'CREATE TABLE IF NOT EXISTS lrr_tag ('
         . 'tagid INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,'
         . 'namespace VARCHAR(255) NOT NULL DEFAULT \'\','
@@ -125,50 +135,58 @@ sub initialize_database {
         . 'UNIQUE(namespace, value)'
         . ')'
     );
-    if ( defined $rv ) {
-        my $errorcode = $dbh->err;
-        die "Failed to create lrr_tag table (code $errorcode): $@";
+    unless ( defined $rv ) {
+        my $errorcode = $dbh->err // '';
+        my $errorstr  = $dbh->errstr // '';
+        $dbh->disconnect();
+        die "Failed to create lrr_tag table (code $errorcode): $errorstr";
     }
     $logger->info("Created table: lrr_tag");
 
     # archive to tag relation
-    $dbh->do(
+    $rv = $dbh->do(
         'CREATE TABLE IF NOT EXISTS lrr_archive_to_tag_map ('
         . 'arcid VARCHAR(255) NOT NULL,'
         . 'tagid INTEGER NOT NULL,'
         . 'update_date DATE,'
-        . 'FOREIGN KEY arcid REFERENCES lrr_archive(arcid),'
-        . 'FOREIGN KEY tagid REFERENCES lrr_tag(tagid),'
+        . 'FOREIGN KEY (arcid) REFERENCES lrr_archive(arcid),'
+        . 'FOREIGN KEY (tagid) REFERENCES lrr_tag(tagid),'
         . 'UNIQUE(arcid, tagid)'
         . ')'
     );
-    if ( defined $rv ) {
-        my $errorcode = $dbh->err;
-        die "Failed to create lrr_archive_to_tag_map table (code $errorcode): $@";
+    unless ( defined $rv ) {
+        my $errorcode = $dbh->err // '';
+        my $errorstr  = $dbh->errstr // '';
+        $dbh->disconnect();
+        die "Failed to create lrr_archive_to_tag_map table (code $errorcode): $errorstr";
     }
     $logger->info("Created table: lrr_archive_to_tag_map");
 
     # archive to tank relation
     # TODO: tank order probably matters, so we should think about this more
     # at the same time, writes are much less frequent than reads.
-    $dbh->do(
+    $rv = $dbh->do(
         'CREATE TABLE IF NOT EXISTS lrr_tank_to_archive_map ('
         . 'tankid VARCHAR(255) NOT NULL,'
         . 'arcid VARCHAR(255) NOT NULL,'
         . 'position INTEGER NOT NULL,'
         . 'update_date DATE,'
-        . 'FOREIGN KEY arcid REFERENCES lrr_archive(arcid),'
-        . 'FOREIGN KEY tankid REFERENCES lrr_tank(tankid),'
+        . 'FOREIGN KEY (arcid) REFERENCES lrr_archive(arcid),'
+        . 'FOREIGN KEY (tankid) REFERENCES lrr_tank(tankid),'
         . 'UNIQUE(tankid, arcid),'
         . 'UNIQUE(tankid, position)'
         . ')'
     );
-    if ( defined $rv ) {
-        my $errorcode = $dbh->err;
-        die "Failed to create lrr_tank_to_archive_map table (code $errorcode): $@";
+    unless ( defined $rv ) {
+        my $errorcode = $dbh->err // '';
+        my $errorstr  = $dbh->errstr // '';
+        $dbh->disconnect();
+        die "Failed to create lrr_tank_to_archive_map table (code $errorcode): $errorstr";
     }
     $logger->info("Created table: lrr_tank_to_archive_map");
 
+    # Close handle
+    $dbh->disconnect();
 }
 
 # Generic transactional scope.

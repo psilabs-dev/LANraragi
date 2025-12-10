@@ -107,6 +107,13 @@ sub startup {
     # Initialize cache
     LANraragi::Utils::PageCache::initialize();
 
+    # Initialize Postgres schema if enabled
+    eval {
+        require LANraragi::Utils::Extensions::Postgres;
+        LANraragi::Utils::Extensions::Postgres::initialize_database();
+        $self->LRR_LOGGER->info("Initialized Postgres schema.");
+    } or die "Postgres initialization failed: $@";
+
     # Load i18n
     LANraragi::Utils::I18NInitializer::initialize($self);
 
