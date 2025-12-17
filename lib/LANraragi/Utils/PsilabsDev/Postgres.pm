@@ -1,0 +1,213 @@
+package LANraragi::Utils::PsilabsDev::Postgres;
+
+use strict;
+use warnings;
+use utf8;
+
+use DBD::Pg;
+use DBI;
+use LANraragi::Utils::Logging  qw(get_logger);
+
+# Get the PostgreSQL database connection.
+sub get_postgresql_dbh {
+
+    # required variables.
+    # TODO: this needs to be populated but for now we can just go with this.
+    my $dbname = $ENV{LRR_POSTGRES_DB}          // 'postgres';
+    my $host = $ENV{LRR_POSTGRES_HOST}          // 'postgres';
+    my $port = $ENV{LRR_POSTGRES_PORT}          // 5432;
+    # my $options = ''; # TODO: figure out if options is needed.
+    my $username = $ENV{LRR_POSTGRES_USER}      // 'postgres';
+    my $password = $ENV{LRR_POSTGRES_PASSWORD}  // 'postgres';
+
+    my $dbh = DBI->connect(
+        "dbi:Pg:dbname=$dbname;host=$host;port=$port",
+        $username,
+        $password,
+        {
+            AutoCommit => 1,
+            RaiseError => 1,
+            PrintError => 0
+        }
+    );
+
+    return $dbh;
+}
+
+sub initialize_database {
+    my $dbh     = shift;
+    my $logger  = get_logger("Postgres Utils", "lanraragi");
+    my $rv;
+
+    $logger->info("Initializing PostgreSQL database...");
+
+    # archive metadata
+    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_archive (
+        arcid           VARCHAR(255) PRIMARY KEY,
+        filename        VARCHAR(255) NOT NULL,
+        extension       VARCHAR(255),
+        isnew           BOOLEAN NOT NULL,
+        lastreadtime    INTEGER NOT NULL,
+        pagecount       INTEGER NOT NULL,
+        progress        INTEGER NOT NULL,
+        title           VARCHAR(255) NOT NULL,
+        summary         TEXT,
+        search_tsv      tsvector
+    )");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create lrr_archive table: $errorcode - $errorstr";
+    }
+    $logger->info("Created table: lrr_archive");
+
+    # category metadata
+    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_category (
+        catid           VARCHAR(255) PRIMARY KEY,
+        name            VARCHAR(255) NOT NULL,
+        pinned          BOOLEAN NOT NULL,
+        search          VARCHAR(255)
+    )");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create lrr_category table: $errorcode - $errorstr";
+    }
+    $logger->info("Created table: lrr_category");
+    
+    # tank metadata
+    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_tank (
+        tankid          VARCHAR(255) PRIMARY KEY,
+        name            VARCHAR(255) NOT NULL,
+        summary         TEXT,
+        tags            TEXT
+    )");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create lrr_tank table: $errorcode - $errorstr";
+    }
+    $logger->info("Created table: lrr_tank");
+
+    # tag metadata
+    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_tag (
+        tagid           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        namespace       VARCHAR(255) NOT NULL DEFAULT '',
+        value           VARCHAR(255) NOT NULL,
+        UNIQUE (namespace, value)
+    )");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create lrr_tag table: $errorcode - $errorstr";
+    }
+    $logger->info("Created table: lrr_tag");
+
+    # category to archive map
+    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_category_to_archive_map (
+        catid VARCHAR(255) NOT NULL,
+        arcid VARCHAR(255) NOT NULL,
+        update_date DATE,
+        FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
+        FOREIGN KEY (catid) REFERENCES lrr_category (catid)
+    )");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create lrr_category_to_archive_map table: $errorcode - $errorstr";
+    }
+    $logger->info("Created table: lrr_category_to_archive_map");
+
+    # archive to tag map
+    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_archive_to_tag_map (
+        arcid VARCHAR(255) NOT NULL,
+        tagid INTEGER NOT NULL,
+        update_date DATE,
+        FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
+        FOREIGN KEY (tagid) REFERENCES lrr_tag (tagid)
+    )");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create lrr_archive_to_tag_map table: $errorcode - $errorstr";
+    }
+    $logger->info("Created table: lrr_archive_to_tag_map");
+
+    # tank to archive map
+    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_tank_to_archive_map (
+        tankid VARCHAR(255) NOT NULL,
+        arcid VARCHAR(255) NOT NULL,
+        position INTEGER NOT NULL,
+        update_date DATE,
+        FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
+        FOREIGN KEY (tankid) REFERENCES lrr_tank (tankid)
+    )");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create lrr_tank_to_archive_map table: $errorcode - $errorstr";
+    }
+    $logger->info("Created table: lrr_tank_to_archive_map");
+
+    # create extension
+    $rv = $dbh->do("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create pg_trgm extension: $errorcode - $errorstr";
+    }
+    $logger->info("Created extension: pg_trgm");
+
+    # create indexes
+    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_title_trgm ON lrr_archive USING gin (title gin_trgm_ops)");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_archive_title_trgm index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_archive_title_trgm");
+
+    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_search_tsv ON lrr_archive USING gin (search_tsv)");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_archive_search_tsv index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_archive_search_tsv");
+
+    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_tag_value_trgm ON lrr_tag USING gin (value gin_trgm_ops)");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_tag_value_trgm index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_tag_value_trgm");
+
+    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_arcid ON lrr_archive_to_tag_map (arcid)");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_archive_to_tag_arcid index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_archive_to_tag_arcid");
+
+    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_tagid ON lrr_archive_to_tag_map (tagid)");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_archive_to_tag_tagid index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_archive_to_tag_tagid");
+
+    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_isnew ON lrr_archive (isnew)");
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_archive_isnew index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_archive_isnew");
+
+    $logger->info("PostgreSQL database initialized successfully");
+}
+
+1;
