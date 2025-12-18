@@ -11,6 +11,8 @@ use Authen::Passphrase;
 use LANraragi::Utils::Generic qw(generate_themes_header);
 use LANraragi::Utils::Path    qw(get_archive_path);
 use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Model::PsilabsDev::PgArchive qw(get_random_archive_id);
+use LANraragi::Utils::PsilabsDev::PgPath;
 
 # This endpoint is technically superseded by /api/search/random, but it's still useful in the Reader.
 sub random_archive {
@@ -18,28 +20,25 @@ sub random_archive {
     my $archive       = "";
     my $archiveexists = 0;
 
-    my $redis = $self->LRR_CONF->get_redis;
-
-    # We get a random archive ID.
-    # We check for the length to (sort-of) avoid not getting an archive ID.
+    # We get a random archive ID from Postgres.
+    # We check to make sure the matching archive file still exists on the server.
     # TODO: This will loop infinitely if there are zero archives in store.
     until ($archiveexists) {
-        $archive = $redis->randomkey();
+        $archive = get_random_archive_id();
+
+        # If no archive was found, break to avoid infinite loop
+        last if $archive eq "";
 
         $self->LRR_LOGGER->debug("Found key $archive");
 
-        #We got a key, but does the matching archive still exist on the server?
-        if (   length($archive) == 40
-            && $redis->type($archive) eq "hash"
-            && $redis->hexists( $archive, "file" ) ) {
-            my $arclocation = get_archive_path( $redis, $archive );
-            if ( -e $arclocation ) { $archiveexists = 1; }
+        # Check if the matching archive file still exists on the server
+        my $arclocation = LANraragi::Utils::PsilabsDev::PgPath::get_archive_path($archive);
+        if ( -e $arclocation ) {
+            $archiveexists = 1;
         }
     }
 
-    $redis->quit();
-
-    #We redirect to the reader, with the key as parameter.
+    # We redirect to the reader, with the key as parameter.
     $self->redirect_to( '/reader?id=' . $archive );
 }
 
