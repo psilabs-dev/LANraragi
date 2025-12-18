@@ -53,11 +53,11 @@ sub apply_routes {
         $public_api    = $logged_in_api;
     }
 
-    $public_routes->get('/')->to('index#index');
-    $public_routes->get('/index')->to('index#index');
-    $public_routes->get('/random')->to('index#random_archive');
-    $public_routes->get('/reader')->to('reader#index');
-    $public_routes->get('/stats')->to('stats#index');
+    $public_routes->get('/')->to('index#index');                        # TODO: require postgres migration
+    $public_routes->get('/index')->to('index#index');                   # TODO: require postgres migration
+    $public_routes->get('/random')->to('index#random_archive');         # TODO: require postgres migration
+    $public_routes->get('/reader')->to('reader#index');                 # TODO: require postgres migration
+    $public_routes->get('/stats')->to('stats#index');                   # TODO: require postgres migration
     $public_routes->get('/js/i18n.js')->to('i18_n#index');
 
     # Minion Admin UI
