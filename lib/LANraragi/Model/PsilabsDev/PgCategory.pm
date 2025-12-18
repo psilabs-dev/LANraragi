@@ -65,4 +65,68 @@ SQL
     return @result;
 }
 
+# replaces: LANraragi::Model::Category::get_categories_containing_archive
+# get_categories_containing_archive(id)
+#   Returns a list of all the categories that contain the given archive.
+sub get_categories_containing_archive {
+    my $archive_id = shift;
+
+    my $logger = get_logger("PgCategory", "lanraragi");
+    $logger->debug("Finding categories containing $archive_id");
+
+    my $dbh = get_postgresql_dbh();
+
+    # Query for static categories containing the archive
+    my $sql = <<'SQL';
+        SELECT c.catid, c.name, c.pinned, COALESCE(c.search, '') as search
+        FROM lrr_category c
+        INNER JOIN lrr_category_to_archive_map m ON c.catid = m.catid
+        WHERE m.arcid = ?
+        AND (c.search IS NULL OR c.search = '')
+        ORDER BY c.catid
+SQL
+
+    my $cat_sth = $dbh->prepare($sql);
+    $cat_sth->execute($archive_id);
+
+    my @result;
+
+    while (my $cat_row = $cat_sth->fetchrow_hashref) {
+        my $catid = $cat_row->{catid};
+
+        $logger->debug("$archive_id is in '" . $cat_row->{name} . "'");
+
+        # Fetch all archives for this category to match Redis format
+        my $arc_sql = <<'SQL';
+            SELECT arcid
+            FROM lrr_category_to_archive_map
+            WHERE catid = ?
+            ORDER BY arcid
+SQL
+
+        my $arc_sth = $dbh->prepare($arc_sql);
+        $arc_sth->execute($catid);
+
+        my @archives;
+        while (my $arc_row = $arc_sth->fetchrow_hashref) {
+            push @archives, $arc_row->{arcid};
+        }
+
+        # Build category hash matching Redis implementation format
+        my %category = (
+            id       => $catid,
+            name     => $cat_row->{name},
+            search   => $cat_row->{search},
+            pinned   => $cat_row->{pinned} ? 1 : 0,  # Convert boolean to 1/0
+            archives => \@archives
+        );
+
+        push @result, \%category;
+    }
+
+    $dbh->disconnect();
+
+    return @result;
+}
+
 1;
