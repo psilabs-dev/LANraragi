@@ -10,6 +10,7 @@ use Authen::Passphrase;
 
 use LANraragi::Utils::Generic qw(generate_themes_header);
 use LANraragi::Utils::Path    qw(get_archive_path);
+use LANraragi::Model::PsilabsDev::PgCategory;
 
 # This endpoint is technically superseded by /api/search/random, but it's still useful in the Reader.
 sub random_archive {
@@ -55,7 +56,7 @@ sub index {
     my $userlogged = $self->LRR_CONF->enable_pass == 0 || $self->session('is_logged');
 
     # Get static category list to populate the right-click menu
-    my @categories = LANraragi::Model::Category->get_static_category_list;
+    my @categories = LANraragi::Model::PsilabsDev::PgCategory::get_static_category_list();
 
     $self->render(
         template     => "index",
