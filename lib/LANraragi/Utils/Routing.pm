@@ -55,7 +55,7 @@ sub apply_routes {
 
     $public_routes->get('/')->to('index#index');                        # TODO: require postgres migration (done)
     $public_routes->get('/index')->to('index#index');                   # TODO: require postgres migration (done)
-    $public_routes->get('/random')->to('index#random_archive');         # TODO: require postgres migration (done)
+    $public_routes->get('/random')->to('index#random_archive');         # TODO: require postgres migration
     $public_routes->get('/reader')->to('reader#index');                 # TODO: require postgres migration
     $public_routes->get('/stats')->to('stats#index');                   # TODO: require postgres migration
     $public_routes->get('/js/i18n.js')->to('i18_n#index');
