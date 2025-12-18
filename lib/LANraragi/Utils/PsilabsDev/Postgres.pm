@@ -38,22 +38,25 @@ sub initialize_database {
     my $dbh     = shift;
     my $logger  = get_logger("Postgres Utils", "lanraragi");
     my $rv;
+    my $sql;
 
     $logger->info("Initializing PostgreSQL database...");
 
-    # archive metadata
-    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_archive (
-        arcid           VARCHAR(255) PRIMARY KEY,
-        filename        VARCHAR(255) NOT NULL,
-        extension       VARCHAR(255),
-        isnew           BOOLEAN NOT NULL,
-        lastreadtime    INTEGER NOT NULL,
-        pagecount       INTEGER NOT NULL,
-        progress        INTEGER NOT NULL,
-        title           VARCHAR(255) NOT NULL,
-        summary         TEXT,
-        search_tsv      tsvector
-    )");
+    $sql = <<'SQL';
+CREATE TABLE IF NOT EXISTS lrr_archive (
+    arcid           VARCHAR(255) PRIMARY KEY,
+    filename        VARCHAR(255) NOT NULL,
+    extension       VARCHAR(255),
+    isnew           BOOLEAN NOT NULL,
+    lastreadtime    INTEGER NOT NULL,
+    pagecount       INTEGER NOT NULL,
+    progress        INTEGER NOT NULL,
+    title           VARCHAR(255) NOT NULL,
+    summary         TEXT,
+    search_tsv      tsvector
+)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -61,13 +64,15 @@ sub initialize_database {
     }
     $logger->info("Created table: lrr_archive");
 
-    # category metadata
-    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_category (
-        catid           VARCHAR(255) PRIMARY KEY,
-        name            VARCHAR(255) NOT NULL,
-        pinned          BOOLEAN NOT NULL,
-        search          VARCHAR(255)
-    )");
+    $sql = <<'SQL';
+CREATE TABLE IF NOT EXISTS lrr_category (
+    catid           VARCHAR(255) PRIMARY KEY,
+    name            VARCHAR(255) NOT NULL,
+    pinned          BOOLEAN NOT NULL,
+    search          VARCHAR(255)
+)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -75,13 +80,15 @@ sub initialize_database {
     }
     $logger->info("Created table: lrr_category");
     
-    # tank metadata
-    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_tank (
-        tankid          VARCHAR(255) PRIMARY KEY,
-        name            VARCHAR(255) NOT NULL,
-        summary         TEXT,
-        tags            TEXT
-    )");
+    $sql = <<'SQL';
+CREATE TABLE IF NOT EXISTS lrr_tank (
+    tankid          VARCHAR(255) PRIMARY KEY,
+    name            VARCHAR(255) NOT NULL,
+    summary         TEXT,
+    tags            TEXT
+)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -89,13 +96,15 @@ sub initialize_database {
     }
     $logger->info("Created table: lrr_tank");
 
-    # tag metadata
-    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_tag (
-        tagid           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        namespace       VARCHAR(255) NOT NULL DEFAULT '',
-        value           VARCHAR(255) NOT NULL,
-        UNIQUE (namespace, value)
-    )");
+    $sql = <<'SQL';
+CREATE TABLE IF NOT EXISTS lrr_tag (
+    tagid           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    namespace       VARCHAR(255) NOT NULL DEFAULT '',
+    value           VARCHAR(255) NOT NULL,
+    UNIQUE (namespace, value)
+)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -103,14 +112,16 @@ sub initialize_database {
     }
     $logger->info("Created table: lrr_tag");
 
-    # category to archive map
-    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_category_to_archive_map (
-        catid VARCHAR(255) NOT NULL,
-        arcid VARCHAR(255) NOT NULL,
-        update_date DATE,
-        FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
-        FOREIGN KEY (catid) REFERENCES lrr_category (catid)
-    )");
+    $sql = <<'SQL';
+CREATE TABLE IF NOT EXISTS lrr_category_to_archive_map (
+    catid           VARCHAR(255) NOT NULL,
+    arcid           VARCHAR(255) NOT NULL,
+    update_date     DATE,
+    FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
+    FOREIGN KEY (catid) REFERENCES lrr_category (catid)
+)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -118,14 +129,16 @@ sub initialize_database {
     }
     $logger->info("Created table: lrr_category_to_archive_map");
 
-    # archive to tag map
-    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_archive_to_tag_map (
-        arcid VARCHAR(255) NOT NULL,
-        tagid INTEGER NOT NULL,
-        update_date DATE,
-        FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
-        FOREIGN KEY (tagid) REFERENCES lrr_tag (tagid)
-    )");
+    $sql = <<'SQL';
+CREATE TABLE IF NOT EXISTS lrr_archive_to_tag_map (
+    arcid           VARCHAR(255) NOT NULL,
+    tagid           INTEGER NOT NULL,
+    update_date     DATE,
+    FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
+    FOREIGN KEY (tagid) REFERENCES lrr_tag (tagid)
+)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -133,15 +146,17 @@ sub initialize_database {
     }
     $logger->info("Created table: lrr_archive_to_tag_map");
 
-    # tank to archive map
-    $rv = $dbh->do("CREATE TABLE IF NOT EXISTS lrr_tank_to_archive_map (
-        tankid VARCHAR(255) NOT NULL,
-        arcid VARCHAR(255) NOT NULL,
-        position INTEGER NOT NULL,
-        update_date DATE,
-        FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
-        FOREIGN KEY (tankid) REFERENCES lrr_tank (tankid)
-    )");
+    $sql = <<'SQL';
+CREATE TABLE IF NOT EXISTS lrr_tank_to_archive_map (
+    tankid          VARCHAR(255) NOT NULL,
+    arcid           VARCHAR(255) NOT NULL,
+    position        INTEGER NOT NULL,
+    update_date     DATE,
+    FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
+    FOREIGN KEY (tankid) REFERENCES lrr_tank (tankid)
+)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -149,8 +164,10 @@ sub initialize_database {
     }
     $logger->info("Created table: lrr_tank_to_archive_map");
 
-    # create extension
-    $rv = $dbh->do("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+    $sql = <<'SQL';
+CREATE EXTENSION IF NOT EXISTS pg_trgm
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -158,8 +175,10 @@ sub initialize_database {
     }
     $logger->info("Created extension: pg_trgm");
 
-    # create indexes
-    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_title_trgm ON lrr_archive USING gin (title gin_trgm_ops)");
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_title_trgm ON lrr_archive USING gin (title gin_trgm_ops)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -167,7 +186,10 @@ sub initialize_database {
     }
     $logger->info("Created index: idx_lrr_archive_title_trgm");
 
-    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_search_tsv ON lrr_archive USING gin (search_tsv)");
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_search_tsv ON lrr_archive USING gin (search_tsv)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -175,7 +197,10 @@ sub initialize_database {
     }
     $logger->info("Created index: idx_lrr_archive_search_tsv");
 
-    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_tag_value_trgm ON lrr_tag USING gin (value gin_trgm_ops)");
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_tag_value_trgm ON lrr_tag USING gin (value gin_trgm_ops)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -183,7 +208,10 @@ sub initialize_database {
     }
     $logger->info("Created index: idx_lrr_tag_value_trgm");
 
-    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_arcid ON lrr_archive_to_tag_map (arcid)");
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_arcid ON lrr_archive_to_tag_map (arcid)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -191,7 +219,10 @@ sub initialize_database {
     }
     $logger->info("Created index: idx_lrr_archive_to_tag_arcid");
 
-    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_tagid ON lrr_archive_to_tag_map (tagid)");
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_tagid ON lrr_archive_to_tag_map (tagid)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
@@ -199,7 +230,10 @@ sub initialize_database {
     }
     $logger->info("Created index: idx_lrr_archive_to_tag_tagid");
 
-    $rv = $dbh->do("CREATE INDEX IF NOT EXISTS idx_lrr_archive_isnew ON lrr_archive (isnew)");
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_isnew ON lrr_archive (isnew)
+SQL
+    $rv = $dbh->do($sql);
     unless ( defined $rv ) {
         my $errorcode   = $dbh->err // '';
         my $errorstr    = $dbh->errstr // '';
