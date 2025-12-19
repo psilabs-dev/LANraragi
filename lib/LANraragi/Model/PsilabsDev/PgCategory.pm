@@ -129,4 +129,90 @@ SQL
     return @result;
 }
 
+# replaces: LANraragi::Model::Category::add_to_category
+# add_to_category(categoryid, arcid)
+#   Adds the given archive ID to the given category.
+#   Only valid if the category is Static.
+#   Returns 1 on success, 0 on failure alongside an error message.
+sub add_to_category {
+    my ( $cat_id, $arc_id ) = @_;
+    my $logger = get_logger("PgCategory", "lanraragi");
+    my $dbh = get_postgresql_dbh();
+    my $err = "";
+
+    # Check if category exists
+    my $cat_check_sql = 'SELECT catid, search FROM lrr_category WHERE catid = ?';
+    my $cat_sth = $dbh->prepare($cat_check_sql);
+    $cat_sth->execute($cat_id);
+    my $cat_row = $cat_sth->fetchrow_hashref;
+
+    if (!$cat_row) {
+        $err = "$cat_id doesn't exist in the database!";
+        $logger->warn($err);
+        $dbh->disconnect();
+        return (0, $err);
+    }
+
+    # Check if category is static (search field is NULL or empty)
+    my $search = $cat_row->{search} // '';
+    unless ($search eq '') {
+        $err = "$cat_id is a favorite search/dynamic category, can't add archives to it.";
+        $logger->error($err);
+        $dbh->disconnect();
+        return (0, $err);
+    }
+
+    # Check if archive exists
+    my $arc_check_sql = 'SELECT arcid FROM lrr_archive WHERE arcid = ?';
+    my $arc_sth = $dbh->prepare($arc_check_sql);
+    $arc_sth->execute($arc_id);
+    my $arc_row = $arc_sth->fetchrow_hashref;
+
+    if (!$arc_row) {
+        $err = "$arc_id does not exist in the database.";
+        $logger->error($err);
+        $dbh->disconnect();
+        return (0, $err);
+    }
+
+    # Check if archive is already in the category
+    my $check_sql = 'SELECT 1 FROM lrr_category_to_archive_map WHERE catid = ? AND arcid = ?';
+    my $check_sth = $dbh->prepare($check_sql);
+    $check_sth->execute($cat_id, $arc_id);
+    my $exists = $check_sth->fetchrow_hashref;
+
+    if ($exists) {
+        $err = "$arc_id already present in category $cat_id, doing nothing.";
+        $logger->warn($err);
+        $dbh->disconnect();
+        return (1, $err);
+    }
+
+    # Add archive to category
+    my $insert_sql = <<'SQL';
+        INSERT INTO lrr_category_to_archive_map (catid, arcid, update_date)
+        VALUES (?, ?, CURRENT_DATE)
+SQL
+
+    my $insert_sth = $dbh->prepare($insert_sql);
+    eval {
+        $insert_sth->execute($cat_id, $arc_id);
+    };
+
+    if ($@) {
+        $err = "Failed to add $arc_id to category $cat_id: $@";
+        $logger->error($err);
+        $dbh->disconnect();
+        return (0, $err);
+    }
+
+    $insert_sth->finish;
+    $dbh->disconnect();
+
+    $logger->debug("Added $arc_id to category $cat_id");
+
+    # Postgres doesn't need cache invalidation
+    return (1, $err);
+}
+
 1;

@@ -13,14 +13,18 @@ use Config;
 
 use LANraragi::Utils::Logging    qw(get_logger);
 use LANraragi::Utils::Redis      qw(redis_decode);
-use LANraragi::Utils::Archive    qw(extract_thumbnail);
-use LANraragi::Utils::Plugins    qw(get_downloader_for_url get_plugin get_plugin_parameters use_plugin);
+use LANraragi::Utils::Plugins    qw(get_downloader_for_url get_plugin get_plugin_parameters);
+use LANraragi::Utils::PsilabsDev::PgPlugins qw(use_plugin);
 use LANraragi::Utils::String     qw(trim_url);
 use LANraragi::Utils::TempFolder qw(get_temp);
+use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::PgArchive qw(extract_thumbnail extract_thumbnail_with_dbh);
 
 use LANraragi::Model::Upload;
 use LANraragi::Model::Config;
 use LANraragi::Model::Stats;
+use LANraragi::Model::PsilabsDev::PgStats;
+use LANraragi::Model::PsilabsDev::PgUpload;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -133,9 +137,14 @@ sub add_tasks {
             my ( $thumbdir, $force ) = @args;
 
             my $logger = get_logger( "Minion", "minion" );
-            my $redis  = LANraragi::Model::Config->get_redis;
-            my @keys   = $redis->keys('????????????????????????????????????????');
-            $redis->quit();
+            my $dbh = get_postgresql_dbh();
+            my $sth = $dbh->prepare('SELECT arcid FROM lrr_archive');
+            $sth->execute();
+            my @keys;
+            while (my $row = $sth->fetchrow_hashref) {
+                push @keys, $row->{arcid};
+            }
+            $sth->finish;
 
             $logger->info("Starting thumbnail regen job (force = $force)");
             my $errors = MCE::Shared->array;
@@ -143,6 +152,9 @@ sub add_tasks {
             # Regen thumbnails for errythang if $force = 1, only missing thumbs o therwise
             my $sub = sub {
                 my (@keys) = @_;
+
+                # Each thread/process needs its own database connection
+                my $dbh_worker = get_postgresql_dbh();
 
                 foreach my $id (@keys) {
 
@@ -154,7 +166,7 @@ sub add_tasks {
                     unless ( $force == 0 && -e $thumbname ) {
                         eval {
                             $logger->debug("Regenerating for $id...");
-                            extract_thumbnail( $thumbdir, $id, 0, 1, 1 );
+                            extract_thumbnail_with_dbh( $dbh_worker, $thumbdir, $id, 0, 1, 1 );
                         };
 
                         if ($@) {
@@ -163,6 +175,8 @@ sub add_tasks {
                         }
                     }
                 }
+
+                $dbh_worker->disconnect;
             };
 
             eval {
@@ -176,6 +190,8 @@ sub add_tasks {
                     $sub->(@keys);
                 }
             };
+
+            $dbh->disconnect;
 
             my @err = $errors->values;
             $job->finish( { errors => \@err } );
@@ -334,7 +350,7 @@ sub add_tasks {
             $og_url = trim_url($og_url);
 
             # If the URL is already recorded, abort the download
-            my $recorded_id = LANraragi::Model::Stats::is_url_recorded($og_url);
+            my $recorded_id = LANraragi::Model::PsilabsDev::PgStats::is_url_recorded($og_url);
             if ($recorded_id) {
                 $job->finish(
                     {   success => 0,
@@ -381,7 +397,7 @@ sub add_tasks {
 
                     # Hand off the result to handle_incoming_file
                     my ( $status_code, $id, $title, $message ) =
-                      LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tag, "", "" );
+                      LANraragi::Model::PsilabsDev::PgUpload::handle_incoming_file( $tempfile, $catid, $tag, "", "" );
                     my $status = $status_code == 200 ? 1 : 0;
 
                     $job->finish(
@@ -414,7 +430,7 @@ sub add_tasks {
 
                 # Hand off the result to handle_incoming_file
                 my ( $status_code, $id, $title, $message ) =
-                  LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tag, "", "" );
+                  LANraragi::Model::PsilabsDev::PgUpload::handle_incoming_file( $tempfile, $catid, $tag, "", "" );
                 my $status = $status_code == 200 ? 1 : 0;
 
                 $job->finish(

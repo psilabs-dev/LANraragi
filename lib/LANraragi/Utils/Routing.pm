@@ -110,13 +110,13 @@ sub apply_routes {
     $public_api->get('/api/opds/:id/pse')->to('api-other#serve_opds_page');             # TODO: require postgres migration
 
     # Miscellaneous API
-    $public_api->get('/api/info')->to('api-other#serve_serverinfo');                    # TODO: require postgres migration
+    $public_api->get('/api/info')->to('api-other#serve_serverinfo');                    # TODO: require postgres migration (done)
     $logged_in_api->get('/api/plugins/:type')->to('api-other#list_plugins');
-    $logged_in_api->post('/api/plugins/use')->to('api-other#use_plugin_sync');          # TODO: require postgres migration
-    $logged_in_api->post('/api/plugins/queue')->to('api-other#use_plugin_async');       # TODO: require postgres migration
+    $logged_in_api->post('/api/plugins/use')->to('api-other#use_plugin_sync');          # TODO: require postgres migration (done)
+    $logged_in_api->post('/api/plugins/queue')->to('api-other#use_plugin_async');       # TODO: require postgres migration (done)
     $logged_in_api->delete('/api/tempfolder')->to('api-other#clean_tempfolder');
-    $logged_in_api->post('/api/download_url')->to('api-other#download_url');            # TODO: require postgres migration
-    $logged_in_api->post('/api/regen_thumbs')->to('api-other#regen_thumbnails');        # TODO: require postgres migration
+    $logged_in_api->post('/api/download_url')->to('api-other#download_url');            # TODO: require postgres migration (done)
+    $logged_in_api->post('/api/regen_thumbs')->to('api-other#regen_thumbnails');        # TODO: require postgres migration (done)
 
     # Archive API
     $public_api->get('/api/archives')->to('api-archive#serve_archivelist');                         # TODO: require postgres migration
