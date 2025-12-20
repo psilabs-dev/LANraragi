@@ -194,4 +194,34 @@ SQL
     return \@tags;
 }
 
+# replaces: LANraragi::Model::Stats::build_stat_hashes
+# build_stat_hashes()
+#   In Redis, this rebuilds multiple search indexes:
+#     - LRR_URL_MAP (URL to archive ID mapping)
+#     - LRR_STATS (tag statistics/counts)
+#     - LRR_UNTAGGED (set of untagged archives)
+#     - LRR_NEW (set of new archives)
+#     - LRR_TITLES (lexicographically sorted titles)
+#     - LRR_TANKGROUPED (tank IDs and archives not in tanks)
+#     - INDEX_<tag> (individual tag search indexes)
+#
+#   In Postgres, these indexes are maintained automatically:
+#     - search_tsv column provides full-text search (auto-updated via triggers)
+#     - Tag statistics are computed on-the-fly via SQL queries
+#     - URL lookups use JOIN queries on lrr_tag table
+#     - Untagged/new filtering uses WHERE clauses
+#
+#   This function is a no-op for Postgres but must exist for compatibility.
+sub build_stat_hashes {
+    my $logger = get_logger("PgStats", "lanraragi");
+
+    $logger->info("build_stat_hashes called - no-op for Postgres (indexes maintained automatically)");
+
+    # Postgres maintains search indexes automatically via the search_tsv column
+    # and database triggers. No manual index building is required.
+    # This function exists only for compatibility with the Minion task system.
+
+    return;
+}
+
 1;

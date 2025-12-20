@@ -8,6 +8,9 @@ use warnings;
 use Config;
 use Encode;
 use File::Basename;
+use Exporter 'import';
+
+our @EXPORT_OK = qw(add_timestamp_tag add_pagecount add_arcsize add_timestamp_tag_with_dbh add_pagecount_with_dbh add_arcsize_with_dbh add_archive_to_postgres);
 
 use LANraragi::Utils::Database qw(compute_id);
 use LANraragi::Utils::Logging  qw(get_logger);
@@ -195,8 +198,8 @@ sub add_archive_to_postgres ( $id, $file, $dbh ) {
 
     # Insert the archive into the database
     my $sql = <<'SQL';
-        INSERT INTO lrr_archive (arcid, filename, extension, isnew, lastreadtime, pagecount, progress, title, summary, thumbhash)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO lrr_archive (arcid, filename, extension, isnew, lastreadtime, pagecount, progress, title, summary, thumbhash, arcsize)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (arcid) DO UPDATE SET
             filename = EXCLUDED.filename,
             extension = EXCLUDED.extension,
@@ -204,7 +207,8 @@ sub add_archive_to_postgres ( $id, $file, $dbh ) {
             lastreadtime = EXCLUDED.lastreadtime,
             pagecount = EXCLUDED.pagecount,
             progress = EXCLUDED.progress,
-            title = EXCLUDED.title
+            title = EXCLUDED.title,
+            arcsize = EXCLUDED.arcsize
 SQL
 
     my $sth = $dbh->prepare($sql);
@@ -218,7 +222,8 @@ SQL
         0,           # progress = 0
         $name,       # title = filename without extension
         '',          # summary = empty
-        ''           # thumbhash = empty
+        '',          # thumbhash = empty
+        $arcsize     # arcsize
     );
     $sth->finish;
 
@@ -239,6 +244,15 @@ SQL
 # Helper function: add_timestamp_tag
 # Adds a timestamp tag to the given ID.
 sub add_timestamp_tag ( $id ) {
+    my $dbh = get_postgresql_dbh();
+    my $result = add_timestamp_tag_with_dbh( $dbh, $id );
+    $dbh->disconnect();
+    return $result;
+}
+
+# Helper function: add_timestamp_tag_with_dbh
+# Adds a timestamp tag to the given ID, using provided database handle.
+sub add_timestamp_tag_with_dbh ( $dbh, $id ) {
 
     my $logger = get_logger( "Archive", "lanraragi" );
 
@@ -251,13 +265,12 @@ sub add_timestamp_tag ( $id ) {
         if ( LANraragi::Model::Config->use_lastmodified eq "1" ) {
             $logger->debug("Using file date");
             # Get the file path from database
-            my $dbh = get_postgresql_dbh();
             my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
             my $sth = $dbh->prepare($sql);
             $sth->execute($id);
             my $row = $sth->fetchrow_hashref;
             my $filepath = $row ? $row->{filename} : '';
-            $dbh->disconnect();
+            $sth->finish;
 
             if ($filepath && -e $filepath) {
                 $date = date_modified($filepath);
@@ -276,9 +289,17 @@ sub add_timestamp_tag ( $id ) {
 # Helper function: add_pagecount
 # Adds pagecount to the archive metadata.
 sub add_pagecount ( $id ) {
+    my $dbh = get_postgresql_dbh();
+    my $result = add_pagecount_with_dbh( $dbh, $id );
+    $dbh->disconnect();
+    return $result;
+}
+
+# Helper function: add_pagecount_with_dbh
+# Adds pagecount to the archive metadata, using provided database handle.
+sub add_pagecount_with_dbh ( $dbh, $id ) {
 
     my $logger = get_logger( "Archive", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
 
     # Get the file path
     my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
@@ -286,10 +307,10 @@ sub add_pagecount ( $id ) {
     $sth->execute($id);
     my $row = $sth->fetchrow_hashref;
     my $filepath = $row ? $row->{filename} : '';
+    $sth->finish;
 
     if (!$filepath || !-e $filepath) {
         $logger->warn("Cannot calculate pagecount for $id - file not found");
-        $dbh->disconnect();
         return;
     }
 
@@ -304,17 +325,23 @@ sub add_pagecount ( $id ) {
     $update_sth->execute($pagecount, $id);
     $update_sth->finish;
 
-    $dbh->disconnect();
-
     $logger->debug("Set pagecount for $id to $pagecount");
 }
 
 # Helper function: add_arcsize
 # Adds archive size to the archive metadata.
 sub add_arcsize ( $id ) {
+    my $dbh = get_postgresql_dbh();
+    my $result = add_arcsize_with_dbh( $dbh, $id );
+    $dbh->disconnect();
+    return $result;
+}
+
+# Helper function: add_arcsize_with_dbh
+# Adds archive size to the archive metadata, using provided database handle.
+sub add_arcsize_with_dbh ( $dbh, $id ) {
 
     my $logger = get_logger( "Archive", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
 
     # Get the file path
     my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
@@ -322,10 +349,10 @@ sub add_arcsize ( $id ) {
     $sth->execute($id);
     my $row = $sth->fetchrow_hashref;
     my $filepath = $row ? $row->{filename} : '';
+    $sth->finish;
 
     if (!$filepath || !-e $filepath) {
         $logger->warn("Cannot calculate arcsize for $id - file not found");
-        $dbh->disconnect();
         return;
     }
 
@@ -336,8 +363,6 @@ sub add_arcsize ( $id ) {
     my $update_sth = $dbh->prepare($update_sql);
     $update_sth->execute($arcsize, $id);
     $update_sth->finish;
-
-    $dbh->disconnect();
 
     $logger->debug("Set arcsize for $id to $arcsize bytes");
 }

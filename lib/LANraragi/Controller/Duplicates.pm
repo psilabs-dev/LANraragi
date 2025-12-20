@@ -7,19 +7,37 @@ use Mojo::JSON qw(decode_json encode_json);
 
 use LANraragi::Utils::Generic  qw(generate_themes_header);
 use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Model::Config;
 
 # Go through the archives in the content directory and build the template at the end.
 sub index {
 
-    my $self      = shift;
-    my $redis_cfg = $self->LRR_CONF->get_redis_config;
+    my $self = shift;
 
     if ( $self->req->param('delete') ) {
         $self->LRR_LOGGER->debug("Cleared all detected duplicates!");
-        $redis_cfg->del("LRR_DUPLICATE_GROUPS");
+        eval {
+            my $redis = LANraragi::Model::Config->get_redis_config;
+            $redis->del("LRR_DUPLICATE_GROUPS");
+            $redis->quit();
+        };
+        if (my $error = $@) {
+            $self->LRR_LOGGER->error("Error clearing duplicate groups: $error");
+        }
     }
 
-    my %duplicate_groups = $redis_cfg->hgetall("LRR_DUPLICATE_GROUPS");
+    my %duplicate_groups;
+    eval {
+        my $redis = LANraragi::Model::Config->get_redis_config;
+        if ( $redis->exists("LRR_DUPLICATE_GROUPS") ) {
+            %duplicate_groups = $redis->hgetall("LRR_DUPLICATE_GROUPS");
+        }
+        $redis->quit();
+    };
+    if (my $error = $@) {
+        $self->LRR_LOGGER->error("Error fetching duplicate groups: $error");
+    }
+
     my @duplicates;
 
     my $dbh;
@@ -77,13 +95,27 @@ sub index {
                     if ( scalar @ids <= 2 ) {
                         my $size = scalar @ids;
                         $self->LRR_LOGGER->debug("group $key: too small ($size) - removing key");
-                        $redis_cfg->hdel( "LRR_DUPLICATE_GROUPS", $key );
+                        eval {
+                            my $redis = LANraragi::Model::Config->get_redis_config;
+                            $redis->hdel( "LRR_DUPLICATE_GROUPS", $key );
+                            $redis->quit();
+                        };
+                        if (my $error = $@) {
+                            $self->LRR_LOGGER->error("Error deleting duplicate group $key: $error");
+                        }
                     } else {
 
                         # archive vanished -> remove from dupes
                         @ids = grep { $_ ne $id } @ids;
                         $self->LRR_LOGGER->debug("group $key: archive $id vanished - removing from group");
-                        $redis_cfg->hset( "LRR_DUPLICATE_GROUPS", $key, encode_json( \@ids ) );
+                        eval {
+                            my $redis = LANraragi::Model::Config->get_redis_config;
+                            $redis->hset( "LRR_DUPLICATE_GROUPS", $key, encode_json( \@ids ) );
+                            $redis->quit();
+                        };
+                        if (my $error = $@) {
+                            $self->LRR_LOGGER->error("Error updating duplicate group $key: $error");
+                        }
                     }
                 }
             }

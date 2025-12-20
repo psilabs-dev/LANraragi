@@ -142,11 +142,6 @@ sub add_tasks {
                 }
             };
 
-            # Clean up thumbjob cache in Redis
-            my $redis = LANraragi::Model::Config->get_redis;
-            $redis->hdel( $id, "thumbjob" );
-            $redis->quit;
-
             my @err = $errors->values;
             $job->finish( { errors => \@err } );
 
@@ -270,8 +265,6 @@ sub add_tasks {
             my $sub = sub {
                 my (@keys) = @_;
 
-                my $redis = LANraragi::Model::Config->get_redis_config;
-
                 foreach my $id (@keys) {
 
                     # Skip if this ID has already been processed in another thread
@@ -307,18 +300,24 @@ sub add_tasks {
                         }
                     }
 
-                    # Add the discovered group to redis
-                    # to avoid redudnant groups in different orders - sort and composite key
+                    # Add the discovered group to Redis (config database)
+                    # to avoid redundant groups in different orders - sort and composite key
                     if ( @group && scalar @group >= 2 ) {
                         @group = sort @group;
                         my $composite_key = join '', map { substr( $_, 0, 10 ) } @group;
                         my $group_json    = encode_json( \@group );
                         $logger->debug("duplicate group '$composite_key': $group_json");
-                        $redis->hset( "LRR_DUPLICATE_GROUPS", "dupgp_$composite_key", $group_json );
+
+                        eval {
+                            my $redis = LANraragi::Model::Config->get_redis_config;
+                            $redis->hset( "LRR_DUPLICATE_GROUPS", "dupgp_$composite_key", $group_json );
+                            $redis->quit();
+                        };
+                        if (my $error = $@) {
+                            $logger->error("Error saving duplicate group: $error");
+                        }
                     }
                 }
-
-                $redis->quit();
             };
 
             eval {
@@ -344,7 +343,7 @@ sub add_tasks {
     $minion->add_task(
         build_stat_hashes => sub {
             my ( $job, @args ) = @_;
-            LANraragi::Model::Stats->build_stat_hashes;
+            LANraragi::Model::PsilabsDev::PgStats::build_stat_hashes();
             $job->finish;
         }
     );
