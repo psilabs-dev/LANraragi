@@ -6,6 +6,133 @@ use utf8;
 
 use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
 use LANraragi::Utils::Logging qw(get_logger);
+use LANraragi::Model::Config;
+
+# replaces: LANraragi::Model::Category::get_category_list
+# get_category_list()
+#   Returns a list of all the category objects.
+sub get_category_list {
+    my $logger = get_logger("PgCategory", "lanraragi");
+    my $dbh = get_postgresql_dbh();
+
+    # Query for all categories
+    my $cat_sql = <<'SQL';
+        SELECT catid, name, pinned, COALESCE(search, '') as search
+        FROM lrr_category
+        ORDER BY catid
+SQL
+
+    my $cat_sth = $dbh->prepare($cat_sql);
+    $cat_sth->execute();
+
+    my @result;
+
+    while (my $cat_row = $cat_sth->fetchrow_hashref) {
+        my $catid = $cat_row->{catid};
+        my $search = $cat_row->{search};
+
+        my @archives;
+
+        # Only fetch archives for static categories (search is empty)
+        if ($search eq '') {
+            my $arc_sql = <<'SQL';
+                SELECT arcid
+                FROM lrr_category_to_archive_map
+                WHERE catid = ?
+                ORDER BY arcid
+SQL
+
+            my $arc_sth = $dbh->prepare($arc_sql);
+            $arc_sth->execute($catid);
+
+            while (my $arc_row = $arc_sth->fetchrow_hashref) {
+                push @archives, $arc_row->{arcid};
+            }
+        }
+
+        # Build category hash matching Redis implementation format
+        my %category = (
+            id       => $catid,
+            name     => $cat_row->{name},
+            search   => $search,
+            pinned   => $cat_row->{pinned} ? 1 : 0,  # Convert boolean to 1/0
+            archives => \@archives
+        );
+
+        push @result, \%category;
+    }
+
+    $dbh->disconnect();
+
+    $logger->debug("Found " . scalar(@result) . " categories");
+
+    return @result;
+}
+
+# replaces: LANraragi::Model::Category::get_category
+# get_category(categoryid)
+#   Returns the category with the given ID.
+#   Returns an empty hash if the category doesn't exist.
+sub get_category {
+    my $cat_id = $_[0];
+    my $logger = get_logger("PgCategory", "lanraragi");
+    my $dbh = get_postgresql_dbh();
+
+    if ( $cat_id eq "" ) {
+        $logger->debug("No category ID provided.");
+        $dbh->disconnect();
+        return ();
+    }
+
+    # Check if category exists and fetch its data
+    my $cat_sql = 'SELECT catid, name, pinned, COALESCE(search, \'\') as search FROM lrr_category WHERE catid = ?';
+    my $cat_sth = $dbh->prepare($cat_sql);
+    $cat_sth->execute($cat_id);
+    my $cat_row = $cat_sth->fetchrow_hashref;
+    $cat_sth->finish;
+
+    unless ($cat_row) {
+        $logger->warn("$cat_id doesn't exist in the database!");
+        $dbh->disconnect();
+        return ();
+    }
+
+    my %category = (
+        id     => $cat_id,
+        name   => $cat_row->{name},
+        search => $cat_row->{search},
+        pinned => $cat_row->{pinned} ? 1 : 0,  # Convert boolean to 1/0
+    );
+
+    # For static categories, fetch the archives list
+    # For dynamic categories, return an empty array
+    if ( $category{search} eq "" ) {
+        my $arc_sql = <<'SQL';
+            SELECT arcid
+            FROM lrr_category_to_archive_map
+            WHERE catid = ?
+            ORDER BY arcid
+SQL
+
+        my $arc_sth = $dbh->prepare($arc_sql);
+        $arc_sth->execute($cat_id);
+
+        my @archives;
+        while (my $arc_row = $arc_sth->fetchrow_hashref) {
+            push @archives, $arc_row->{arcid};
+        }
+        $arc_sth->finish;
+
+        $category{archives} = \@archives;
+    } else {
+        # Dynamic category - return empty archives array
+        $category{archives} = [];
+    }
+
+    $dbh->disconnect();
+
+    return %category;
+}
 
 # replaces: LANraragi::Model::Category::get_static_category_list
 # get_static_category_list()
@@ -276,6 +403,74 @@ sub create_category {
     }
 
     $dbh->disconnect();
+    return $cat_id;
+}
+
+# replaces: LANraragi::Model::Category::get_bookmark_link
+# get_bookmark_link()
+#   Gets the ID of the category that is linked to the bookmark button.
+#   If no such ID exists, returns an empty string.
+sub get_bookmark_link {
+    my $redis = LANraragi::Model::Config->get_redis_config();
+    my $catid = $redis->hget('LRR_CONFIG', 'bookmark_link') || "";
+    $redis->quit();
+    return $catid;
+}
+
+# replaces: LANraragi::Model::Category::update_bookmark_link
+# update_bookmark_link(cat_id)
+#   Links the bookmark button to a static category.
+#   Returns an HTTP status code, category ID, and response message.
+sub update_bookmark_link {
+    my $cat_id = shift;
+    my $logger = get_logger("PgCategory", "lanraragi");
+
+    unless (defined $cat_id && $cat_id =~ /^SET_\d{10}$/) {
+        return (400, $cat_id, "Input category ID is invalid.");
+    }
+
+    my $dbh = get_postgresql_dbh();
+
+    # Check if category exists using Postgres
+    my $check_sql = 'SELECT catid, search FROM lrr_category WHERE catid = ?';
+    my $check_sth = $dbh->prepare($check_sql);
+    $check_sth->execute($cat_id);
+    my $cat_row = $check_sth->fetchrow_hashref;
+    $check_sth->finish;
+
+    unless ($cat_row) {
+        $dbh->disconnect();
+        return (404, $cat_id, "Category does not exist!");
+    }
+
+    # Check if category is static (search field is NULL or empty)
+    my $search = $cat_row->{search} // '';
+    unless ($search eq '') {
+        $dbh->disconnect();
+        return (400, $cat_id, "Cannot link bookmark to a dynamic category.");
+    }
+
+    $dbh->disconnect();
+
+    # Store bookmark_link in Redis config
+    my $redis = LANraragi::Model::Config->get_redis_config();
+    $redis->hset('LRR_CONFIG', 'bookmark_link', $cat_id);
+    $redis->quit();
+
+    $logger->info("Updated bookmark link to category $cat_id");
+    return (200, $cat_id, "success");
+}
+
+# replaces: LANraragi::Model::Category::remove_bookmark_link
+# remove_bookmark_link()
+#   Unlinks the bookmark from its current category and returns the category ID.
+sub remove_bookmark_link {
+    my $logger = get_logger("PgCategory", "lanraragi");
+    my $redis = LANraragi::Model::Config->get_redis_config();
+    my $cat_id = $redis->hget('LRR_CONFIG', 'bookmark_link') || "";
+    $redis->hdel('LRR_CONFIG', 'bookmark_link');
+    $redis->quit();
+    $logger->info("Removed bookmark link from category " . ($cat_id || "(none)"));
     return $cat_id;
 }
 

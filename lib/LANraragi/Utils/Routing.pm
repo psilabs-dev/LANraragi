@@ -55,9 +55,9 @@ sub apply_routes {
 
     $public_routes->get('/')->to('index#index');                        # TODO: require postgres migration (done)
     $public_routes->get('/index')->to('index#index');                   # TODO: require postgres migration (done)
-    $public_routes->get('/random')->to('index#random_archive');         # TODO: require postgres migration
+    $public_routes->get('/random')->to('index#random_archive');         # TODO: require postgres migration (done)
     $public_routes->get('/reader')->to('reader#index');                 # TODO: require postgres migration (done)
-    $public_routes->get('/stats')->to('stats#index');                   # TODO: require postgres migration
+    $public_routes->get('/stats')->to('stats#index');                   # TODO: require postgres migration (done)
     $public_routes->get('/js/i18n.js')->to('i18_n#index');
 
     # Minion Admin UI
@@ -122,15 +122,15 @@ sub apply_routes {
     $public_api->get('/api/archives')->to('api-archive#serve_archivelist');                         # TODO: require postgres migration (done)
     $public_api->get('/api/archives/untagged')->to('api-archive#serve_untagged_archivelist');       # TODO: require postgres migration (done)
     $public_api->get('/api/archives/:id/thumbnail')->to('api-archive#serve_thumbnail');             # TODO: require postgres migration (done)
-    $public_api->get('/api/archives/:id/download')->to('api-archive#serve_file');                   # TODO: require postgres migration
-    $public_api->get('/api/archives/:id/page')->to('api-archive#serve_page');                       # TODO: require postgres migration
-    $public_api->get('/api/archives/:id/files')->to('api-archive#get_file_list');                   # TODO: require postgres migration
-    $public_api->post('/api/archives/:id/files/thumbnails')->to('api-archive#generate_page_thumbnails');  # TODO: require postgres migration
-    $public_api->post('/api/archives/:id/extract')->to('api-archive#get_file_list');                # Deprecated  # TODO: require postgres migration
+    $public_api->get('/api/archives/:id/download')->to('api-archive#serve_file');                   # TODO: require postgres migration (done)
+    $public_api->get('/api/archives/:id/page')->to('api-archive#serve_page');                       # TODO: require postgres migration (done)
+    $public_api->get('/api/archives/:id/files')->to('api-archive#get_file_list');                   # TODO: require postgres migration (done)
+    $public_api->post('/api/archives/:id/files/thumbnails')->to('api-archive#generate_page_thumbnails');  # TODO: require postgres migration (done)
+    $public_api->post('/api/archives/:id/extract')->to('api-archive#get_file_list');                # Deprecated  # TODO: require postgres migration (done)
     if ( $self->LRR_CONF->enable_authprogress ) {
-        $logged_in_api->put('/api/archives/:id/progress/:page')->to('api-archive#update_progress');      # TODO: require postgres migration
+        $logged_in_api->put('/api/archives/:id/progress/:page')->to('api-archive#update_progress');      # TODO: require postgres migration (done)
     } else {
-        $public_api->put('/api/archives/:id/progress/:page')->to('api-archive#update_progress');         # TODO: require postgres migration
+        $public_api->put('/api/archives/:id/progress/:page')->to('api-archive#update_progress');         # TODO: require postgres migration (done)
     }
     $public_api->delete('/api/archives/:id/isnew')->to('api-archive#clear_new');                    # TODO: require postgres migration
     $public_api->get('/api/archives/:id')->to('api-archive#serve_metadata');                        # TODO: require postgres migration
@@ -152,8 +152,8 @@ sub apply_routes {
     $logged_in_api->get('/api/database/backup')->to('api-database#serve_backup');       # TODO: require postgres migration (done)
     $logged_in_api->delete('/api/database/isnew')->to('api-database#clear_new_all');    # TODO: require postgres migration (done)
     $logged_in_api->post('/api/database/drop')->to('api-database#drop_database');       # TODO: require postgres migration (done)
-    $logged_in_api->post('/api/database/clean')->to('api-database#clean_database');     # TODO: require postgres migration
-    $public_api->get('/api/database/stats')->to('api-database#serve_tag_stats');        # TODO: require postgres migration
+    $logged_in_api->post('/api/database/clean')->to('api-database#clean_database');     # TODO: require postgres migration (done)
+    $public_api->get('/api/database/stats')->to('api-database#serve_tag_stats');        # TODO: require postgres migration (done)
 
     # Shinobu API
     $logged_in_api->get('/api/shinobu')->to('api-shinobu#shinobu_status');
@@ -167,13 +167,13 @@ sub apply_routes {
     $logged_in_api->post('/api/minion/:jobname/queue')->to('api-minion#queue_minion_job');    # unused for now
 
     # Category API
-    $public_api->get('/api/categories')->to('api-category#get_category_list');                          # TODO: require postgres migration
-    $public_api->get('/api/categories/bookmark_link')->to('api-category#get_bookmark_link');            # TODO: require postgres migration
-    $public_api->get('/api/categories/:id')->to('api-category#get_category');                           # TODO: require postgres migration
-    $logged_in_api->put('/api/categories/bookmark_link/:id')->to('api-category#update_bookmark_link');  # TODO: require postgres migration
-    $logged_in_api->put('/api/categories')->to('api-category#create_category');                         # TODO: require postgres migration
+    $public_api->get('/api/categories')->to('api-category#get_category_list');                          # TODO: require postgres migration (done)
+    $public_api->get('/api/categories/bookmark_link')->to('api-category#get_bookmark_link');            # TODO: require postgres migration (done)
+    $public_api->get('/api/categories/:id')->to('api-category#get_category');                           # TODO: require postgres migration (done)
+    $logged_in_api->put('/api/categories/bookmark_link/:id')->to('api-category#update_bookmark_link');  # TODO: require postgres migration (done)
+    $logged_in_api->put('/api/categories')->to('api-category#create_category');                         # TODO: require postgres migration (done)
     $logged_in_api->put('/api/categories/:id')->to('api-category#update_category');                     # TODO: require postgres migration
-    $logged_in_api->delete('/api/categories/bookmark_link')->to('api-category#remove_bookmark_link');   # TODO: require postgres migration
+    $logged_in_api->delete('/api/categories/bookmark_link')->to('api-category#remove_bookmark_link');   # TODO: require postgres migration (done)
     $logged_in_api->delete('/api/categories/:id')->to('api-category#delete_category');                  # TODO: require postgres migration
     $logged_in_api->put('/api/categories/:id/:archive')->to('api-category#add_to_category');            # TODO: require postgres migration
     $logged_in_api->delete('/api/categories/:id/:archive')->to('api-category#remove_from_category');    # TODO: require postgres migration

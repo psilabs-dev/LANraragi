@@ -64,9 +64,34 @@ sub add_tasks {
             my $logger = get_logger( "Minion", "minion" );
             $logger->debug("Generating page thumbnails for archive $id...");
 
-            # Get the number of pages in the archive
-            my $redis = LANraragi::Model::Config->get_redis;
-            my $pages = $redis->hget( $id, "pagecount" );
+            # Get the number of pages in the archive from Postgres
+            my $dbh = get_postgresql_dbh();
+            my $pages;
+
+            eval {
+                my $sql = q{SELECT pagecount FROM lrr_archive WHERE arcid = ?};
+                my $sth = $dbh->prepare($sql);
+                $sth->execute($id);
+                my $row = $sth->fetchrow_hashref;
+                $pages = $row->{pagecount} if $row;
+                $sth->finish;
+            };
+
+            if (my $error = $@) {
+                $logger->error("Error retrieving pagecount for archive $id: $error");
+                $dbh->disconnect();
+                $job->fail({ error => "Failed to retrieve pagecount: $error" });
+                return;
+            }
+
+            unless ($pages) {
+                $logger->error("Archive $id has no pagecount in database");
+                $dbh->disconnect();
+                $job->fail({ error => "Archive has no pagecount" });
+                return;
+            }
+
+            $dbh->disconnect();
 
             my $use_hq   = LANraragi::Model::Config->get_hqthumbpages;
             my $thumbdir = LANraragi::Model::Config->get_thumbdir;
@@ -117,6 +142,8 @@ sub add_tasks {
                 }
             };
 
+            # Clean up thumbjob cache in Redis
+            my $redis = LANraragi::Model::Config->get_redis;
             $redis->hdel( $id, "thumbjob" );
             $redis->quit;
 

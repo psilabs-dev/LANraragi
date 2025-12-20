@@ -6,9 +6,8 @@ use Mojo::JSON qw(decode_json);
 
 use LANraragi::Model::Backup;
 use LANraragi::Model::PsilabsDev::PgBackup;
-use LANraragi::Model::Stats;
+use LANraragi::Model::PsilabsDev::PgStats;
 use LANraragi::Utils::Generic qw(render_api_response);
-use LANraragi::Utils::Database qw(invalidate_cache);
 use LANraragi::Utils::PsilabsDev::PgDatabase;
 
 sub serve_backup {
@@ -29,14 +28,14 @@ sub serve_tag_stats {
     my $self = shift;
     my $minscore = $self->req->param('minweight') || "1";
 
-    $self->render( json => LANraragi::Model::Stats::build_tag_stats($minscore) );
+    $self->render( json => LANraragi::Model::PsilabsDev::PgStats::build_tag_stats($minscore) );
 }
 
 sub clean_database {
-    my ( $deleted, $unlinked ) = LANraragi::Utils::Database::clean_database;
+    my ( $deleted, $unlinked ) = LANraragi::Utils::PsilabsDev::PgDatabase::clean_database;
 
-    # Force a refresh
-    invalidate_cache(1);
+    # Force a refresh (no-op for Postgres but kept for compatibility)
+    LANraragi::Utils::PsilabsDev::PgDatabase::invalidate_cache(1);
 
     shift->render(
         json => {

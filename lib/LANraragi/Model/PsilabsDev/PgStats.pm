@@ -6,6 +6,7 @@ use utf8;
 
 use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
 use LANraragi::Utils::Logging qw(get_logger);
+use LANraragi::Model::Config;
 
 # replaces: LANraragi::Model::Stats::get_archive_count
 # get_archive_count()
@@ -47,15 +48,35 @@ SQL
 
 # replaces: LANraragi::Model::Stats::get_page_stat
 # get_page_stat()
-#   Returns the total number of pages read across all archives.
-#   In the Postgres implementation, this sums the progress field from lrr_archive table.
+#   Returns the cumulative total number of pages read across all archives.
+#   Reads from LRR_TOTALPAGESTAT in Redis Database 2 (configuration database).
+#   This counter is incremented each time a user reads a page.
+#   Configuration exception: This remains in Redis as it's stored in the config database.
 sub get_page_stat {
+    my $logger = get_logger("PgStats", "lanraragi");
+
+    my $redis = LANraragi::Model::Config->get_redis_config;
+    my $stat  = ($redis->get("LRR_TOTALPAGESTAT") || 0) + 0;
+    $redis->quit();
+
+    $logger->debug("Total pages read: $stat");
+
+    return $stat;
+}
+
+# replaces: LANraragi::Model::Stats::compute_content_size
+# compute_content_size()
+#   Computes the total size of all archives in the database.
+#   In Redis, this sums the arcsize field from all archive hashes.
+#   In Postgres, this sums the arcsize column from lrr_archive table.
+#   Returns the size in GB (as a decimal number).
+sub compute_content_size {
     my $logger = get_logger("PgStats", "lanraragi");
     my $dbh = get_postgresql_dbh();
 
-    # Sum all progress values (pages read)
+    # Sum all archive sizes
     my $sql = <<'SQL';
-        SELECT COALESCE(SUM(progress), 0) as total_pages
+        SELECT COALESCE(SUM(arcsize), 0) as total_size
         FROM lrr_archive
 SQL
 
@@ -63,13 +84,16 @@ SQL
     $sth->execute();
 
     my $row = $sth->fetchrow_hashref;
-    my $total = $row->{total_pages} || 0;
+    my $size = $row->{total_size} || 0;
 
     $dbh->disconnect();
 
-    $logger->debug("Total pages read: $total");
+    # Convert to GB (matching Redis implementation)
+    my $size_gb = int( $size / 1073741824 * 100 ) / 100;
 
-    return $total + 0;  # Return as integer
+    $logger->debug("Total content size: $size_gb GB");
+
+    return $size_gb;
 }
 
 # replaces: LANraragi::Model::Stats::is_url_recorded
@@ -113,6 +137,61 @@ SQL
     $dbh->disconnect();
 
     return $id;
+}
+
+# replaces: LANraragi::Model::Stats::build_tag_stats
+# build_tag_stats($minscore)
+#   Builds tag statistics for display in the tag cloud.
+#   In Redis, this queries the LRR_STATS sorted set.
+#   In Postgres, this counts tag occurrences across all archives.
+#   Returns a reference to an array of tag objects with text, namespace, and weight fields.
+sub build_tag_stats {
+    my $minscore = shift;
+    my $logger = get_logger("PgStats", "lanraragi");
+
+    $logger->debug("Serving tag statistics with a minimum weight of $minscore");
+
+    my $dbh = get_postgresql_dbh();
+
+    # Count tag occurrences across all archives, filtering by minimum score
+    # Join lrr_tag with lrr_archive_to_tag_map to count how many times each tag appears
+    # Lowercase tags during grouping to match Redis behavior (e.g., "Artist:John" and "artist:john" counted together)
+    my $sql = <<'SQL';
+        SELECT LOWER(t.namespace) as namespace, LOWER(t.value) as value, COUNT(*) as weight
+        FROM lrr_tag t
+        INNER JOIN lrr_archive_to_tag_map atm ON t.tagid = atm.tagid
+        GROUP BY LOWER(t.namespace), LOWER(t.value)
+        HAVING COUNT(*) >= ?
+        ORDER BY weight DESC
+SQL
+
+    my $sth = $dbh->prepare($sql);
+    $sth->execute($minscore);
+
+    # Build the array of tag objects
+    my @tags;
+    while (my $row = $sth->fetchrow_hashref) {
+        my $namespace = $row->{namespace} || "";
+        my $value = $row->{value} || "";
+        my $weight = $row->{weight} || 0;
+
+        # Skip empty values
+        next if $value eq "";
+
+        my $j = {
+            text => $value,
+            namespace => $namespace,
+            weight => $weight + 0  # Ensure it's treated as a number
+        };
+        push(@tags, $j);
+    }
+
+    $sth->finish;
+    $dbh->disconnect();
+
+    $logger->debug("Returning " . scalar(@tags) . " tags with minimum weight $minscore");
+
+    return \@tags;
 }
 
 1;

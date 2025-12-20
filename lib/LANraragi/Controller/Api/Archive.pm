@@ -16,12 +16,15 @@ use LANraragi::Utils::Database qw(get_archive_json set_isnew);
 use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Redis    qw(redis_encode);
 use LANraragi::Utils::Path     qw(compat_path get_archive_path move_path);
+use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::PgPath;
 
 use LANraragi::Model::Archive;
 use LANraragi::Model::Category;
 use LANraragi::Model::Config;
 use LANraragi::Model::Reader;
 use LANraragi::Model::PsilabsDev::PgArchive;
+use LANraragi::Model::PsilabsDev::PgReader;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -98,7 +101,7 @@ sub update_thumbnail {
 sub generate_page_thumbnails {
     my $self = shift;
     my $id   = check_id_parameter( $self, "generate_page_thumbnails" ) || return;
-    LANraragi::Model::Archive::generate_page_thumbnails( $self, $id );
+    LANraragi::Model::PsilabsDev::PgArchive::generate_page_thumbnails( $self, $id );
 }
 
 # Use RenderFile to get the file of the provided id to the client.
@@ -106,10 +109,10 @@ sub serve_file {
 
     my $self  = shift;
     my $id    = check_id_parameter( $self, "serve_file" ) || return;
-    my $redis = $self->LRR_CONF->get_redis;
+    my $dbh = get_postgresql_dbh();
 
-    my $file = get_archive_path( $redis, $id );
-    $redis->quit();
+    my $file = LANraragi::Utils::PsilabsDev::PgPath::get_archive_path( $dbh, $id );
+    $dbh->disconnect();
     $self->render_file( filepath => compat_path( $file ), filename => basename( $file ) );
 }
 
@@ -254,7 +257,7 @@ sub serve_page {
     my $id   = check_id_parameter( $self, "serve_page" ) || return;
     my $path = $self->req->param('path')                 || "404.xyz";
 
-    LANraragi::Model::Archive::serve_page( $self, $id, $path );
+    LANraragi::Model::PsilabsDev::PgArchive::serve_page( $self, $id, $path );
 }
 
 sub get_file_list {
@@ -264,7 +267,7 @@ sub get_file_list {
     my $force = $self->req->param('force') eq "true" || "0";
     my $reader_json;
 
-    eval { $reader_json = LANraragi::Model::Reader::build_reader_JSON( $self, $id, $force ); };
+    eval { $reader_json = LANraragi::Model::PsilabsDev::PgReader::build_reader_JSON( $self, $id, $force ); };
     my $err = $@;
 
     if ($err) {
@@ -342,47 +345,49 @@ sub update_progress {
     my $id   = check_id_parameter( $self, "update_progress" ) || return;
 
     my $page = $self->stash('page') || 0;
-    my $time = time();
 
     # Undocumented parameter to force progress update
     my $force = $self->req->param('force') || 0;
-
-    my $redis     = $self->LRR_CONF->get_redis;
-    my $redis_cfg = $self->LRR_CONF->get_redis_config;
-    my $pagecount = $redis->hget( $id, "pagecount" );
 
     if ( LANraragi::Model::Config->enable_localprogress && !LANraragi::Model::Config->enable_authprogress ) {
         render_api_response( $self, "update_progress", "Server-side Progress Tracking is disabled on this instance." );
         return;
     }
 
-    # This relies on pagecount, so you can't update progress for archives that don't have a valid pagecount recorded yet.
-    unless ( $pagecount || $force ) {
-        render_api_response( $self, "update_progress", "Archive doesn't have a total page count recorded yet." );
-        return;
-    }
-
-    # Safety-check the given page value.
-    unless ( $force || ( looks_like_number($page) && $page > 0 && $page <= $pagecount ) ) {
-        render_api_response( $self, "update_progress", "Invalid progress value." );
-        return;
-    }
+    my $redis = $self->LRR_CONF->get_redis;
 
     return unless exec_with_lock( $self, $redis, "archive-write:$id", "update_progress", $id, sub {
-        # Just set the progress value.
-        $redis->hset( $id, "progress",     $page );
-        $redis->hset( $id, "lastreadtime", $time );
+        my $result;
 
-        # Update total pages read statistic
-        $redis_cfg->incr("LRR_TOTALPAGESTAT");
-        $redis_cfg->quit();
+        eval {
+            $result = LANraragi::Model::PsilabsDev::PgArchive::update_progress( $id, $page, $force );
+        };
+
+        if ( my $error = $@ ) {
+            render_api_response( $self, "update_progress", $error );
+            return;
+        }
+
+        my $pagecount = $result->{pagecount};
+
+        # This relies on pagecount, so you can't update progress for archives that don't have a valid pagecount recorded yet.
+        unless ( $pagecount || $force ) {
+            render_api_response( $self, "update_progress", "Archive doesn't have a total page count recorded yet." );
+            return;
+        }
+
+        # Safety-check the given page value.
+        unless ( $force || ( looks_like_number($page) && $page > 0 && $page <= $pagecount ) ) {
+            render_api_response( $self, "update_progress", "Invalid progress value." );
+            return;
+        }
 
         $self->render(
             json => {
                 operation    => "update_progress",
                 id           => $id,
                 page         => $page,
-                lastreadtime => $time,
+                lastreadtime => $result->{lastreadtime},
                 success      => 1
             }
         );
