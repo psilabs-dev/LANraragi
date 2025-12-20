@@ -315,8 +315,8 @@ sub add_pagecount_with_dbh ( $dbh, $id ) {
     }
 
     # Calculate pagecount using Archive utility
-    use LANraragi::Utils::Archive qw(extract_file_from_archive);
-    my @files = extract_file_from_archive($filepath, 1);  # 1 = list only
+    use LANraragi::Utils::Archive qw(get_filelist);
+    my @files = get_filelist($filepath, $id);
     my $pagecount = scalar @files;
 
     # Update pagecount in database
