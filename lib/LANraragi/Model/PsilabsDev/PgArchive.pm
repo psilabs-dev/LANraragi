@@ -417,7 +417,7 @@ sub serve_page {
      # Get the file extension to report content-type properly
         my ( $n, $p, $file_ext ) = fileparse( $path, qr/\.[^.]*/ );
         my $content = get_page_data($id, $path);
-        $logger->debug("Data size:".length($content));
+        $logger->debug("Data size: " . length($content));
         # Serve extracted file directly
         $self->render_file(
             data                => $content,
@@ -437,7 +437,7 @@ sub get_title ($id) {
 
     if ( $id eq "" ) {
         $logger->debug("No archive ID provided.");
-        return undef;
+        return ();
     }
 
     my $dbh = get_postgresql_dbh();

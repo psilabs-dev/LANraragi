@@ -18,7 +18,7 @@ sub get_archive_path ( $dbh, $id ) {
     my $row = $sth->fetchrow_hashref;
     $sth->finish;
 
-    return undef unless $row;
+    return unless $row;
     return create_path( $row->{filename} );
 }
 

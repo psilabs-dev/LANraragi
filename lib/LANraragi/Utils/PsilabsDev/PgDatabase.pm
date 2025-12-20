@@ -209,7 +209,7 @@ sub get_archive_json ( $dbh, $id ) {
 
     if ( my $error = $@ ) {
         $logger->error("Error in get_archive_json for $id: $error");
-        return undef;
+        return;
     }
 
     return $arcdata;
