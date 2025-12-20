@@ -199,8 +199,9 @@ SQL
         $insert_sth->execute($cat_id, $arc_id);
     };
 
-    if ($@) {
-        $err = "Failed to add $arc_id to category $cat_id: $@";
+    my $insert_error = $@;
+    if ($insert_error) {
+        $err = "Failed to add $arc_id to category $cat_id: $insert_error";
         $logger->error($err);
         $dbh->disconnect();
         return (0, $err);
@@ -213,6 +214,69 @@ SQL
 
     # Postgres doesn't need cache invalidation
     return (1, $err);
+}
+
+# replaces: LANraragi::Model::Category::create_category
+# create_category(name, favtag, pinned, existing_id)
+#   Create a Category.
+#   If the "favtag" argument is supplied, the category will be Dynamic.
+#   Otherwise, it'll be Static.
+#   If an existing category ID is supplied, said category will be updated with the given parameters.
+#   Returns the ID of the created/updated Category.
+sub create_category {
+    my ( $name, $favtag, $pinned, $cat_id ) = @_;
+    my $logger = get_logger("PgCategory", "lanraragi");
+    my $dbh = get_postgresql_dbh();
+
+    # Set all fields of the category object
+    unless ( length($cat_id) ) {
+        $cat_id = "SET_" . time();
+
+        my $isnewkey = 0;
+        until ($isnewkey) {
+            # Check if the category ID exists, move timestamp further if it does
+            my $check_sth = $dbh->prepare('SELECT catid FROM lrr_category WHERE catid = ?');
+            $check_sth->execute($cat_id);
+            my $exists = $check_sth->fetchrow_hashref;
+            $check_sth->finish;
+
+            if ($exists) {
+                $cat_id = "SET_" . ( time() + 1 );
+            } else {
+                $isnewkey = 1;
+            }
+        }
+    }
+
+    # Check if category exists
+    my $exists_sth = $dbh->prepare('SELECT catid FROM lrr_category WHERE catid = ?');
+    $exists_sth->execute($cat_id);
+    my $existing = $exists_sth->fetchrow_hashref;
+    $exists_sth->finish;
+
+    # Convert pinned to boolean
+    my $pinned_bool = $pinned ? 1 : 0;
+
+    if ($existing) {
+        # Update existing category
+        my $update_sth = $dbh->prepare(
+            'UPDATE lrr_category SET name = ?, search = ?, pinned = ? WHERE catid = ?'
+        );
+        $update_sth->execute($name, $favtag, $pinned_bool, $cat_id);
+        $update_sth->finish;
+        $logger->debug("Updated category $cat_id");
+    } else {
+        # Insert new category
+        my $insert_sth = $dbh->prepare(
+            'INSERT INTO lrr_category (catid, name, search, pinned) VALUES (?, ?, ?, ?)'
+        );
+        $insert_sth->execute($cat_id, $name, $favtag, $pinned_bool);
+        $insert_sth->finish;
+        $logger->debug("Created new category $cat_id");
+    }
+
+    $dbh->disconnect();
+    return $cat_id;
 }
 
 1;

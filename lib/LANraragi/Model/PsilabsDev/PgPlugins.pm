@@ -20,6 +20,9 @@ use LANraragi::Utils::Plugins  qw(get_plugin_parameters get_plugin);
 use LANraragi::Utils::Path     qw(create_path);
 use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
 
+use Exporter 'import';
+our @EXPORT_OK = qw(exec_metadata_plugin exec_enabled_plugins_on_file);
+
 # replaces LANraragi::Model::Plugins::exec_metadata_plugin
 # Execute a specified plugin on a file, described through its archive ID.
 sub exec_metadata_plugin ( $plugin, $id, %args ) {

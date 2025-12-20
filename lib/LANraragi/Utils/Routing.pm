@@ -80,18 +80,18 @@ sub apply_routes {
     $logged_in->post('/config/plugins')->to('plugins#save_config');
     $logged_in->post('/config/plugins/upload')->to('plugins#process_upload');
 
-    $logged_in->get('/config/categories')->to('category#index');        # TODO: require postgres migration
+    $logged_in->get('/config/categories')->to('category#index');        # TODO: require postgres migration (done)
 
-    $logged_in->get('/batch')->to('batch#index');                       # TODO: require postgres migration
-    $logged_in->websocket('/batch/socket')->to('batch#socket');         # TODO: require postgres migration
+    $logged_in->get('/batch')->to('batch#index');                       # TODO: require postgres migration (done)
+    $logged_in->websocket('/batch/socket')->to('batch#socket');         # TODO: require postgres migration (done)
 
-    $logged_in->get('/edit')->to('edit#index');                         # TODO: require postgres migration
+    $logged_in->get('/edit')->to('edit#index');                         # TODO: require postgres migration (done)
 
-    $logged_in->get('/backup')->to('backup#index');                     # TODO: require postgres migration
-    $logged_in->post('/backup')->to('backup#restore');                  # TODO: require postgres migration
+    $logged_in->get('/backup')->to('backup#index');                     # TODO: require postgres migration (done)
+    $logged_in->post('/backup')->to('backup#restore');                  # TODO: require postgres migration (done)
 
-    $logged_in->get('/upload')->to('upload#index');                     # TODO: require postgres migration
-    $logged_in->post('/upload')->to('upload#process_upload');           # TODO: require postgres migration
+    $logged_in->get('/upload')->to('upload#index');                     # TODO: require postgres migration (done)
+    $logged_in->post('/upload')->to('upload#process_upload');           # TODO: require postgres migration (done)
 
     $logged_in->get('/logs')->to('logging#index');
     $logged_in->get('/logs/general')->to('logging#print_general');

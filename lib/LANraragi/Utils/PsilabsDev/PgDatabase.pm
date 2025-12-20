@@ -7,17 +7,93 @@ use utf8;
 use feature qw(signatures);
 no warnings 'experimental::signatures';
 
+use File::Basename;
+use Cwd qw(getcwd);
+use Redis;
+use LANraragi::Model::Config;
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Utils::Tags qw(split_tags_to_array join_tags_to_string);
 use LANraragi::Utils::String qw(trim trim_CRLF);
 use List::MoreUtils qw(uniq);
 use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::Path;
+use LANraragi::Utils::PsilabsDev::PgPath qw(get_archive_path);
+use LANraragi::Utils::PsilabsDev::PgArchive;
+use LANraragi::Model::PsilabsDev::PgBackup;
+use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Model::PsilabsDev::PgTankoubon;
 
 # Functions for interacting with Postgres.
 use Exporter 'import';
 our @EXPORT_OK = qw(
-  set_tags set_tags_with_dbh set_title set_title_with_dbh set_summary set_summary_with_dbh invalidate_cache
+  get_archive set_tags set_tags_with_dbh set_title set_title_with_dbh set_summary set_summary_with_dbh set_isnew invalidate_cache clean_database clean_categories_and_tanks change_archive_id change_archive_id_with_dbh
 );
+
+# replaces LANraragi::Utils::Database::get_archive
+# Retrieves archive metadata from Postgres and returns it as a hash
+# similar to the Redis hgetall structure for compatibility
+sub get_archive ($id) {
+    my $logger = get_logger( "PgDatabase", "lanraragi" );
+    my $dbh = get_postgresql_dbh();
+
+    eval {
+        # Get archive data
+        my $sth = $dbh->prepare(q{
+            SELECT arcid, filename, title, summary, thumbhash
+            FROM lrr_archive
+            WHERE arcid = ?
+        });
+        $sth->execute($id);
+        my $row = $sth->fetchrow_hashref;
+        $sth->finish;
+
+        unless ($row) {
+            $dbh->disconnect();
+            return ();
+        }
+
+        # Get tags as a comma-separated string
+        my $tag_sth = $dbh->prepare(q{
+            SELECT string_agg(
+                CASE
+                    WHEN t.namespace = '' THEN t.value
+                    ELSE t.namespace || ':' || t.value
+                END,
+                ', '
+            ) as tags
+            FROM lrr_archive_to_tag_map atm
+            JOIN lrr_tag t ON atm.tagid = t.tagid
+            WHERE atm.arcid = ?
+        });
+        $tag_sth->execute($id);
+        my $tag_row = $tag_sth->fetchrow_hashref;
+        my $tags = $tag_row->{tags} // "";
+        $tag_sth->finish;
+
+        $dbh->disconnect();
+
+        # Extract name from filename
+        my ( $name, $path, $suffix ) = fileparse( $row->{filename}, qr/\.[^.]*/ );
+
+        # Build hash compatible with Redis version
+        my %hash = (
+            name      => $name,
+            title     => $row->{title} // "",
+            tags      => $tags,
+            summary   => $row->{summary} // "",
+            file      => $row->{filename},
+            thumbhash => $row->{thumbhash} // ""
+        );
+
+        return %hash;
+    };
+
+    if ( my $error = $@ ) {
+        $logger->error("Error retrieving archive $id: $error");
+        $dbh->disconnect();
+        return ();
+    }
+}
 
 # replaces LANraragi::Utils::Database::set_title
 sub set_title ( $id, $newtitle ) {
@@ -258,6 +334,32 @@ sub set_summary_with_dbh ( $dbh, $id, $summary ) {
     }
 }
 
+# replaces LANraragi::Utils::Database::set_isnew
+sub set_isnew ( $id, $isnew ) {
+    my $logger = get_logger( "PgDatabase", "lanraragi" );
+
+    # Convert "false" to false boolean, everything else to true
+    my $newval = $isnew ne "false" ? 1 : 0;
+
+    my $dbh = get_postgresql_dbh();
+
+    eval {
+        my $sth = $dbh->prepare('UPDATE lrr_archive SET isnew = ? WHERE arcid = ?');
+        $sth->execute($newval, $id);
+        $sth->finish;
+
+        $logger->debug("Updated isnew for archive $id to: $newval");
+    };
+
+    if ( my $error = $@ ) {
+        $logger->error("Error setting isnew for archive $id: $error");
+        $dbh->disconnect();
+        die $error;
+    }
+
+    $dbh->disconnect();
+}
+
 # replaces LANraragi::Utils::Database::invalidate_cache
 # In Postgres, there's no separate search cache to invalidate.
 # The search_tsv column is kept in sync with updates, so this is a no-op.
@@ -265,6 +367,306 @@ sub invalidate_cache ( $rebuild_indexes = 0 ) {
     # No-op for Postgres - search index is always up to date via search_tsv
     # The $rebuild_indexes parameter is ignored as well
     return;
+}
+
+# replaces LANraragi::Utils::Database::change_archive_id
+# Changes an archive's ID from $old_id to $new_id in the database.
+# This updates the archive record and all references in categories and tankoubons.
+# Also updates the filemap in Redis (still used by Shinobu for file tracking).
+sub change_archive_id ( $old_id, $new_id ) {
+    my $logger = get_logger( "PgDatabase", "lanraragi" );
+    my $dbh = get_postgresql_dbh();
+
+    $logger->debug("Changing ID $old_id to $new_id");
+
+    my $file_for_redis;
+    eval {
+        $dbh->begin_work;
+
+        # Check if old ID exists in archive table
+        my $check_sth = $dbh->prepare('SELECT arcid, filename FROM lrr_archive WHERE arcid = ?');
+        $check_sth->execute($old_id);
+        my $row = $check_sth->fetchrow_hashref;
+        $check_sth->finish;
+
+        if ($row) {
+            # Update the archive ID
+            my $update_arc_sth = $dbh->prepare('UPDATE lrr_archive SET arcid = ? WHERE arcid = ?');
+            $update_arc_sth->execute($new_id, $old_id);
+            $update_arc_sth->finish;
+
+            # Update archive size based on file
+            my $file = LANraragi::Utils::Path::create_path($row->{filename});
+            if (defined($file) && -e $file) {
+                my $arcsize = -s $file;
+                my $update_size_sth = $dbh->prepare('UPDATE lrr_archive SET arcsize = ? WHERE arcid = ?');
+                $update_size_sth->execute($arcsize, $new_id);
+                $update_size_sth->finish;
+            }
+
+            # Update category mappings
+            my $update_cat_sth = $dbh->prepare('UPDATE lrr_category_to_archive_map SET arcid = ? WHERE arcid = ?');
+            $update_cat_sth->execute($new_id, $old_id);
+            $update_cat_sth->finish;
+
+            # Update tankoubon mappings
+            my $update_tank_sth = $dbh->prepare('UPDATE lrr_tank_to_archive_map SET arcid = ? WHERE arcid = ?');
+            $update_tank_sth->execute($new_id, $old_id);
+            $update_tank_sth->finish;
+
+            $logger->debug("Updated archive and all references from $old_id to $new_id");
+
+            # Get file path for Redis update before committing
+            $file_for_redis = get_archive_path($dbh, $new_id);
+        }
+
+        $dbh->commit;
+    };
+
+    if (my $error = $@) {
+        $logger->error("Error changing archive ID from $old_id to $new_id: $error");
+        eval { $dbh->rollback };
+        $dbh->disconnect();
+        die $error;
+    }
+
+    $dbh->disconnect();
+
+    # Update the filemap in Redis (still used by Shinobu)
+    if (defined($file_for_redis) && $file_for_redis ne "") {
+        my $redis_config = LANraragi::Model::Config->get_redis_config;
+        $redis_config->hset( "LRR_FILEMAP", $file_for_redis, $new_id );
+        $redis_config->quit;
+    }
+}
+
+# Cleans the database by clearing all categories, tankoubons, and their mappings.
+# This is used before restoring from a backup.
+# Note: Archives themselves are NOT deleted - only their metadata relationships.
+sub clean_categories_and_tanks {
+    my $logger = get_logger("PgDatabase", "lanraragi");
+    my $dbh = get_postgresql_dbh();
+
+    $logger->info("Cleaning categories and tankoubons before restore...");
+
+    eval {
+        $dbh->begin_work;
+
+        # Delete category to archive mappings
+        $dbh->do('DELETE FROM lrr_category_to_archive_map');
+        $logger->debug("Cleared category to archive mappings");
+
+        # Delete all categories
+        $dbh->do('DELETE FROM lrr_category');
+        $logger->debug("Cleared categories");
+
+        # Delete tankoubon to archive mappings
+        $dbh->do('DELETE FROM lrr_tank_to_archive_map');
+        $logger->debug("Cleared tankoubon to archive mappings");
+
+        # Delete all tankoubons
+        $dbh->do('DELETE FROM lrr_tank');
+        $logger->debug("Cleared tankoubons");
+
+        $dbh->commit;
+        $logger->info("Categories and tankoubons cleaned successfully");
+    };
+
+    if ($@) {
+        my $error = $@;
+        $logger->error("Error cleaning categories and tankoubons: $error");
+        eval { $dbh->rollback };
+        $dbh->disconnect();
+        die $error;
+    }
+
+    $dbh->disconnect();
+    return;
+}
+
+# Helper for change_archive_id that accepts a database handle
+# Used internally by clean_database to avoid creating new connections mid-operation
+sub change_archive_id_with_dbh ( $dbh, $old_id, $new_id ) {
+    my $logger = get_logger( "PgDatabase", "lanraragi" );
+
+    $logger->debug("Changing ID $old_id to $new_id");
+
+    my $file_for_redis;
+
+    # NO begin_work - assume already in transaction
+
+    # Check if old ID exists in archive table
+    my $check_sth = $dbh->prepare('SELECT arcid, filename FROM lrr_archive WHERE arcid = ?');
+    $check_sth->execute($old_id);
+    my $row = $check_sth->fetchrow_hashref;
+    $check_sth->finish;
+
+    if ($row) {
+        # Update the archive ID
+        my $update_arc_sth = $dbh->prepare('UPDATE lrr_archive SET arcid = ? WHERE arcid = ?');
+        $update_arc_sth->execute($new_id, $old_id);
+        $update_arc_sth->finish;
+
+        # Update archive size based on file
+        my $file = LANraragi::Utils::Path::create_path($row->{filename});
+        if (defined($file) && -e $file) {
+            my $arcsize = -s $file;
+            my $update_size_sth = $dbh->prepare('UPDATE lrr_archive SET arcsize = ? WHERE arcid = ?');
+            $update_size_sth->execute($arcsize, $new_id);
+            $update_size_sth->finish;
+        }
+
+        # Update category mappings
+        my $update_cat_sth = $dbh->prepare('UPDATE lrr_category_to_archive_map SET arcid = ? WHERE arcid = ?');
+        $update_cat_sth->execute($new_id, $old_id);
+        $update_cat_sth->finish;
+
+        # Update tankoubon mappings
+        my $update_tank_sth = $dbh->prepare('UPDATE lrr_tank_to_archive_map SET arcid = ? WHERE arcid = ?');
+        $update_tank_sth->execute($new_id, $old_id);
+        $update_tank_sth->finish;
+
+        $logger->debug("Updated archive and all references from $old_id to $new_id");
+
+        # Get file path for Redis update
+        $file_for_redis = get_archive_path($dbh, $new_id);
+    }
+
+    # NO commit - caller manages transaction
+
+    return $file_for_redis;
+}
+
+# replaces LANraragi::Utils::Database::clean_database
+# Remove entries from the database that don't have a matching archive on the filesystem.
+# Returns the number of entries deleted/unlinked.
+sub clean_database {
+    my $logger = get_logger("PgDatabase", "lanraragi");
+
+    eval {
+        # Save an autobackup somewhere before cleaning
+        my $outfile = getcwd() . "/autobackup.json";
+        $logger->info("Saving automatic backup to $outfile");
+        open( my $fh, '>', $outfile );
+        print $fh LANraragi::Model::PsilabsDev::PgBackup::build_backup_JSON();
+        close $fh;
+    };
+
+    if ($@) {
+        $logger->warn("Unable to open a file to save backup before cleaning database! $@");
+    }
+
+    # Get the filemap from Redis for ID checks later down the line
+    # This is still needed because Shinobu uses Redis to track file changes
+    my $redis_config = LANraragi::Model::Config->get_redis_config;
+    my @filemapids = $redis_config->exists("LRR_FILEMAP") ? $redis_config->hvals("LRR_FILEMAP") : ();
+    my %filemap    = map { $_ => 1 } @filemapids;
+
+    my $dbh = get_postgresql_dbh();
+    my $deleted_arcs  = 0;
+    my $unlinked_arcs = 0;
+
+    eval {
+        # Get all archive IDs
+        my $sql = 'SELECT arcid, filename FROM lrr_archive';
+        my $sth = $dbh->prepare($sql);
+        $sth->execute();
+
+        while (my $row = $sth->fetchrow_hashref) {
+            my $id = $row->{arcid};
+            my $file = LANraragi::Utils::Path::create_path($row->{filename});
+
+            # Check if the linked file exists
+            unless ( defined($file) && -e $file ) {
+                $logger->debug("Archive $id file does not exist: " . ($row->{filename} // "undefined"));
+
+                # Delete the archive using PgArchive
+                LANraragi::Utils::PsilabsDev::PgArchive::delete_archive($id);
+                $deleted_arcs++;
+                next;
+            }
+
+            # If the linked file exists, check if its ID is in the filemap
+            # This handles cases where archive files are modified and get new IDs
+            unless ( $file eq "" || exists $filemap{$id} ) {
+                $logger->warn("File exists but its ID is no longer $id!");
+                $logger->warn("Trying to find its new ID in the Shinobu filemap...");
+
+                if ( $redis_config->hexists( "LRR_FILEMAP", $file ) ) {
+                    my $newid = $redis_config->hget( "LRR_FILEMAP", $file );
+                    $logger->warn("Found $newid in the filemap! Changing ID from $id to it.");
+
+                    # Check if the new ID already exists as a separate entry
+                    my $check_sth = $dbh->prepare('SELECT arcid FROM lrr_archive WHERE arcid = ?');
+                    $check_sth->execute($newid);
+                    my $exists = $check_sth->fetchrow_hashref;
+                    $check_sth->finish;
+
+                    if ( $exists ) {
+                        $logger->warn("ID $newid already exists in the database! Unlinking old ID.");
+                        # Clear the filename to unlink the old entry (with transaction)
+                        eval {
+                            $dbh->begin_work;
+                            my $unlink_sth = $dbh->prepare('UPDATE lrr_archive SET filename = ? WHERE arcid = ?');
+                            $unlink_sth->execute("", $id);
+                            $unlink_sth->finish;
+                            $dbh->commit;
+                        };
+                        if (my $err = $@) {
+                            eval { $dbh->rollback };
+                            die $err;
+                        }
+                        # NOTE: Do NOT increment $unlinked_arcs here, matching Redis behavior at line 381
+                    } else {
+                        # Use the transactional version of change_archive_id
+                        my $file_for_redis;
+                        eval {
+                            $dbh->begin_work;
+                            $file_for_redis = change_archive_id_with_dbh( $dbh, $id, $newid );
+                            $dbh->commit;
+                        };
+                        if (my $err = $@) {
+                            eval { $dbh->rollback };
+                            die $err;
+                        }
+                        # Update Redis filemap
+                        if (defined($file_for_redis) && $file_for_redis ne "") {
+                            $redis_config->hset( "LRR_FILEMAP", $file_for_redis, $newid );
+                        }
+                    }
+
+                } else {
+                    $logger->warn("File $file not found in the filemap! Removing file reference in the database entry for $id.");
+                    # Clear the filename to unlink the entry (with transaction)
+                    eval {
+                        $dbh->begin_work;
+                        my $unlink_sth = $dbh->prepare('UPDATE lrr_archive SET filename = ? WHERE arcid = ?');
+                        $unlink_sth->execute("", $id);
+                        $unlink_sth->finish;
+                        $dbh->commit;
+                    };
+                    if (my $err = $@) {
+                        eval { $dbh->rollback };
+                        die $err;
+                    }
+                    $unlinked_arcs++;
+                }
+            }
+        }
+
+        $sth->finish;
+    };
+
+    if (my $error = $@) {
+        $logger->error("Error during clean_database: $error");
+        $dbh->disconnect();
+        $redis_config->quit;
+        die $error;
+    }
+
+    $dbh->disconnect();
+    $redis_config->quit;
+    return ( $deleted_arcs, $unlinked_arcs );
 }
 
 1;

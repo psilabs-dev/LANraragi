@@ -1,16 +1,19 @@
 package LANraragi::Controller::Batch;
 use Mojo::Base 'Mojolicious::Controller';
 
-use Redis;
 use Encode;
 use Mojo::JSON qw(decode_json);
 
 use LANraragi::Utils::Generic  qw(generate_themes_header);
 use LANraragi::Utils::Tags     qw(rewrite_tags build_tag_replace_hash split_tags_to_array restore_CRLF);
-use LANraragi::Utils::Database qw(get_computed_tagrules set_tags set_title set_summary set_isnew invalidate_cache);
+use LANraragi::Utils::Database qw(get_computed_tagrules);
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(set_tags set_title set_summary set_tags_with_dbh set_title_with_dbh set_summary_with_dbh set_isnew invalidate_cache);
 use LANraragi::Utils::Plugins  qw(get_plugins get_plugin get_plugin_parameters);
 use LANraragi::Utils::Logging  qw(get_logger);
-use LANraragi::Utils::Redis    qw(redis_decode);
+use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Utils::PsilabsDev::PgArchive qw(delete_archive);
+use LANraragi::Model::PsilabsDev::PgPlugins qw(exec_metadata_plugin);
 
 # This action will render a template
 sub index {
@@ -33,7 +36,7 @@ sub index {
     }
 
     # Get static category list
-    my @categories = LANraragi::Model::Category->get_static_category_list;
+    my @categories = LANraragi::Model::PsilabsDev::PgCategory::get_static_category_list();
 
     $self->render(
         template   => "batch",
@@ -53,7 +56,6 @@ sub socket {
     my $self      = shift;
     my $cancelled = 0;
     my $client    = $self->tx;
-    my $redis     = $self->LRR_CONF->get_redis;
 
     my $logger = get_logger( "Batch Tagging", "lanraragi" );
 
@@ -103,12 +105,12 @@ sub socket {
                     $logger->debug("Overriding configured parameters");
                     if ( exists $args{customargs} ) {
 
-                        # Decode user overrides
-                        $args{customargs} = [ map { redis_decode($_) } @args_override ];
+                        # User overrides from JSON are already properly decoded
+                        $args{customargs} = \@args_override;
                     } else {
                         my @keys = sort grep { $_ !~ m/^enabled$/ } keys %args;
                         while ( my ( $idx, $key ) = each @keys ) {
-                            $args{customargs}{$key} = redis_decode( $args_override[$idx] );
+                            $args{customargs}{$key} = $args_override[$idx];
                         }
                     }
 
@@ -134,7 +136,7 @@ sub socket {
 
             if ( $operation eq "addcat" ) {
                 my $catid = $command->{"category"};
-                my ( $catsucc, $caterr ) = LANraragi::Model::Category::add_to_category( $catid, $id );
+                my ( $catsucc, $caterr ) = LANraragi::Model::PsilabsDev::PgCategory::add_to_category( $catid, $id );
 
                 $client->send(
                     {   json => {
@@ -151,8 +153,26 @@ sub socket {
             if ( $operation eq "tagrules" ) {
 
                 $logger->debug("Applying tag rules to $id...");
-                my $tags = $redis->hget( $id, "tags" );
-                $tags = redis_decode($tags);
+
+                # Get tags from Postgres
+                my $dbh = get_postgresql_dbh();
+                my $sth = $dbh->prepare(q{
+                    SELECT string_agg(
+                        CASE
+                            WHEN t.namespace = '' THEN t.value
+                            ELSE t.namespace || ':' || t.value
+                        END,
+                        ', '
+                    ) as tags
+                    FROM lrr_archive_to_tag_map atm
+                    JOIN lrr_tag t ON atm.tagid = t.tagid
+                    WHERE atm.arcid = ?
+                });
+                $sth->execute($id);
+                my $row = $sth->fetchrow_hashref;
+                my $tags = $row->{tags} // "";
+                $sth->finish;
+                $dbh->disconnect();
 
                 my @tagarray = split_tags_to_array($tags);
                 @tagarray = rewrite_tags( \@tagarray, $rules, $hash_replace_rules );
@@ -179,7 +199,7 @@ sub socket {
             if ( $operation eq "delete" ) {
                 $logger->debug("Deleting $id...");
 
-                my $delStatus = LANraragi::Model::Archive::delete_archive($id);
+                my $delStatus = delete_archive($id);
 
                 $client->send(
                     {   json => {
@@ -211,7 +231,6 @@ sub socket {
         finish => sub {
             $logger->info('Client disconnected, halting remaining operations');
             $cancelled = 1;
-            $redis->quit();
         }
     );
 
@@ -221,19 +240,38 @@ sub batch_plugin {
     my ( $id, $plugin, %args ) = @_;
 
     # Run plugin with args on id
-    my %plugin_result = LANraragi::Model::Plugins::exec_metadata_plugin( $plugin, $id, %args );
+    my %plugin_result = exec_metadata_plugin( $plugin, $id, %args );
 
     # If the plugin exec returned tags, add them
     unless ( exists $plugin_result{error} ) {
-        set_tags( $id, $plugin_result{new_tags}, 1 );
+        # Wrap all metadata updates in a single transaction for atomicity
+        my $dbh = get_postgresql_dbh();
+        $dbh->begin_work;
 
-        if ( exists $plugin_result{title} ) {
-            set_title( $id, $plugin_result{title} );
+        eval {
+            # All metadata updates from this plugin in one transaction
+            if ( $plugin_result{new_tags} ) {
+                set_tags_with_dbh( $dbh, $id, $plugin_result{new_tags}, 1 );
+            }
+
+            if ( exists $plugin_result{title} ) {
+                set_title_with_dbh( $dbh, $id, $plugin_result{title} );
+            }
+
+            if ( exists $plugin_result{summary} ) {
+                set_summary_with_dbh( $dbh, $id, $plugin_result{summary} );
+            }
+
+            $dbh->commit;
+        };
+
+        if ( my $error = $@ ) {
+            eval { $dbh->rollback };
+            $dbh->disconnect;
+            die $error;
         }
 
-        if ( exists $plugin_result{summary} ) {
-            set_summary( $id, $plugin_result{summary} );
-        }
+        $dbh->disconnect;
     }
 
     return {

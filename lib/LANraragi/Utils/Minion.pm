@@ -12,7 +12,6 @@ use MCE::Shared;
 use Config;
 
 use LANraragi::Utils::Logging    qw(get_logger);
-use LANraragi::Utils::Redis      qw(redis_decode);
 use LANraragi::Utils::Plugins    qw(get_downloader_for_url get_plugin get_plugin_parameters);
 use LANraragi::Utils::PsilabsDev::PgPlugins qw(use_plugin);
 use LANraragi::Utils::String     qw(trim_url);
@@ -323,13 +322,13 @@ sub add_tasks {
 
             # Since we already have a file, this goes straight to handle_incoming_file.
             my ( $status_code, $id, $title, $message ) =
-              LANraragi::Model::Upload::handle_incoming_file( $file, $catid, "", "", "" );
+              LANraragi::Model::PsilabsDev::PgUpload::handle_incoming_file( $file, $catid, "", "", "" );
             my $status = $status_code == 200 ? 1 : 0;
             $job->finish(
                 {   success  => $status,
                     id       => $id,
                     category => $catid,
-                    title    => redis_decode($title),    # Fix display issues in the response
+                    title    => $title,
                     message  => $message
                 }
             );
