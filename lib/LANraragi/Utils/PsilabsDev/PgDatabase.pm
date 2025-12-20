@@ -26,7 +26,7 @@ use LANraragi::Model::PsilabsDev::PgTankoubon;
 # Functions for interacting with Postgres.
 use Exporter 'import';
 our @EXPORT_OK = qw(
-  get_archive set_tags set_tags_with_dbh set_title set_title_with_dbh set_summary set_summary_with_dbh set_isnew invalidate_cache clean_database clean_categories_and_tanks change_archive_id change_archive_id_with_dbh
+  get_archive set_tags set_tags_with_dbh set_title set_title_with_dbh set_summary set_summary_with_dbh set_isnew clear_new_all invalidate_cache clean_database clean_categories_and_tanks change_archive_id change_archive_id_with_dbh drop_database
 );
 
 # replaces LANraragi::Utils::Database::get_archive
@@ -360,6 +360,31 @@ sub set_isnew ( $id, $isnew ) {
     $dbh->disconnect();
 }
 
+# replaces LANraragi::Controller::Api::Database::clear_new_all (endpoint logic)
+# Clear the new flag in all archives.
+sub clear_new_all {
+    my $logger = get_logger( "PgDatabase", "lanraragi" );
+    my $dbh = get_postgresql_dbh();
+
+    eval {
+        # Set isnew to false for all archives
+        my $sth = $dbh->prepare('UPDATE lrr_archive SET isnew = FALSE');
+        $sth->execute();
+        my $rows_affected = $sth->rows;
+        $sth->finish;
+
+        $logger->info("Cleared new flag for all archives (affected $rows_affected rows)");
+    };
+
+    if ( my $error = $@ ) {
+        $logger->error("Error clearing new flag for all archives: $error");
+        $dbh->disconnect();
+        die $error;
+    }
+
+    $dbh->disconnect();
+}
+
 # replaces LANraragi::Utils::Database::invalidate_cache
 # In Postgres, there's no separate search cache to invalidate.
 # The search_tsv column is kept in sync with updates, so this is a no-op.
@@ -667,6 +692,74 @@ sub clean_database {
     $dbh->disconnect();
     $redis_config->quit;
     return ( $deleted_arcs, $unlinked_arcs );
+}
+
+# replaces LANraragi::Utils::Database::drop_database
+# Drops the entire database by deleting all data from all tables.
+# This is extremely dangerous and cannot be undone.
+sub drop_database {
+    my $logger = get_logger("PgDatabase", "lanraragi");
+    my $dbh = get_postgresql_dbh();
+
+    $logger->warn("Dropping entire database - all Postgres and Redis data will be lost!");
+
+    # Drop Postgres tables
+    eval {
+        $dbh->begin_work;
+
+        # Delete in order to respect foreign key constraints
+        # First delete all mapping tables (they have foreign keys to other tables)
+        $dbh->do('DELETE FROM lrr_archive_to_tag_map');
+        $logger->debug("Cleared archive to tag mappings");
+
+        $dbh->do('DELETE FROM lrr_category_to_archive_map');
+        $logger->debug("Cleared category to archive mappings");
+
+        $dbh->do('DELETE FROM lrr_tank_to_archive_map');
+        $logger->debug("Cleared tankoubon to archive mappings");
+
+        # Then delete the main tables
+        $dbh->do('DELETE FROM lrr_tag');
+        $logger->debug("Cleared tags");
+
+        $dbh->do('DELETE FROM lrr_category');
+        $logger->debug("Cleared categories");
+
+        $dbh->do('DELETE FROM lrr_tank');
+        $logger->debug("Cleared tankoubons");
+
+        $dbh->do('DELETE FROM lrr_archive');
+        $logger->debug("Cleared archives");
+
+        $dbh->commit;
+        $logger->info("Postgres database dropped successfully");
+    };
+
+    if (my $error = $@) {
+        $logger->error("Error dropping Postgres database: $error");
+        eval { $dbh->rollback };
+        $dbh->disconnect();
+        die $error;
+    }
+
+    $dbh->disconnect();
+
+    # Drop all Redis databases (config, minion, search cache)
+    # This matches the original behavior of flushall() in the Redis implementation
+    my $redis;
+    eval {
+        $redis = LANraragi::Model::Config->get_redis;
+        $redis->flushall();
+        $logger->info("All Redis databases cleared successfully");
+    };
+
+    if (my $error = $@) {
+        $logger->error("Error clearing Redis databases: $error");
+        eval { $redis->quit if $redis };
+        die $error;
+    }
+
+    $redis->quit();
 }
 
 1;

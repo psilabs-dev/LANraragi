@@ -119,9 +119,9 @@ sub apply_routes {
     $logged_in_api->post('/api/regen_thumbs')->to('api-other#regen_thumbnails');        # TODO: require postgres migration (done)
 
     # Archive API
-    $public_api->get('/api/archives')->to('api-archive#serve_archivelist');                         # TODO: require postgres migration
-    $public_api->get('/api/archives/untagged')->to('api-archive#serve_untagged_archivelist');       # TODO: require postgres migration
-    $public_api->get('/api/archives/:id/thumbnail')->to('api-archive#serve_thumbnail');             # TODO: require postgres migration
+    $public_api->get('/api/archives')->to('api-archive#serve_archivelist');                         # TODO: require postgres migration (done)
+    $public_api->get('/api/archives/untagged')->to('api-archive#serve_untagged_archivelist');       # TODO: require postgres migration (done)
+    $public_api->get('/api/archives/:id/thumbnail')->to('api-archive#serve_thumbnail');             # TODO: require postgres migration (done)
     $public_api->get('/api/archives/:id/download')->to('api-archive#serve_file');                   # TODO: require postgres migration
     $public_api->get('/api/archives/:id/page')->to('api-archive#serve_page');                       # TODO: require postgres migration
     $public_api->get('/api/archives/:id/files')->to('api-archive#get_file_list');                   # TODO: require postgres migration
@@ -149,9 +149,9 @@ sub apply_routes {
     $logged_in_api->delete('/api/search/cache')->to('api-search#clear_cache');          # TODO: require postgres migration
 
     # Database API
-    $logged_in_api->get('/api/database/backup')->to('api-database#serve_backup');       # TODO: require postgres migration
-    $logged_in_api->delete('/api/database/isnew')->to('api-database#clear_new_all');    # TODO: require postgres migration
-    $logged_in_api->post('/api/database/drop')->to('api-database#drop_database');       # TODO: require postgres migration
+    $logged_in_api->get('/api/database/backup')->to('api-database#serve_backup');       # TODO: require postgres migration (done)
+    $logged_in_api->delete('/api/database/isnew')->to('api-database#clear_new_all');    # TODO: require postgres migration (done)
+    $logged_in_api->post('/api/database/drop')->to('api-database#drop_database');       # TODO: require postgres migration (done)
     $logged_in_api->post('/api/database/clean')->to('api-database#clean_database');     # TODO: require postgres migration
     $public_api->get('/api/database/stats')->to('api-database#serve_tag_stats');        # TODO: require postgres migration
 

@@ -21,6 +21,7 @@ use LANraragi::Model::Archive;
 use LANraragi::Model::Category;
 use LANraragi::Model::Config;
 use LANraragi::Model::Reader;
+use LANraragi::Model::PsilabsDev::PgArchive;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -40,17 +41,13 @@ sub check_id_parameter {
 
 sub serve_archivelist {
     my $self   = shift;
-    my @idlist = LANraragi::Model::Archive::generate_archive_list;
+    my @idlist = LANraragi::Model::PsilabsDev::PgArchive::generate_archive_list();
     $self->render( json => \@idlist );
 }
 
 sub serve_untagged_archivelist {
-    my $self  = shift;
-    my $redis = $self->LRR_CONF->get_redis_search;
-
-    my @untagged = $redis->smembers("LRR_UNTAGGED");
-    $redis->quit;
-
+    my $self = shift;
+    my @untagged = LANraragi::Model::PsilabsDev::PgArchive::get_untagged_archives();
     $self->render( json => \@untagged );
 }
 
