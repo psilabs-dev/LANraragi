@@ -28,7 +28,7 @@ use File::ChangeNotify;
 use File::Basename;
 use Encode;
 
-use LANraragi::Utils::Archive    qw(extract_thumbnail);
+use LANraragi::Utils::PsilabsDev::PgArchive qw(extract_thumbnail);
 use LANraragi::Utils::Database   qw(invalidate_cache compute_id);
 use LANraragi::Utils::Logging    qw(get_logger);
 use LANraragi::Utils::Generic    qw(is_archive);
