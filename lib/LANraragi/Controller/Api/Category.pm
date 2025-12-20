@@ -1,12 +1,9 @@
 package LANraragi::Controller::Api::Category;
 use Mojo::Base 'Mojolicious::Controller';
 
-use Redis;
-use Encode;
-
-use LANraragi::Model::Category;
 use LANraragi::Model::Config;
 use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Model::PsilabsDev::PgArchive;
 use LANraragi::Utils::Generic qw(render_api_response exec_with_lock);
 
 sub get_category_list {
@@ -58,30 +55,26 @@ sub update_category {
 
     my $self     = shift;
     my $catid    = $self->stash('id');
-    my %category = LANraragi::Model::Category::get_category($catid);
+    my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($catid);
 
     unless (%category) {
         render_api_response( $self, "update_category", "The given category does not exist." );
         return;
     }
 
-    my $redis = LANraragi::Model::Config->get_redis;
-    
-    return unless exec_with_lock( $self, $redis, "category-write:$catid", "update_category", $catid, sub {
-        my $name   = $self->req->param('name')   || $category{name};
-        my $search = $self->req->param('search') || $category{search};
-        my $pinned = ( $self->req->param('pinned') && $self->req->param('pinned') ne "false" ) ? 1 : 0;
+    my $name   = $self->req->param('name')   || $category{name};
+    my $search = $self->req->param('search') || $category{search};
+    my $pinned = ( $self->req->param('pinned') && $self->req->param('pinned') ne "false" ) ? 1 : 0;
 
-        my $updated_id = LANraragi::Model::Category::create_category( $name, $search, $pinned, $catid );
-        
-        $self->render(
-            json => {
-                operation   => "update_category",
-                category_id => $updated_id,
-                success     => 1
-            }
-        );
-    });
+    my $updated_id = LANraragi::Model::PsilabsDev::PgCategory::create_category( $name, $search, $pinned, $catid );
+
+    $self->render(
+        json => {
+            operation   => "update_category",
+            category_id => $updated_id,
+            success     => 1
+        }
+    );
 }
 
 sub delete_category {
@@ -90,9 +83,9 @@ sub delete_category {
     my $catid = $self->stash('id');
 
     my $redis = LANraragi::Model::Config->get_redis;
-    
+
     return unless exec_with_lock( $self, $redis, "category-write:$catid", "delete_category", $catid, sub {
-        my $result = LANraragi::Model::Category::delete_category($catid);
+        my $result = LANraragi::Model::PsilabsDev::PgCategory::delete_category($catid);
 
         if ($result) {
             render_api_response( $self, "delete_category" );
@@ -109,14 +102,14 @@ sub add_to_category {
     my $arcid = $self->stash('archive');
 
     my $redis = LANraragi::Model::Config->get_redis;
-    
+
     return unless exec_with_lock( $self, $redis, "category-write:$catid", "add_to_category", $catid, sub {
-        my ( $result, $err ) = LANraragi::Model::Category::add_to_category( $catid, $arcid );
-        
+        my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgCategory::add_to_category( $catid, $arcid );
+
         if ($result) {
             my $successMessage = "Added $arcid to Category $catid!";
-            my %category       = LANraragi::Model::Category::get_category($catid);
-            my $title          = LANraragi::Model::Archive::get_title($arcid);
+            my %category       = LANraragi::Model::PsilabsDev::PgCategory::get_category($catid);
+            my $title          = LANraragi::Model::PsilabsDev::PgArchive::get_title($arcid);
 
             if ( %category && defined($title) ) {
                 $successMessage = "Added \"$title\" to category \"$category{name}\"!";
@@ -136,14 +129,14 @@ sub remove_from_category {
     my $arcid = $self->stash('archive');
 
     my $redis = LANraragi::Model::Config->get_redis;
-    
+
     return unless exec_with_lock( $self, $redis, "category-write:$catid", "remove_from_category", $catid, sub {
-        my ( $result, $err ) = LANraragi::Model::Category::remove_from_category( $catid, $arcid );
-        
+        my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgCategory::remove_from_category( $catid, $arcid );
+
         if ($result) {
             my $successMessage = "Removed $arcid from Category $catid!";
-            my %category       = LANraragi::Model::Category::get_category($catid);
-            my $title          = LANraragi::Model::Archive::get_title($arcid);
+            my %category       = LANraragi::Model::PsilabsDev::PgCategory::get_category($catid);
+            my $title          = LANraragi::Model::PsilabsDev::PgArchive::get_title($arcid);
 
             if ( %category && defined($title) ) {
                 $successMessage = "Removed \"$title\" from category \"$category{name}\"!";

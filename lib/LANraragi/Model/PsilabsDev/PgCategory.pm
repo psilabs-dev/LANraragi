@@ -474,4 +474,134 @@ sub remove_bookmark_link {
     return $cat_id;
 }
 
+# replaces: LANraragi::Model::Category::remove_from_category
+# remove_from_category(categoryid, arcid)
+#   Removes the given archive ID from the given category.
+#   Only valid if the category is a Static category.
+#   Returns 1 on success, 0 on failure alongside an error message.
+sub remove_from_category {
+    my ( $cat_id, $arc_id ) = @_;
+    my $logger = get_logger("PgCategory", "lanraragi");
+    my $dbh = get_postgresql_dbh();
+    my $err = "";
+
+    # Check if category exists
+    my $cat_check_sql = 'SELECT catid, search FROM lrr_category WHERE catid = ?';
+    my $cat_sth = $dbh->prepare($cat_check_sql);
+    $cat_sth->execute($cat_id);
+    my $cat_row = $cat_sth->fetchrow_hashref;
+    $cat_sth->finish;
+
+    if (!$cat_row) {
+        $err = "$cat_id doesn't exist in the database!";
+        $logger->warn($err);
+        $dbh->disconnect();
+        return (0, $err);
+    }
+
+    # Check if category is static (search field is NULL or empty)
+    my $search = $cat_row->{search} // '';
+    unless ($search eq '') {
+        $err = "$cat_id is a favorite search, it doesn't contain archives.";
+        $logger->error($err);
+        $dbh->disconnect();
+        return (0, $err);
+    }
+
+    # Remove archive from category
+    my $delete_sql = 'DELETE FROM lrr_category_to_archive_map WHERE catid = ? AND arcid = ?';
+    my $delete_sth = $dbh->prepare($delete_sql);
+    eval {
+        $delete_sth->execute($cat_id, $arc_id);
+    };
+
+    my $delete_error = $@;
+    if ($delete_error) {
+        $err = "Failed to remove $arc_id from category $cat_id: $delete_error";
+        $logger->error($err);
+        $dbh->disconnect();
+        return (0, $err);
+    }
+
+    $delete_sth->finish;
+    $dbh->disconnect();
+
+    $logger->debug("Removed $arc_id from category $cat_id");
+
+    # Postgres doesn't need cache invalidation
+    return (1, $err);
+}
+
+# replaces: LANraragi::Model::Category::delete_category
+# delete_category(id)
+#   Deletes the category with the given ID.
+#   If bookmark is linked to the category, remove the link.
+#   Returns 0 if the given ID isn't a category ID, 1 otherwise
+sub delete_category {
+    my $cat_id = $_[0];
+    my $logger = get_logger("PgCategory", "lanraragi");
+
+    if ( length($cat_id) != 14 ) {
+        # Probably not a category ID
+        $logger->error("$cat_id is not a category ID, doing nothing.");
+        return 0;
+    }
+
+    my $dbh = get_postgresql_dbh();
+
+    # Check if category exists
+    my $check_sql = 'SELECT catid FROM lrr_category WHERE catid = ?';
+    my $check_sth = $dbh->prepare($check_sql);
+    $check_sth->execute($cat_id);
+    my $exists = $check_sth->fetchrow_hashref;
+    $check_sth->finish;
+
+    if ($exists) {
+        # Check if bookmark is linked to this category and remove if so
+        my $redis = LANraragi::Model::Config->get_redis_config();
+        my $bookmark_catid = $redis->hget('LRR_CONFIG', 'bookmark_link') || "";
+
+        if ($bookmark_catid eq $cat_id) {
+            $redis->hdel('LRR_CONFIG', 'bookmark_link');
+            $logger->info("Removed link from bookmark to category $cat_id.");
+        }
+        $redis->quit();
+
+        # Delete the category
+        # First, delete all archive mappings for this category
+        # Then delete the category itself
+        $dbh->begin_work();
+        eval {
+            # Delete archive mappings
+            my $delete_map_sql = 'DELETE FROM lrr_category_to_archive_map WHERE catid = ?';
+            my $delete_map_sth = $dbh->prepare($delete_map_sql);
+            $delete_map_sth->execute($cat_id);
+            $delete_map_sth->finish;
+
+            # Delete the category
+            my $delete_cat_sql = 'DELETE FROM lrr_category WHERE catid = ?';
+            my $delete_cat_sth = $dbh->prepare($delete_cat_sql);
+            $delete_cat_sth->execute($cat_id);
+            $delete_cat_sth->finish;
+
+            $dbh->commit();
+        };
+
+        if ( my $error = $@ ) {
+            $dbh->rollback();
+            $logger->error("Error deleting category $cat_id: $error");
+            $dbh->disconnect();
+            return 0;
+        }
+
+        $dbh->disconnect();
+        $logger->info("Deleted category $cat_id");
+        return 1;
+    } else {
+        $logger->warn("$cat_id doesn't exist in the database!");
+        $dbh->disconnect();
+        return 1;
+    }
+}
+
 1;

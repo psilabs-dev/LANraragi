@@ -102,12 +102,12 @@ sub apply_routes {
 
     $logged_in->get('/tankoubons')->to('tankoubon#index');
 
-    $logged_in->get('/duplicates')->to('duplicates#index');             # TODO: require postgres migration
+    $logged_in->get('/duplicates')->to('duplicates#index');             # TODO: require postgres migration (done)
 
     # OPDS API
-    $public_api->get('/api/opds')->to('api-other#serve_opds_catalog');                  # TODO: require postgres migration
-    $public_api->get('/api/opds/:id')->to('api-other#serve_opds_item');                 # TODO: require postgres migration
-    $public_api->get('/api/opds/:id/pse')->to('api-other#serve_opds_page');             # TODO: require postgres migration
+    $public_api->get('/api/opds')->to('api-other#serve_opds_catalog');                  # TODO: require postgres migration (done)
+    $public_api->get('/api/opds/:id')->to('api-other#serve_opds_item');                 # TODO: require postgres migration (done)
+    $public_api->get('/api/opds/:id/pse')->to('api-other#serve_opds_page');             # TODO: require postgres migration (done)
 
     # Miscellaneous API
     $public_api->get('/api/info')->to('api-other#serve_serverinfo');                    # TODO: require postgres migration (done)
@@ -132,21 +132,21 @@ sub apply_routes {
     } else {
         $public_api->put('/api/archives/:id/progress/:page')->to('api-archive#update_progress');         # TODO: require postgres migration (done)
     }
-    $public_api->delete('/api/archives/:id/isnew')->to('api-archive#clear_new');                    # TODO: require postgres migration
-    $public_api->get('/api/archives/:id')->to('api-archive#serve_metadata');                        # TODO: require postgres migration
-    $public_api->get('/api/archives/:id/categories')->to('api-archive#get_categories');             # TODO: require postgres migration
-    $public_api->get('/api/archives/:id/tankoubons')->to('api-tankoubon#get_tankoubons_file');      # TODO: require postgres migration
-    $public_api->get('/api/archives/:id/metadata')->to('api-archive#serve_metadata');               # TODO: require postgres migration
-    $logged_in_api->put('/api/archives/upload')->to('api-archive#create_archive');                  # TODO: require postgres migration
-    $logged_in_api->put('/api/archives/:id/thumbnail')->to('api-archive#update_thumbnail');         # TODO: require postgres migration
-    $logged_in_api->put('/api/archives/:id/metadata')->to('api-archive#update_metadata');           # TODO: require postgres migration
-    $logged_in_api->delete('/api/archives/:id')->to('api-archive#delete_archive');                  # TODO: require postgres migration
+    $public_api->delete('/api/archives/:id/isnew')->to('api-archive#clear_new');                    # TODO: require postgres migration (done)
+    $public_api->get('/api/archives/:id')->to('api-archive#serve_metadata');                        # TODO: require postgres migration (done)
+    $public_api->get('/api/archives/:id/categories')->to('api-archive#get_categories');             # TODO: require postgres migration (done)
+    $public_api->get('/api/archives/:id/tankoubons')->to('api-tankoubon#get_tankoubons_file');      # TODO: require postgres migration (done)
+    $public_api->get('/api/archives/:id/metadata')->to('api-archive#serve_metadata');               # TODO: require postgres migration (done)
+    $logged_in_api->put('/api/archives/upload')->to('api-archive#create_archive');                  # TODO: require postgres migration (done)
+    $logged_in_api->put('/api/archives/:id/thumbnail')->to('api-archive#update_thumbnail');         # TODO: require postgres migration (done)
+    $logged_in_api->put('/api/archives/:id/metadata')->to('api-archive#update_metadata');           # TODO: require postgres migration (done)
+    $logged_in_api->delete('/api/archives/:id')->to('api-archive#delete_archive');                  # TODO: require postgres migration (done)
 
     # Search API
-    $public_api->get('/search')->to('api-search#handle_datatables');                    # TODO: require postgres migration
-    $public_api->get('/api/search')->to('api-search#handle_api');                       # TODO: require postgres migration
-    $public_api->get('/api/search/random')->to('api-search#get_random_archives');       # TODO: require postgres migration
-    $logged_in_api->delete('/api/search/cache')->to('api-search#clear_cache');          # TODO: require postgres migration
+    $public_api->get('/search')->to('api-search#handle_datatables');                    # TODO: require postgres migration (done)
+    $public_api->get('/api/search')->to('api-search#handle_api');                       # TODO: require postgres migration (done)
+    $public_api->get('/api/search/random')->to('api-search#get_random_archives');       # TODO: require postgres migration (done)
+    $logged_in_api->delete('/api/search/cache')->to('api-search#clear_cache');          # TODO: require postgres migration (done)
 
     # Database API
     $logged_in_api->get('/api/database/backup')->to('api-database#serve_backup');       # TODO: require postgres migration (done)
@@ -172,20 +172,20 @@ sub apply_routes {
     $public_api->get('/api/categories/:id')->to('api-category#get_category');                           # TODO: require postgres migration (done)
     $logged_in_api->put('/api/categories/bookmark_link/:id')->to('api-category#update_bookmark_link');  # TODO: require postgres migration (done)
     $logged_in_api->put('/api/categories')->to('api-category#create_category');                         # TODO: require postgres migration (done)
-    $logged_in_api->put('/api/categories/:id')->to('api-category#update_category');                     # TODO: require postgres migration
+    $logged_in_api->put('/api/categories/:id')->to('api-category#update_category');                     # TODO: require postgres migration (done)
     $logged_in_api->delete('/api/categories/bookmark_link')->to('api-category#remove_bookmark_link');   # TODO: require postgres migration (done)
-    $logged_in_api->delete('/api/categories/:id')->to('api-category#delete_category');                  # TODO: require postgres migration
-    $logged_in_api->put('/api/categories/:id/:archive')->to('api-category#add_to_category');            # TODO: require postgres migration
-    $logged_in_api->delete('/api/categories/:id/:archive')->to('api-category#remove_from_category');    # TODO: require postgres migration
+    $logged_in_api->delete('/api/categories/:id')->to('api-category#delete_category');                  # TODO: require postgres migration (done)
+    $logged_in_api->put('/api/categories/:id/:archive')->to('api-category#add_to_category');            # TODO: require postgres migration (done)
+    $logged_in_api->delete('/api/categories/:id/:archive')->to('api-category#remove_from_category');    # TODO: require postgres migration (done)
 
     # Tankoubon API
-    $public_api->get('/api/tankoubons')->to('api-tankoubon#get_tankoubon_list');                        # TODO: require postgres migration
-    $public_api->get('/api/tankoubons/:id')->to('api-tankoubon#get_tankoubon');                         # TODO: require postgres migration
-    $logged_in_api->put('/api/tankoubons')->to('api-tankoubon#create_tankoubon');                       # TODO: require postgres migration
-    $logged_in_api->put('/api/tankoubons/:id')->to('api-tankoubon#update_tankoubon');                   # TODO: require postgres migration
-    $logged_in_api->delete('/api/tankoubons/:id')->to('api-tankoubon#delete_tankoubon');                # TODO: require postgres migration
-    $logged_in_api->put('/api/tankoubons/:id/:archive')->to('api-tankoubon#add_to_tankoubon');          # TODO: require postgres migration
-    $logged_in_api->delete('/api/tankoubons/:id/:archive')->to('api-tankoubon#remove_from_tankoubon');  # TODO: require postgres migration
+    $public_api->get('/api/tankoubons')->to('api-tankoubon#get_tankoubon_list');                        # TODO: require postgres migration (done)
+    $public_api->get('/api/tankoubons/:id')->to('api-tankoubon#get_tankoubon');                         # TODO: require postgres migration (done)
+    $logged_in_api->put('/api/tankoubons')->to('api-tankoubon#create_tankoubon');                       # TODO: require postgres migration (done)
+    $logged_in_api->put('/api/tankoubons/:id')->to('api-tankoubon#update_tankoubon');                   # TODO: require postgres migration (done)
+    $logged_in_api->delete('/api/tankoubons/:id')->to('api-tankoubon#delete_tankoubon');                # TODO: require postgres migration (done)
+    $logged_in_api->put('/api/tankoubons/:id/:archive')->to('api-tankoubon#add_to_tankoubon');          # TODO: require postgres migration (done)
+    $logged_in_api->delete('/api/tankoubons/:id/:archive')->to('api-tankoubon#remove_from_tankoubon');  # TODO: require postgres migration (done)
 
 }
 

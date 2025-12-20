@@ -4,7 +4,7 @@ use Mojo::Base 'Mojolicious::Controller';
 use Mojo::JSON qw(encode_json decode_json);
 
 use LANraragi::Model::PsilabsDev::PgStats;
-use LANraragi::Model::Opds;
+use LANraragi::Model::PsilabsDev::PgOpds;
 use LANraragi::Utils::Generic    qw(render_api_response);
 use LANraragi::Utils::Plugins    qw(get_plugin get_plugins);
 use LANraragi::Utils::PsilabsDev::PgPlugins qw(use_plugin);
@@ -44,13 +44,13 @@ sub serve_serverinfo {
 # Basic OPDS catalog
 sub serve_opds_catalog {
     my $self = shift;
-    $self->render( text => LANraragi::Model::Opds::generate_opds_catalog($self), format => 'xml' );
+    $self->render( text => LANraragi::Model::PsilabsDev::PgOpds::generate_opds_catalog($self), format => 'xml' );
 }
 
 sub serve_opds_item {
     my $self = shift;
     my $id   = $self->stash('id');
-    $self->render( text => LANraragi::Model::Opds::generate_opds_item( $self, $id ), format => 'xml' );
+    $self->render( text => LANraragi::Model::PsilabsDev::PgOpds::generate_opds_item( $self, $id ), format => 'xml' );
 }
 
 # OPDS-PSE specific endpoint
@@ -59,7 +59,7 @@ sub serve_opds_page {
     my $id   = $self->stash('id');
     my $page = $self->req->param('page') || 1;
 
-    LANraragi::Model::Opds::render_archive_page( $self, $id, $page );
+    LANraragi::Model::PsilabsDev::PgOpds::render_archive_page( $self, $id, $page );
 }
 
 #Remove temp dir.

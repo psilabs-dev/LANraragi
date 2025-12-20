@@ -15,6 +15,7 @@ use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Utils::Tags qw(split_tags_to_array join_tags_to_string);
 use LANraragi::Utils::String qw(trim trim_CRLF);
 use List::MoreUtils qw(uniq);
+use List::Util qw(max);
 use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
 use LANraragi::Utils::Path;
 use LANraragi::Utils::PsilabsDev::PgPath qw(get_archive_path);
@@ -26,7 +27,7 @@ use LANraragi::Model::PsilabsDev::PgTankoubon;
 # Functions for interacting with Postgres.
 use Exporter 'import';
 our @EXPORT_OK = qw(
-  get_archive set_tags set_tags_with_dbh set_title set_title_with_dbh set_summary set_summary_with_dbh set_isnew clear_new_all invalidate_cache clean_database clean_categories_and_tanks change_archive_id change_archive_id_with_dbh drop_database
+  get_archive get_archive_json get_archive_json_multi set_tags set_tags_with_dbh set_title set_title_with_dbh set_summary set_summary_with_dbh set_isnew clear_new_all invalidate_cache clean_database clean_categories_and_tanks change_archive_id change_archive_id_with_dbh drop_database
 );
 
 # replaces LANraragi::Utils::Database::get_archive
@@ -93,6 +94,197 @@ sub get_archive ($id) {
         $dbh->disconnect();
         return ();
     }
+}
+
+# Internal function for building an archive JSON from Postgres data.
+# This is similar to LANraragi::Utils::Database::build_json but does NOT apply
+# redis_decode to text fields. Postgres data with client_encoding=UTF8 is already
+# properly UTF-8 encoded, while Redis stores binary data that requires decoding.
+# Applying redis_decode to already-decoded Postgres data causes double-decoding corruption.
+sub build_json_pg ( $id, %hash ) {
+
+    # Grab all metadata from the hash
+    my ( $name, $title, $tags, $summary, $file, $isnew, $progress, $pagecount, $lastreadtime, $arcsize ) =
+      @hash{qw(name title tags summary file isnew progress pagecount lastreadtime arcsize)};
+
+    $file = LANraragi::Utils::Path::create_path($file);
+
+    # Return undef if the file doesn't exist.
+    return unless ( defined($file) && -e $file );
+
+    # NOTE: Unlike Database::build_json, we do NOT call redis_decode here.
+    # Postgres data is already UTF-8 encoded.
+
+    # Workaround if title was incorrectly parsed as blank
+    if ( !defined($title) || $title =~ /^\s*$/ ) {
+        $title = $name;
+    }
+
+    my $arcdata = {
+        arcid        => $id,
+        title        => $title,
+        filename     => $name,
+        tags         => $tags,
+        summary      => $summary,
+        isnew        => $isnew ? $isnew : "false",
+        extension    => lc( ( split( /\./, $file ) )[-1] ),
+        progress     => $progress     ? int($progress)     : 0,
+        pagecount    => $pagecount    ? int($pagecount)    : 0,
+        lastreadtime => $lastreadtime ? int($lastreadtime) : 0,
+        size         => $arcsize      ? int($arcsize)      : 0
+    };
+
+    return $arcdata;
+}
+
+# replaces LANraragi::Utils::Database::get_archive_json
+# Builds a JSON object for an archive registered in the database and returns it.
+sub get_archive_json ( $dbh, $id ) {
+    my $logger = get_logger( "PgDatabase", "lanraragi" );
+
+    my $arcdata;
+
+    eval {
+        # Check if this is a tank ID
+        if ( $id =~ /^TANK/ ) {
+            $arcdata = build_tank_json_pg($id);
+        } else {
+            # Check if archive exists
+            my $check_sth = $dbh->prepare('SELECT arcid FROM lrr_archive WHERE arcid = ?');
+            $check_sth->execute($id);
+            my $exists = $check_sth->fetchrow_hashref;
+            $check_sth->finish;
+
+            die "Archive $id does not exist" unless $exists;
+
+            # Get full archive data
+            my $sth = $dbh->prepare(q{
+                SELECT arcid, filename, title, summary, thumbhash, isnew, progress, pagecount, lastreadtime, arcsize
+                FROM lrr_archive
+                WHERE arcid = ?
+            });
+            $sth->execute($id);
+            my $row = $sth->fetchrow_hashref;
+            $sth->finish;
+
+            # Get tags as a comma-separated string
+            my $tag_sth = $dbh->prepare(q{
+                SELECT string_agg(
+                    CASE
+                        WHEN t.namespace = '' THEN t.value
+                        ELSE t.namespace || ':' || t.value
+                    END,
+                    ', '
+                ) as tags
+                FROM lrr_archive_to_tag_map atm
+                JOIN lrr_tag t ON atm.tagid = t.tagid
+                WHERE atm.arcid = ?
+            });
+            $tag_sth->execute($id);
+            my $tag_row = $tag_sth->fetchrow_hashref;
+            my $tags = $tag_row->{tags} // "";
+            $tag_sth->finish;
+
+            # Extract name from filename
+            my ( $name, $path, $suffix ) = fileparse( $row->{filename}, qr/\.[^.]*/ );
+
+            # Build hash for build_json_pg
+            my %hash = (
+                name         => $name,
+                title        => $row->{title} // "",
+                tags         => $tags,
+                summary      => $row->{summary} // "",
+                file         => $row->{filename},
+                isnew        => $row->{isnew} ? "true" : "false",
+                progress     => $row->{progress} // 0,
+                pagecount    => $row->{pagecount} // 0,
+                lastreadtime => $row->{lastreadtime} // 0,
+                arcsize      => $row->{arcsize} // 0
+            );
+
+            # Use Postgres-specific build_json_pg which doesn't apply redis_decode
+            $arcdata = build_json_pg( $id, %hash );
+        }
+    };
+
+    if ( my $error = $@ ) {
+        $logger->error("Error in get_archive_json for $id: $error");
+        return undef;
+    }
+
+    return $arcdata;
+}
+
+# Internal helper for building a tank JSON (Postgres version).
+# NOTE: Cannot directly reuse LANraragi::Utils::Database::build_tank_json because
+# it calls LANraragi::Model::Tankoubon::get_tankoubon (Redis version) instead of
+# LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon (Postgres version).
+# The aggregation logic below is identical to Database::build_tank_json.
+sub build_tank_json_pg ($id) {
+    my ( $total, $count, %tank ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon( $id, 1 );
+
+    # Aggregate data of all archives in the tank
+    my $aggregate_tags      = "";
+    my $aggregate_names     = "";
+    my $aggregate_isnew     = 0;
+    my $aggregate_progress  = 0;
+    my $aggregate_pagecount = 0;
+    my $latest_readtime     = 0;
+    my $aggregate_size      = 0;
+
+    foreach my $archive_info ( @{ $tank{full_data} } ) {
+        $aggregate_tags  .= %$archive_info{tags} . ",";
+        $aggregate_names .= %$archive_info{title} . ",";
+        $aggregate_isnew     = $aggregate_isnew || %$archive_info{isnew};
+        $aggregate_progress  = $aggregate_progress + %$archive_info{progress};
+        $aggregate_pagecount = $aggregate_pagecount + %$archive_info{pagecount};
+        $aggregate_size      = $aggregate_size + %$archive_info{size};
+        $latest_readtime     = max( $latest_readtime, %$archive_info{lastreadtime} );
+    }
+
+    chop $aggregate_tags;
+    chop $aggregate_names;
+
+    my $arcdata = {
+        arcid        => $id,
+        title        => $tank{name},
+        filename     => "",
+        tags         => $aggregate_tags,
+        summary      => "Tankoubon containing: $aggregate_names",
+        isnew        => $aggregate_isnew ? $aggregate_isnew : "false",
+        extension    => ".tank",
+        progress     => $aggregate_progress,
+        pagecount    => $aggregate_pagecount,
+        lastreadtime => $latest_readtime,
+        size         => $aggregate_size
+    };
+
+    return $arcdata;
+}
+
+# replaces LANraragi::Utils::Database::get_archive_json_multi
+# Builds JSON objects for multiple archives and returns them as an array.
+sub get_archive_json_multi (@ids) {
+    my $logger = get_logger( "PgDatabase", "lanraragi" );
+    my $dbh = get_postgresql_dbh();
+
+    my @archives;
+
+    eval {
+        foreach my $id (@ids) {
+            my $arcdata = get_archive_json( $dbh, $id );
+            if ($arcdata) {
+                push @archives, $arcdata;
+            }
+        }
+    };
+
+    if ( my $error = $@ ) {
+        $logger->error("Error in get_archive_json_multi: $error");
+    }
+
+    $dbh->disconnect();
+    return @archives;
 }
 
 # replaces LANraragi::Utils::Database::set_title

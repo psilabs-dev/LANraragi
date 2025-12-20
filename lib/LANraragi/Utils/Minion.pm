@@ -235,18 +235,33 @@ sub add_tasks {
             my ($threshold) = @args;
 
             my $logger = get_logger( "Minion", "minion" );
-            my $redis  = LANraragi::Model::Config->get_redis;
-            my @keys   = $redis->keys('????????????????????????????????????????');
 
             $logger->info("Starting find duplicate job (threshold = $threshold)");
 
-            # Gather thumbhashes
+            # Gather thumbhashes from Postgres instead of Redis
+            my $dbh = get_postgresql_dbh();
             my %thumbhashes;
-            foreach my $id (@keys) {
-                my $thumbhash = $redis->hget( $id, "thumbhash" );
-                $thumbhashes{$id} = $thumbhash if $thumbhash;
+
+            eval {
+                my $sql = 'SELECT arcid, thumbhash FROM lrr_archive WHERE thumbhash IS NOT NULL';
+                my $sth = $dbh->prepare($sql);
+                $sth->execute();
+
+                while (my $row = $sth->fetchrow_hashref) {
+                    $thumbhashes{$row->{arcid}} = $row->{thumbhash};
+                }
+
+                $sth->finish;
+            };
+
+            if (my $error = $@) {
+                $logger->error("Error fetching thumbhashes from Postgres: $error");
+                $dbh->disconnect();
+                $job->fail( { errors => [$error] } );
+                return;
             }
-            $redis->quit();
+
+            $dbh->disconnect();
 
             # Prepare to track visited nodes
             my $visited = MCE::Shared->hash;

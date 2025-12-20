@@ -3,9 +3,9 @@ use Mojo::Base 'Mojolicious::Controller';
 
 use List::Util qw(min);
 
-use LANraragi::Model::Search;
+use LANraragi::Model::PsilabsDev::PgSearch;
 use LANraragi::Utils::Generic  qw(render_api_response);
-use LANraragi::Utils::Database qw(invalidate_cache get_archive_json_multi);
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(invalidate_cache get_archive_json_multi);
 
 # Undocumented API matching the Datatables spec.
 sub handle_datatables {
@@ -55,7 +55,7 @@ sub handle_datatables {
 
     # TODO add a parameter to datatables for grouptanks? Not really essential rn tho
     my ( $total, $filtered, @ids ) =
-      LANraragi::Model::Search::do_search( $filter, $categoryfilter, $start, $sortkey, $sortorder, $newfilter, $untaggedfilter, 0 );
+      LANraragi::Model::PsilabsDev::PgSearch::do_search( $filter, $categoryfilter, $start, $sortkey, $sortorder, $newfilter, $untaggedfilter, 0 );
 
     $self->render( json => get_datatables_object( $draw, $total, $filtered, @ids ) );
 }
@@ -77,7 +77,7 @@ sub handle_api {
 
     $sortorder = ( $sortorder && $sortorder eq 'desc' ) ? 1 : 0;
 
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
         $filter, $category, $start, $sortkey, $sortorder,
         $newfilter eq "true",
         $untaggedf eq "true",
@@ -106,7 +106,7 @@ sub get_random_archives {
     my $random_count = $req->param('count')         || 5;
 
     # Use the search engine to get IDs matching the filter/category selection, with start=-1 to get all data
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
         $filter, $category, -1, "title", 0,
         $newfilter eq "true",
         $untaggedf eq "true",

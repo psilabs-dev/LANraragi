@@ -12,7 +12,8 @@ use File::Temp qw(tempdir tmpnam);
 use File::Basename;
 
 use LANraragi::Utils::Generic  qw(render_api_response is_archive get_bytelength exec_with_lock);
-use LANraragi::Utils::Database qw(get_archive_json set_isnew);
+use LANraragi::Utils::Database qw();
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive_json set_isnew);
 use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Redis    qw(redis_encode);
 use LANraragi::Utils::Path     qw(compat_path get_archive_path move_path);
@@ -20,11 +21,12 @@ use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
 use LANraragi::Utils::PsilabsDev::PgPath;
 
 use LANraragi::Model::Archive;
-use LANraragi::Model::Category;
 use LANraragi::Model::Config;
 use LANraragi::Model::Reader;
 use LANraragi::Model::PsilabsDev::PgArchive;
+use LANraragi::Model::PsilabsDev::PgCategory;
 use LANraragi::Model::PsilabsDev::PgReader;
+use LANraragi::Model::PsilabsDev::PgUpload;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -57,10 +59,10 @@ sub serve_untagged_archivelist {
 sub serve_metadata {
     my $self  = shift;
     my $id    = check_id_parameter( $self, "metadata" ) || return;
-    my $redis = $self->LRR_CONF->get_redis;
+    my $dbh   = get_postgresql_dbh();
 
-    my $arcdata = get_archive_json( $redis, $id );
-    $redis->quit;
+    my $arcdata = get_archive_json( $dbh, $id );
+    $dbh->disconnect();
 
     if ($arcdata) {
         $self->render( json => $arcdata );
@@ -75,7 +77,7 @@ sub get_categories {
     my $self = shift;
     my $id   = check_id_parameter( $self, "find_arc_categories" ) || return;
 
-    my @categories = LANraragi::Model::Category::get_categories_containing_archive($id);
+    my @categories = LANraragi::Model::PsilabsDev::PgCategory::get_categories_containing_archive($id);
 
     $self->render(
         json => {
@@ -95,7 +97,7 @@ sub serve_thumbnail {
 sub update_thumbnail {
     my $self = shift;
     my $id   = check_id_parameter( $self, "update_thumbnail" ) || return;
-    LANraragi::Model::Archive::update_thumbnail( $self, $id );
+    LANraragi::Model::PsilabsDev::PgArchive::update_thumbnail( $self, $id );
 }
 
 sub generate_page_thumbnails {
@@ -226,7 +228,7 @@ sub create_archive {
         }
 
         my ( $status_code, $id, $response_title, $message ) =
-          LANraragi::Model::Upload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
+          LANraragi::Model::PsilabsDev::PgUpload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
 
         unless ( $status_code == 200 ) {
             return $self->render(
@@ -303,7 +305,7 @@ sub delete_archive {
     my $redis = LANraragi::Model::Config->get_redis;
 
     return unless exec_with_lock( $self, $redis, "archive-write:$id", "delete_archive", $id, sub {
-        my $delStatus = LANraragi::Model::Archive::delete_archive($id);
+        my $delStatus = LANraragi::Model::PsilabsDev::PgArchive::delete_archive($id);
 
         $self->render(
             json => {
@@ -327,10 +329,10 @@ sub update_metadata {
     my $redis = LANraragi::Model::Config->get_redis;
 
     return unless exec_with_lock( $self, $redis, "archive-write:$id", "update_metadata", $id, sub {
-        my $err = LANraragi::Model::Archive::update_metadata( $id, $title, $tags, $summary );
+        my $err = LANraragi::Model::PsilabsDev::PgArchive::update_metadata( $id, $title, $tags, $summary );
 
         if ( $err eq "" ) {
-            my $title          = LANraragi::Model::Archive::get_title($id);
+            my $title          = LANraragi::Model::PsilabsDev::PgArchive::get_title($id);
             my $successMessage = "Updated metadata for \"$title\"!";
 
             render_api_response( $self, "update_metadata", undef, $successMessage );

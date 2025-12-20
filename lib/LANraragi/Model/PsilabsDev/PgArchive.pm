@@ -9,8 +9,10 @@ use utf8;
 
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Utils::Generic qw(render_api_response);
+use LANraragi::Utils::String qw(trim trim_CRLF);
 use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
-use LANraragi::Utils::Path qw(create_path);
+use LANraragi::Utils::PsilabsDev::PgDatabase;
+use LANraragi::Utils::Path qw(create_path unlink_path);
 use LANraragi::Utils::Archive qw(extract_single_file);
 use LANraragi::Utils::PageCache qw(fetch put);
 use LANraragi::Utils::PsilabsDev::PgPath;
@@ -18,6 +20,7 @@ use LANraragi::Model::Config;
 use LANraragi::Model::Reader;
 
 use File::Basename;
+use File::Path qw(remove_tree);
 
 # replaces LANraragi::Model::Archive::generate_archive_list
 # Generates an array of all the archive JSONs in the database that have existing files.
@@ -422,6 +425,228 @@ sub serve_page {
             format              => substr( $file_ext, 1 )
         );
     }
+}
+
+# replaces LANraragi::Model::Archive::get_title
+# get_title(id)
+#   Returns the title for the archive matching the given id.
+#   Returns undef if the id doesn't exist.
+sub get_title ($id) {
+
+    my $logger = get_logger( "PgArchive", "lanraragi" );
+
+    if ( $id eq "" ) {
+        $logger->debug("No archive ID provided.");
+        return undef;
+    }
+
+    my $dbh = get_postgresql_dbh();
+    my $title;
+
+    eval {
+        my $sql = 'SELECT title FROM lrr_archive WHERE arcid = ?';
+        my $sth = $dbh->prepare($sql);
+        $sth->execute($id);
+        my $row = $sth->fetchrow_hashref;
+        $title = $row->{title} if $row;
+        $sth->finish;
+    };
+
+    if (my $error = $@) {
+        $logger->error("Error retrieving title for archive $id: $error");
+    }
+
+    $dbh->disconnect();
+
+    return $title;
+}
+
+# replaces LANraragi::Model::Archive::update_thumbnail
+sub update_thumbnail {
+
+    my ( $self, $id ) = @_;
+
+    my $page = $self->req->param('page');
+    $page = 1 unless $page;
+
+    my $thumbdir = LANraragi::Model::Config->get_thumbdir;
+    my $use_jxl  = LANraragi::Model::Config->get_jxlthumbpages;
+    my $format   = $use_jxl ? 'jxl' : 'jpg';
+
+    # Thumbnails are stored in the content directory, thumb subfolder.
+    # Another subfolder with the first two characters of the id is used for FS optimization.
+    my $subfolder = substr( $id, 0, 2 );
+    my $thumbname = "$thumbdir/$subfolder/$id.$format";    # Path to main thumbnail
+
+    my $newthumb = "";
+
+    # Get the required thumbnail we want to make the main one
+    no warnings 'experimental::try';
+    try {
+        $newthumb = LANraragi::Utils::PsilabsDev::PgArchive::extract_thumbnail( $thumbdir, $id, $page, 1, 1 )
+    } catch ($e) {
+        LANraragi::Utils::Generic::render_api_response( $self, "update_thumbnail", $e );
+        return;
+    }
+
+    if ( !$newthumb ) {
+        LANraragi::Utils::Generic::render_api_response( $self, "update_thumbnail", "Thumbnail not generated." );
+    } else {
+        $self->render(
+            json => {
+                operation     => "update_thumbnail",
+                new_thumbnail => $newthumb,
+                success       => 1
+            }
+        );
+    }
+
+}
+
+# replaces LANraragi::Model::Archive::update_metadata
+sub update_metadata {
+    my ( $id, $title, $tags, $summary ) = @_;
+
+    my $logger = get_logger( "PgArchive", "lanraragi" );
+
+    unless ( defined $title || defined $tags ) {
+        return "No metadata parameters (Please supply title, tags or summary)";
+    }
+
+    # Clean up the user's inputs.
+    ( $_ = LANraragi::Utils::String::trim($_) )      for ( $title, $tags );
+    ( $_ = LANraragi::Utils::String::trim_CRLF($_) ) for ( $title, $tags );
+
+    # Use a transaction to ensure all metadata updates are atomic
+    my $dbh = get_postgresql_dbh();
+
+    eval {
+        $dbh->begin_work;
+
+        if ( defined $title ) {
+            LANraragi::Utils::PsilabsDev::PgDatabase::set_title_with_dbh( $dbh, $id, $title );
+        }
+
+        if ( defined $tags ) {
+            LANraragi::Utils::PsilabsDev::PgDatabase::set_tags_with_dbh( $dbh, $id, $tags );
+        }
+
+        if ( defined $summary ) {
+            LANraragi::Utils::PsilabsDev::PgDatabase::set_summary_with_dbh( $dbh, $id, $summary );
+        }
+
+        $dbh->commit;
+    };
+
+    my $error = $@;
+    if ($error) {
+        $logger->error("Error updating metadata for archive $id: $error");
+        eval { $dbh->rollback };
+        $dbh->disconnect;
+        return $error;
+    }
+
+    $dbh->disconnect;
+
+    # No errors.
+    return "";
+}
+
+# replaces LANraragi::Model::Archive::delete_archive
+# Deletes the archive with the given id from Postgres, and the matching archive file/thumbnail.
+sub delete_archive ($id) {
+
+    my $logger = get_logger( "PgArchive", "lanraragi" );
+    my $dbh = get_postgresql_dbh();
+    my $filename;
+
+    eval {
+        # Get archive filename before deletion
+        my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
+        my $sth = $dbh->prepare($sql);
+        $sth->execute($id);
+        my $row = $sth->fetchrow_hashref;
+        $sth->finish;
+
+        unless ($row) {
+            $logger->warn("Archive $id doesn't exist in the database");
+            die "Archive not found";
+        }
+
+        $filename = $row->{filename};
+
+        # Start transaction for multi-step deletion
+        $dbh->begin_work;
+
+        # Delete from junction tables manually (schema has no CASCADE)
+        # Note: We delete junction tables in the same transaction for atomicity
+
+        # Delete archive-to-tag mappings
+        my $del_tags_sql = 'DELETE FROM lrr_archive_to_tag_map WHERE arcid = ?';
+        my $del_tags_sth = $dbh->prepare($del_tags_sql);
+        $del_tags_sth->execute($id);
+        $del_tags_sth->finish;
+        $logger->debug("Deleted tag mappings for archive $id");
+
+        # Delete archive-to-category mappings
+        my $del_cats_sql = 'DELETE FROM lrr_category_to_archive_map WHERE arcid = ?';
+        my $del_cats_sth = $dbh->prepare($del_cats_sql);
+        $del_cats_sth->execute($id);
+        $del_cats_sth->finish;
+        $logger->debug("Deleted category mappings for archive $id");
+
+        # Delete archive-to-tank mappings
+        my $del_tanks_sql = 'DELETE FROM lrr_tank_to_archive_map WHERE arcid = ?';
+        my $del_tanks_sth = $dbh->prepare($del_tanks_sql);
+        $del_tanks_sth->execute($id);
+        $del_tanks_sth->finish;
+        $logger->debug("Deleted tankoubon mappings for archive $id");
+
+        # Finally, delete the archive itself
+        my $del_arc_sql = 'DELETE FROM lrr_archive WHERE arcid = ?';
+        my $del_arc_sth = $dbh->prepare($del_arc_sql);
+        $del_arc_sth->execute($id);
+        $del_arc_sth->finish;
+
+        # Commit transaction
+        $dbh->commit;
+
+        $logger->info("Deleted archive $id from database");
+    };
+
+    if (my $error = $@) {
+        $logger->error("Error deleting archive $id: $error");
+        eval { $dbh->rollback };
+        $dbh->disconnect();
+        return "0";
+    }
+
+    $dbh->disconnect();
+
+    # Delete the physical file and thumbnails
+    if ( defined($filename) && $filename ne "" ) {
+        my $file = create_path($filename);
+
+        if ( defined($file) && -e $file ) {
+            my $status = unlink_path( $file );
+
+            my $thumbdir  = LANraragi::Model::Config->get_thumbdir;
+            my $subfolder = substr( $id, 0, 2 );
+
+            my $jpg_thumbname = "$thumbdir/$subfolder/$id.jpg";
+            unlink $jpg_thumbname;
+
+            my $jxl_thumbname = "$thumbdir/$subfolder/$id.jxl";
+            unlink $jxl_thumbname;
+
+            # Delete the thumbpages folder
+            remove_tree("$thumbdir/$subfolder/$id/");
+
+            return $status ? $filename : "0";
+        }
+    }
+
+    return "0";
 }
 
 1;
