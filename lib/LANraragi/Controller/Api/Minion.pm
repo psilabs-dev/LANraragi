@@ -29,7 +29,14 @@ sub minion_job_status {
         );
 
     } else {
-        render_api_response( $self, "minion_job_status", "No job with this ID." );
+        return $self->render(
+            json => {
+                operation => "minion_job_status",
+                success   => 0,
+                error     => "No job with this ID."
+            },
+            status => 404
+        );
     }
 }
 
@@ -42,7 +49,14 @@ sub minion_job_detail {
     if ($job) {
         $self->render( json => $job->info );
     } else {
-        render_api_response( $self, "minion_job_detail", "No job with this ID." );
+        return $self->render(
+            json => {
+                operation => "minion_job_detail",
+                success   => 0,
+                error     => "No job with this ID."
+            },
+            status => 404
+        );
     }
 }
 

@@ -29,8 +29,14 @@ sub get_tankoubon {
     my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon( $tank_id, $fulldata, $page );
 
     unless (%tankoubon) {
-        render_api_response( $self, "get_tankoubon", "The given tankoubon does not exist." );
-        return;
+        return $self->render(
+            json => {
+                operation => "get_tankoubon",
+                success   => 0,
+                error     => "The given tankoubon does not exist."
+            },
+            status => 404
+        );
     }
 
     $self->render( json => { result => \%tankoubon, total => $total, filtered => $filtered } );
@@ -68,7 +74,14 @@ sub delete_tankoubon {
     if ($result) {
         render_api_response( $self, "delete_tankoubon" );
     } else {
-        render_api_response( $self, "delete_tankoubon", "The given tankoubon does not exist." );
+        return $self->render(
+            json => {
+                operation => "delete_tankoubon",
+                success   => 0,
+                error     => "The given tankoubon does not exist."
+            },
+            status => 404
+        );
     }
 }
 

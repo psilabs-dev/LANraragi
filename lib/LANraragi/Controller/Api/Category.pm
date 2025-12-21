@@ -21,8 +21,14 @@ sub get_category {
     my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($catid);
 
     unless (%category) {
-        render_api_response( $self, "get_category", "The given category does not exist." );
-        return;
+        return $self->render(
+            json => {
+                operation => "get_category",
+                success   => 0,
+                error     => "The given category does not exist."
+            },
+            status => 404
+        );
     }
 
     $self->render( json => \%category );
@@ -58,8 +64,14 @@ sub update_category {
     my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($catid);
 
     unless (%category) {
-        render_api_response( $self, "update_category", "The given category does not exist." );
-        return;
+        return $self->render(
+            json => {
+                operation => "update_category",
+                success   => 0,
+                error     => "The given category does not exist."
+            },
+            status => 404
+        );
     }
 
     my $name   = $self->req->param('name')   || $category{name};
@@ -90,7 +102,14 @@ sub delete_category {
         if ($result) {
             render_api_response( $self, "delete_category" );
         } else {
-            render_api_response( $self, "delete_category", "The given category does not exist." );
+            return $self->render(
+                json => {
+                    operation => "delete_category",
+                    success   => 0,
+                    error     => "The given category does not exist."
+                },
+                status => 404
+            );
         }
     });
 }

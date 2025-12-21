@@ -67,7 +67,14 @@ sub serve_metadata {
     if ($arcdata) {
         $self->render( json => $arcdata );
     } else {
-        render_api_response( $self, "metadata", "This ID doesn't exist on the server." );
+        $self->render(
+            json => {
+                operation => "metadata",
+                success   => 0,
+                error     => "This ID doesn't exist on the server."
+            },
+            status => 404
+        );
     }
 }
 
@@ -328,7 +335,14 @@ sub update_metadata {
 
     # Check if archive exists before acquiring lock
     unless ( LANraragi::Model::PsilabsDev::PgArchive::archive_exists($id) ) {
-        render_api_response( $self, "update_metadata", "Archive with ID $id not found." );
+        $self->render(
+            json => {
+                operation => "update_metadata",
+                success   => 0,
+                error     => "Archive with ID $id not found."
+            },
+            status => 404
+        );
         return;
     }
 
