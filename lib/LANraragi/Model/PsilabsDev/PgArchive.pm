@@ -427,6 +427,38 @@ sub serve_page {
     }
 }
 
+# archive_exists(id)
+#   Returns 1 if the archive exists in the database, 0 otherwise.
+sub archive_exists ($id) {
+
+    my $logger = get_logger( "PgArchive", "lanraragi" );
+
+    if ( $id eq "" ) {
+        $logger->debug("No archive ID provided.");
+        return 0;
+    }
+
+    my $dbh = get_postgresql_dbh();
+    my $exists = 0;
+
+    eval {
+        my $sql = 'SELECT 1 FROM lrr_archive WHERE arcid = ? LIMIT 1';
+        my $sth = $dbh->prepare($sql);
+        $sth->execute($id);
+        my $row = $sth->fetchrow_hashref;
+        $exists = 1 if $row;
+        $sth->finish;
+    };
+
+    if (my $error = $@) {
+        $logger->error("Error checking existence for archive $id: $error");
+    }
+
+    $dbh->disconnect();
+
+    return $exists;
+}
+
 # replaces LANraragi::Model::Archive::get_title
 # get_title(id)
 #   Returns the title for the archive matching the given id.

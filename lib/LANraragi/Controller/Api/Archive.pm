@@ -326,6 +326,12 @@ sub update_metadata {
     my $tags    = $self->req->param('tags');
     my $summary = $self->req->param('summary');
 
+    # Check if archive exists before acquiring lock
+    unless ( LANraragi::Model::PsilabsDev::PgArchive::archive_exists($id) ) {
+        render_api_response( $self, "update_metadata", "Archive with ID $id not found." );
+        return;
+    }
+
     my $redis = LANraragi::Model::Config->get_redis;
 
     return unless exec_with_lock( $self, $redis, "archive-write:$id", "update_metadata", $id, sub {
