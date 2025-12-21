@@ -66,6 +66,22 @@ sub socket {
 
     my @rules = get_computed_tagrules();
     my ( $rules, $hash_replace_rules ) = build_tag_replace_hash( \@rules );
+
+    # Prepare database connection and statement ONCE at WebSocket connection time
+    my $dbh = get_postgresql_dbh();
+    my $tag_fetch_sth = $dbh->prepare(q{
+        SELECT string_agg(
+            CASE
+                WHEN t.namespace = '' THEN t.value
+                ELSE t.namespace || ':' || t.value
+            END,
+            ', '
+        ) as tags
+        FROM lrr_archive_to_tag_map atm
+        JOIN lrr_tag t ON atm.tagid = t.tagid
+        WHERE atm.arcid = ?
+    });
+
     $self->on(
         message => sub {
             my ( $self, $msg ) = @_;
@@ -154,44 +170,51 @@ sub socket {
 
                 $logger->debug("Applying tag rules to $id...");
 
-                # Get tags from Postgres
-                my $dbh = get_postgresql_dbh();
-                my $sth = $dbh->prepare(q{
-                    SELECT string_agg(
-                        CASE
-                            WHEN t.namespace = '' THEN t.value
-                            ELSE t.namespace || ':' || t.value
-                        END,
-                        ', '
-                    ) as tags
-                    FROM lrr_archive_to_tag_map atm
-                    JOIN lrr_tag t ON atm.tagid = t.tagid
-                    WHERE atm.arcid = ?
-                });
-                $sth->execute($id);
-                my $row = $sth->fetchrow_hashref;
-                my $tags = $row->{tags} // "";
-                $sth->finish;
-                $dbh->disconnect();
+                # Use WebSocket-level connection with explicit transaction
+                eval {
+                    $dbh->begin_work;
 
-                my @tagarray = split_tags_to_array($tags);
-                @tagarray = rewrite_tags( \@tagarray, $rules, $hash_replace_rules );
+                    # REUSE prepared statement instead of creating new connection per message
+                    $tag_fetch_sth->execute($id);
+                    my $row = $tag_fetch_sth->fetchrow_hashref;
+                    my $tags = $row ? $row->{tags} : "";
 
-                # Merge array with commas
-                my $newtags = join( ', ', @tagarray );
-                $logger->debug("New tags: $newtags");
-                set_tags( $id, $newtags );
+                    my @tagarray = split_tags_to_array($tags);
+                    @tagarray = rewrite_tags( \@tagarray, $rules, $hash_replace_rules );
 
-                $client->send(
-                    {   json => {
-                            id      => $id,
-                            success => 1,
-                            tags    => $newtags,
+                    # Merge array with commas
+                    my $newtags = join( ', ', @tagarray );
+                    $logger->debug("New tags: $newtags");
+
+                    # Use _with_dbh variant to share connection
+                    set_tags_with_dbh( $dbh, $id, $newtags, 0 );
+
+                    $dbh->commit;
+
+                    $client->send(
+                        {   json => {
+                                id      => $id,
+                                success => 1,
+                                tags    => $newtags,
+                            }
                         }
-                    }
-                );
+                    );
 
-                invalidate_cache();
+                    invalidate_cache();
+                };
+
+                if ( my $error = $@ ) {
+                    eval { $dbh->rollback };
+                    $logger->error("Failed to apply tag rules to $id: $error");
+                    $client->send(
+                        {   json => {
+                                id      => $id,
+                                success => 0,
+                                message => "Failed to apply tag rules: $error"
+                            }
+                        }
+                    );
+                }
 
                 return;
             }
@@ -231,6 +254,10 @@ sub socket {
         finish => sub {
             $logger->info('Client disconnected, halting remaining operations');
             $cancelled = 1;
+
+            # Clean up on WebSocket close
+            $tag_fetch_sth->finish if $tag_fetch_sth;
+            $dbh->disconnect if $dbh;
         }
     );
 

@@ -505,6 +505,20 @@ sub set_tags_with_dbh ( $dbh, $id, $newtags, $append = 0 ) {
     # Parse and insert new tags
     my @tag_array = split_tags_to_array($newtags);
 
+    # Prepare all statements ONCE before the loop
+    my $tag_sth = $dbh->prepare(q{
+        INSERT INTO lrr_tag (namespace, value)
+        VALUES (?, ?)
+        ON CONFLICT (namespace, value) DO NOTHING
+    });
+    my $tagid_sth = $dbh->prepare(q{
+        SELECT tagid FROM lrr_tag WHERE namespace = ? AND value = ?
+    });
+    my $map_sth = $dbh->prepare(q{
+        INSERT INTO lrr_archive_to_tag_map (arcid, tagid, update_date)
+        VALUES (?, ?, CURRENT_DATE)
+    });
+
     foreach my $tag (@tag_array) {
         next unless $tag;
 
@@ -523,31 +537,21 @@ sub set_tags_with_dbh ( $dbh, $id, $newtags, $append = 0 ) {
         $value = trim($value);
 
         # Insert tag if it doesn't exist (ON CONFLICT DO NOTHING)
-        my $tag_sth = $dbh->prepare(q{
-            INSERT INTO lrr_tag (namespace, value)
-            VALUES (?, ?)
-            ON CONFLICT (namespace, value) DO NOTHING
-        });
         $tag_sth->execute($namespace, $value);
-        $tag_sth->finish;
 
         # Get the tag ID
-        my $tagid_sth = $dbh->prepare(q{
-            SELECT tagid FROM lrr_tag WHERE namespace = ? AND value = ?
-        });
         $tagid_sth->execute($namespace, $value);
         my $row = $tagid_sth->fetchrow_hashref;
         my $tagid = $row->{tagid};
-        $tagid_sth->finish;
 
         # Insert mapping
-        my $map_sth = $dbh->prepare(q{
-            INSERT INTO lrr_archive_to_tag_map (arcid, tagid, update_date)
-            VALUES (?, ?, CURRENT_DATE)
-        });
         $map_sth->execute($id, $tagid);
-        $map_sth->finish;
     }
+
+    # Finish all statements AFTER the loop
+    $tag_sth->finish;
+    $tagid_sth->finish;
+    $map_sth->finish;
 
     # Update the search_tsv column for full-text search
     my $update_tsv_sth = $dbh->prepare(q{

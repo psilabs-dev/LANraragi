@@ -25,6 +25,15 @@ SQL
     my $cat_sth = $dbh->prepare($cat_sql);
     $cat_sth->execute();
 
+    # Prepare archive fetching statement once before loop
+    my $arc_sql = <<'SQL';
+        SELECT arcid
+        FROM lrr_category_to_archive_map
+        WHERE catid = ?
+        ORDER BY arcid
+SQL
+    my $arc_sth = $dbh->prepare($arc_sql);
+
     my @result;
 
     while (my $cat_row = $cat_sth->fetchrow_hashref) {
@@ -35,20 +44,12 @@ SQL
 
         # Only fetch archives for static categories (search is empty)
         if ($search eq '') {
-            my $arc_sql = <<'SQL';
-                SELECT arcid
-                FROM lrr_category_to_archive_map
-                WHERE catid = ?
-                ORDER BY arcid
-SQL
-
-            my $arc_sth = $dbh->prepare($arc_sql);
             $arc_sth->execute($catid);
 
             while (my $arc_row = $arc_sth->fetchrow_hashref) {
                 push @archives, $arc_row->{arcid};
             }
-            $arc_sth->finish;
+            # Don't finish here - allows statement handle reuse
         }
 
         # Build category hash matching Redis implementation format
@@ -63,6 +64,7 @@ SQL
         push @result, \%category;
     }
     $cat_sth->finish;
+    $arc_sth->finish;
 
     $dbh->disconnect();
 
@@ -154,27 +156,28 @@ SQL
     my $cat_sth = $dbh->prepare($cat_sql);
     $cat_sth->execute();
 
+    # Prepare archive fetching statement once before loop
+    my $arc_sql = <<'SQL';
+        SELECT arcid
+        FROM lrr_category_to_archive_map
+        WHERE catid = ?
+        ORDER BY arcid
+SQL
+    my $arc_sth = $dbh->prepare($arc_sql);
+
     my @result;
 
     while (my $cat_row = $cat_sth->fetchrow_hashref) {
         my $catid = $cat_row->{catid};
 
         # Fetch archives for this category
-        my $arc_sql = <<'SQL';
-            SELECT arcid
-            FROM lrr_category_to_archive_map
-            WHERE catid = ?
-            ORDER BY arcid
-SQL
-
-        my $arc_sth = $dbh->prepare($arc_sql);
         $arc_sth->execute($catid);
 
         my @archives;
         while (my $arc_row = $arc_sth->fetchrow_hashref) {
             push @archives, $arc_row->{arcid};
         }
-        $arc_sth->finish;
+        # Don't finish here - allows statement handle reuse
 
         # Build category hash matching Redis implementation format
         my %category = (
@@ -188,6 +191,7 @@ SQL
         push @result, \%category;
     }
     $cat_sth->finish;
+    $arc_sth->finish;
 
     $dbh->disconnect();
 
@@ -220,6 +224,15 @@ SQL
     my $cat_sth = $dbh->prepare($sql);
     $cat_sth->execute($archive_id);
 
+    # Prepare archive fetching statement once before loop
+    my $arc_sql = <<'SQL';
+        SELECT arcid
+        FROM lrr_category_to_archive_map
+        WHERE catid = ?
+        ORDER BY arcid
+SQL
+    my $arc_sth = $dbh->prepare($arc_sql);
+
     my @result;
 
     while (my $cat_row = $cat_sth->fetchrow_hashref) {
@@ -228,21 +241,13 @@ SQL
         $logger->debug("$archive_id is in '" . $cat_row->{name} . "'");
 
         # Fetch all archives for this category to match Redis format
-        my $arc_sql = <<'SQL';
-            SELECT arcid
-            FROM lrr_category_to_archive_map
-            WHERE catid = ?
-            ORDER BY arcid
-SQL
-
-        my $arc_sth = $dbh->prepare($arc_sql);
         $arc_sth->execute($catid);
 
         my @archives;
         while (my $arc_row = $arc_sth->fetchrow_hashref) {
             push @archives, $arc_row->{arcid};
         }
-        $arc_sth->finish;
+        # Don't finish here - allows statement handle reuse
 
         # Build category hash matching Redis implementation format
         my %category = (
@@ -256,6 +261,7 @@ SQL
         push @result, \%category;
     }
     $cat_sth->finish;
+    $arc_sth->finish;
 
     $dbh->disconnect();
 
@@ -369,12 +375,13 @@ sub create_category {
         $cat_id = "SET_" . time();
 
         my $isnewkey = 0;
+        # Prepare statement ONCE before the loop
+        my $check_sth = $dbh->prepare('SELECT catid FROM lrr_category WHERE catid = ?');
+
         until ($isnewkey) {
             # Check if the category ID exists, move timestamp further if it does
-            my $check_sth = $dbh->prepare('SELECT catid FROM lrr_category WHERE catid = ?');
             $check_sth->execute($cat_id);
             my $exists = $check_sth->fetchrow_hashref;
-            $check_sth->finish;
 
             if ($exists) {
                 $cat_id = "SET_" . ( time() + 1 );
@@ -382,6 +389,8 @@ sub create_category {
                 $isnewkey = 1;
             }
         }
+
+        $check_sth->finish;  # Finish AFTER loop
     }
 
     # Check if category exists

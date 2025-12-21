@@ -27,27 +27,27 @@ SQL
     my $tank_sth = $dbh->prepare($tank_sql);
     $tank_sth->execute();
 
+    # Prepare archive query ONCE outside the loop
+    my $arc_sql = <<'SQL';
+        SELECT arcid
+        FROM lrr_tank_to_archive_map
+        WHERE tankid = ?
+        ORDER BY position
+SQL
+    my $arc_sth = $dbh->prepare($arc_sql);
+
     my @result;
 
     while (my $tank_row = $tank_sth->fetchrow_hashref) {
         my $tankid = $tank_row->{tankid};
 
-        # Fetch archives for this tankoubon
-        my $arc_sql = <<'SQL';
-            SELECT arcid
-            FROM lrr_tank_to_archive_map
-            WHERE tankid = ?
-            ORDER BY position
-SQL
-
-        my $arc_sth = $dbh->prepare($arc_sql);
+        # Execute the prepared statement for this tankoubon
         $arc_sth->execute($tankid);
 
         my @archives;
         while (my $arc_row = $arc_sth->fetchrow_hashref) {
             push @archives, $arc_row->{arcid};
         }
-        $arc_sth->finish;
 
         # Build tankoubon hash matching Redis implementation format
         my %tankoubon = (
@@ -61,6 +61,7 @@ SQL
         push @result, \%tankoubon;
     }
     $tank_sth->finish;
+    $arc_sth->finish;
 
     $dbh->disconnect();
 
@@ -106,12 +107,12 @@ sub create_tankoubon {
         $tank_id = "TANK_" . time();
 
         my $isnewkey = 0;
+        # Prepare statement once before loop
+        my $check_sth = $dbh->prepare('SELECT tankid FROM lrr_tank WHERE tankid = ?');
         until ($isnewkey) {
             # Check if the tank ID exists, move timestamp further if it does
-            my $check_sth = $dbh->prepare('SELECT tankid FROM lrr_tank WHERE tankid = ?');
             $check_sth->execute($tank_id);
             my $exists = $check_sth->fetchrow_hashref;
-            $check_sth->finish;
 
             if ($exists) {
                 $tank_id = "TANK_" . ( time() + 1 );
@@ -119,6 +120,7 @@ sub create_tankoubon {
                 $isnewkey = 1;
             }
         }
+        $check_sth->finish;
     }
 
     # Check if tank exists
@@ -410,19 +412,20 @@ sub update_archive_list {
     }
 
     # Verify all archives exist
+    my $arc_check_sth = $dbh->prepare('SELECT arcid FROM lrr_archive WHERE arcid = ?');
     foreach my $arc_id (@tank_archives) {
-        my $arc_check_sth = $dbh->prepare('SELECT arcid FROM lrr_archive WHERE arcid = ?');
         $arc_check_sth->execute($arc_id);
         my $arc_exists = $arc_check_sth->fetchrow_hashref;
-        $arc_check_sth->finish;
 
         unless ($arc_exists) {
             $err = "$arc_id does not exist in the database.";
             $logger->error($err);
+            $arc_check_sth->finish;
             $dbh->disconnect();
             return ( 0, $err );
         }
     }
+    $arc_check_sth->finish;
 
     # Begin transaction
     $dbh->begin_work;

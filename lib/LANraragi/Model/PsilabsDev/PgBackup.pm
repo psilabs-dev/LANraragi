@@ -35,26 +35,26 @@ SQL
     my $cat_sth = $dbh->prepare($cat_sql);
     $cat_sth->execute();
 
+    # Prepare archive statement ONCE before the category loop
+    my $cat_arc_sql = <<'SQL';
+        SELECT arcid
+        FROM lrr_category_to_archive_map
+        WHERE catid = ?
+        ORDER BY arcid
+SQL
+    my $cat_arc_sth = $dbh->prepare($cat_arc_sql);
+
     while (my $cat_row = $cat_sth->fetchrow_hashref) {
         my $catid = $cat_row->{catid};
 
         eval {
             # Fetch archives for this category
-            my $arc_sql = <<'SQL';
-                SELECT arcid
-                FROM lrr_category_to_archive_map
-                WHERE catid = ?
-                ORDER BY arcid
-SQL
-
-            my $arc_sth = $dbh->prepare($arc_sql);
-            $arc_sth->execute($catid);
+            $cat_arc_sth->execute($catid);
 
             my @archives;
-            while (my $arc_row = $arc_sth->fetchrow_hashref) {
+            while (my $arc_row = $cat_arc_sth->fetchrow_hashref) {
                 push @archives, $arc_row->{arcid};
             }
-            $arc_sth->finish;
 
             # Build category hash matching Redis backup format
             my %category = (
@@ -69,6 +69,7 @@ SQL
 
         $logger->trace("Backing up category $catid: $@");
     }
+    $cat_arc_sth->finish;
     $cat_sth->finish;
 
     # Backup tanks
@@ -97,30 +98,30 @@ SQL
     my $arc_sth = $dbh->prepare($arc_sql);
     $arc_sth->execute();
 
+    # Prepare tag statement ONCE before the archive loop
+    my $tag_sql = <<'SQL';
+        SELECT CASE
+            WHEN t.namespace = '' THEN t.value
+            ELSE t.namespace || ':' || t.value
+        END as tag
+        FROM lrr_archive_to_tag_map m
+        JOIN lrr_tag t ON m.tagid = t.tagid
+        WHERE m.arcid = ?
+        ORDER BY t.tagid
+SQL
+    my $tag_sth = $dbh->prepare($tag_sql);
+
     while (my $arc_row = $arc_sth->fetchrow_hashref) {
         my $id = $arc_row->{arcid};
 
         eval {
             # Get tags for this archive
-            my $tag_sql = <<'SQL';
-                SELECT CASE
-                    WHEN t.namespace = '' THEN t.value
-                    ELSE t.namespace || ':' || t.value
-                END as tag
-                FROM lrr_archive_to_tag_map m
-                JOIN lrr_tag t ON m.tagid = t.tagid
-                WHERE m.arcid = ?
-                ORDER BY t.tagid
-SQL
-
-            my $tag_sth = $dbh->prepare($tag_sql);
             $tag_sth->execute($id);
 
             my @tags;
             while (my $tag_row = $tag_sth->fetchrow_hashref) {
                 push @tags, $tag_row->{tag};
             }
-            $tag_sth->finish;
 
             my $tags_str = join(', ', @tags);
 
@@ -139,6 +140,7 @@ SQL
 
         $logger->trace("Backing up archive $id: $@");
     }
+    $tag_sth->finish;
     $arc_sth->finish;
 
     $dbh->disconnect();
@@ -169,6 +171,9 @@ sub restore_from_JSON {
         return;
     }
 
+    # Prepare archive existence check statement ONCE for all restore operations
+    my $check_arc_sth = $dbh->prepare('SELECT arcid FROM lrr_archive WHERE arcid = ?');
+
     # Restore categories
     foreach my $category (@{ $json->{categories} }) {
         my $cat_id = $category->{"catid"};
@@ -196,11 +201,8 @@ SQL
             # Add archives to category
             foreach my $arcid (@archives) {
                 # Check if archive exists
-                my $check_arc_sql = 'SELECT arcid FROM lrr_archive WHERE arcid = ?';
-                my $check_arc_sth = $dbh->prepare($check_arc_sql);
                 $check_arc_sth->execute($arcid);
                 my $arc_exists = $check_arc_sth->fetchrow_hashref;
-                $check_arc_sth->finish;
 
                 if ($arc_exists) {
                     my $insert_map_sql = <<'SQL';
@@ -252,11 +254,8 @@ SQL
             my $position = 1;
             foreach my $arcid (@archives) {
                 # Check if archive exists
-                my $check_arc_sql = 'SELECT arcid FROM lrr_archive WHERE arcid = ?';
-                my $check_arc_sth = $dbh->prepare($check_arc_sql);
                 $check_arc_sth->execute($arcid);
                 my $arc_exists = $check_arc_sth->fetchrow_hashref;
-                $check_arc_sth->finish;
 
                 if ($arc_exists) {
                     my $insert_map_sql = <<'SQL';
@@ -282,17 +281,31 @@ SQL
         }
     }
 
+    # Prepare SQL statements ONCE before loops (performance optimization)
+    my $insert_tag_sth = $dbh->prepare(<<'SQL');
+        INSERT INTO lrr_tag (namespace, value)
+        VALUES (?, ?)
+        ON CONFLICT (namespace, value) DO NOTHING
+SQL
+
+    my $select_tagid_sth = $dbh->prepare(<<'SQL');
+        SELECT tagid FROM lrr_tag WHERE namespace = ? AND value = ?
+SQL
+
+    my $insert_map_sth = $dbh->prepare(<<'SQL');
+        INSERT INTO lrr_archive_to_tag_map (arcid, tagid, update_date)
+        VALUES (?, ?, CURRENT_DATE)
+        ON CONFLICT DO NOTHING
+SQL
+
     # Restore archive metadata
     foreach my $archive (@{ $json->{archives} }) {
         my $id = $archive->{"arcid"};
 
         eval {
             # Check if archive exists
-            my $check_sql = 'SELECT arcid FROM lrr_archive WHERE arcid = ?';
-            my $check_sth = $dbh->prepare($check_sql);
-            $check_sth->execute($id);
-            my $exists = $check_sth->fetchrow_hashref;
-            $check_sth->finish;
+            $check_arc_sth->execute($id);
+            my $exists = $check_arc_sth->fetchrow_hashref;
 
             if ($exists) {
                 $logger->info("Restoring metadata for Archive $id...");
@@ -338,31 +351,16 @@ SQL
                             $value = $tag;
                         }
 
-                        # Insert or get tag
-                        my $insert_tag_sql = <<'SQL';
-                            INSERT INTO lrr_tag (namespace, value)
-                            VALUES (?, ?)
-                            ON CONFLICT (namespace, value) DO UPDATE
-                            SET namespace = EXCLUDED.namespace
-                            RETURNING tagid
-SQL
-
-                        my $insert_tag_sth = $dbh->prepare($insert_tag_sql);
+                        # Insert or do nothing if exists
                         $insert_tag_sth->execute($namespace, $value);
-                        my $tag_row = $insert_tag_sth->fetchrow_hashref;
+
+                        # Get the tagid (works whether tag was just inserted or already existed)
+                        $select_tagid_sth->execute($namespace, $value);
+                        my $tag_row = $select_tagid_sth->fetchrow_hashref;
                         my $tagid = $tag_row->{tagid};
-                        $insert_tag_sth->finish;
 
-                        # Link tag to archive
-                        my $insert_map_sql = <<'SQL';
-                            INSERT INTO lrr_archive_to_tag_map (arcid, tagid, update_date)
-                            VALUES (?, ?, CURRENT_DATE)
-                            ON CONFLICT DO NOTHING
-SQL
-
-                        my $insert_map_sth = $dbh->prepare($insert_map_sql);
+                        # Link tag to archive (using pre-prepared statement)
                         $insert_map_sth->execute($id, $tagid);
-                        $insert_map_sth->finish;
                     }
                 }
 
@@ -398,6 +396,12 @@ SQL
             $dbh->rollback() if $dbh->{AutoCommit} == 0;
         }
     }
+
+    # Finish prepared statements after all loops complete
+    $check_arc_sth->finish;
+    $insert_tag_sth->finish;
+    $select_tagid_sth->finish;
+    $insert_map_sth->finish;
 
     $dbh->disconnect();
     $logger->info("Backup restore completed.");

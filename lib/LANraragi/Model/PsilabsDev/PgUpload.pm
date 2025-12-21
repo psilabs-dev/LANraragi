@@ -135,9 +135,12 @@ sub handle_incoming_file ( $tempfile, $catid, $tags, $title, $summary ) {
 
     # Now that the file has been copied, we can add the timestamp tag and calculate pagecount.
     # (The file being physically present is necessary in case last modified time is used)
-    add_timestamp_tag( $id );
-    add_pagecount( $id );
-    add_arcsize( $id );
+    # Reuse database connection and fetch filename once to avoid redundant queries
+    my $metadata_dbh = get_postgresql_dbh();
+    add_timestamp_tag_with_dbh( $metadata_dbh, $id, $output_file );
+    add_pagecount_with_dbh( $metadata_dbh, $id, $output_file );
+    add_arcsize_with_dbh( $metadata_dbh, $id, $output_file );
+    $metadata_dbh->disconnect();
 
     # Generate thumbnail
     my $thumbdir = LANraragi::Model::Config->get_thumbdir;
@@ -157,17 +160,7 @@ sub handle_incoming_file ( $tempfile, $catid, $tags, $title, $summary ) {
 
         my ( $catsucc, $caterr ) = LANraragi::Model::PsilabsDev::PgCategory::add_to_category( $catid, $id );
         if ($catsucc) {
-            # Fetch category name
-            my $dbh = get_postgresql_dbh();
-            my $cat_sql = 'SELECT name FROM lrr_category WHERE catid = ?';
-            my $cat_sth = $dbh->prepare($cat_sql);
-            $cat_sth->execute($catid);
-            my $cat_row = $cat_sth->fetchrow_hashref;
-            $cat_sth->finish();
-            my $catname = $cat_row ? $cat_row->{name} : "Unknown";
-            $dbh->disconnect();
-
-            $successmsg .= "Added to Category '$catname'!";
+            $successmsg .= "Added to Category!";
         } else {
             $successmsg .= "Couldn't add to Category: $caterr";
         }
@@ -254,7 +247,8 @@ sub add_timestamp_tag ( $id ) {
 
 # Helper function: add_timestamp_tag_with_dbh
 # Adds a timestamp tag to the given ID, using provided database handle.
-sub add_timestamp_tag_with_dbh ( $dbh, $id ) {
+# Optional third parameter: filepath (avoids redundant database query if provided)
+sub add_timestamp_tag_with_dbh ( $dbh, $id, $filepath = undef ) {
 
     my $logger = get_logger( "Archive", "lanraragi" );
 
@@ -266,13 +260,16 @@ sub add_timestamp_tag_with_dbh ( $dbh, $id ) {
 
         if ( LANraragi::Model::Config->use_lastmodified eq "1" ) {
             $logger->debug("Using file date");
-            # Get the file path from database
-            my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
-            my $sth = $dbh->prepare($sql);
-            $sth->execute($id);
-            my $row = $sth->fetchrow_hashref;
-            my $filepath = $row ? $row->{filename} : '';
-            $sth->finish;
+
+            # Get the file path from database only if not provided
+            unless ($filepath) {
+                my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
+                my $sth = $dbh->prepare($sql);
+                $sth->execute($id);
+                my $row = $sth->fetchrow_hashref;
+                $filepath = $row ? $row->{filename} : '';
+                $sth->finish;
+            }
 
             if ($filepath && -e $filepath) {
                 $date = date_modified($filepath);
@@ -300,17 +297,20 @@ sub add_pagecount ( $id ) {
 
 # Helper function: add_pagecount_with_dbh
 # Adds pagecount to the archive metadata, using provided database handle.
-sub add_pagecount_with_dbh ( $dbh, $id ) {
+# Optional third parameter: filepath (avoids redundant database query if provided)
+sub add_pagecount_with_dbh ( $dbh, $id, $filepath = undef ) {
 
     my $logger = get_logger( "Archive", "lanraragi" );
 
-    # Get the file path
-    my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
-    my $sth = $dbh->prepare($sql);
-    $sth->execute($id);
-    my $row = $sth->fetchrow_hashref;
-    my $filepath = $row ? $row->{filename} : '';
-    $sth->finish;
+    # Get the file path from database only if not provided
+    unless ($filepath) {
+        my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
+        my $sth = $dbh->prepare($sql);
+        $sth->execute($id);
+        my $row = $sth->fetchrow_hashref;
+        $filepath = $row ? $row->{filename} : '';
+        $sth->finish;
+    }
 
     if (!$filepath || !-e $filepath) {
         $logger->warn("Cannot calculate pagecount for $id - file not found");
@@ -342,17 +342,20 @@ sub add_arcsize ( $id ) {
 
 # Helper function: add_arcsize_with_dbh
 # Adds archive size to the archive metadata, using provided database handle.
-sub add_arcsize_with_dbh ( $dbh, $id ) {
+# Optional third parameter: filepath (avoids redundant database query if provided)
+sub add_arcsize_with_dbh ( $dbh, $id, $filepath = undef ) {
 
     my $logger = get_logger( "Archive", "lanraragi" );
 
-    # Get the file path
-    my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
-    my $sth = $dbh->prepare($sql);
-    $sth->execute($id);
-    my $row = $sth->fetchrow_hashref;
-    my $filepath = $row ? $row->{filename} : '';
-    $sth->finish;
+    # Get the file path from database only if not provided
+    unless ($filepath) {
+        my $sql = 'SELECT filename FROM lrr_archive WHERE arcid = ?';
+        my $sth = $dbh->prepare($sql);
+        $sth->execute($id);
+        my $row = $sth->fetchrow_hashref;
+        $filepath = $row ? $row->{filename} : '';
+        $sth->finish;
+    }
 
     if (!$filepath || !-e $filepath) {
         $logger->warn("Cannot calculate arcsize for $id - file not found");
