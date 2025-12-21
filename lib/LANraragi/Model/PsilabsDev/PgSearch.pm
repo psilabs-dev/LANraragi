@@ -136,9 +136,16 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
         push @where_clauses, "a.isnew = TRUE";
     }
 
-    # Untagged filter - archives with no tags
+    # Untagged filter - archives with no "meaningful" tags
+    # Excludes basic metadata namespaces that don't count as "tagged"
+    # (matches logic in PgArchive::get_untagged_archives and Model::Stats)
     if ($untaggedonly) {
-        push @where_clauses, "NOT EXISTS (SELECT 1 FROM lrr_archive_to_tag_map WHERE arcid = a.arcid)";
+        push @where_clauses, "NOT EXISTS (
+        SELECT 1 FROM lrr_archive_to_tag_map atm
+        INNER JOIN lrr_tag t ON atm.tagid = t.tagid
+        WHERE atm.arcid = a.arcid
+        AND t.namespace NOT IN ('artist', 'parody', 'series', 'language', 'event', 'group', 'date_added', 'timestamp', 'source')
+    )";
     }
 
     # Process search tokens
