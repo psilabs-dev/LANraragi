@@ -10,6 +10,7 @@ no warnings 'experimental::signatures';
 use File::Basename;
 use Cwd qw(getcwd);
 use Redis;
+use Time::HiRes qw(time);
 use LANraragi::Model::Config;
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Utils::Tags qw(split_tags_to_array join_tags_to_string);
@@ -286,16 +287,23 @@ sub get_archive_json_multi (@ids) {
         }
 
         # Process tank IDs individually (they require complex aggregation logic)
-        foreach my $tank_id (@tank_ids) {
-            my $arcdata = build_tank_json_pg($tank_id);
-            if ($arcdata) {
-                push @archives, $arcdata;
+        if (@tank_ids) {
+            my $tank_start = time();
+            foreach my $tank_id (@tank_ids) {
+                my $arcdata = build_tank_json_pg($tank_id);
+                if ($arcdata) {
+                    push @archives, $arcdata;
+                }
             }
+            my $tank_time = (time() - $tank_start) * 1000;
+            $logger->debug(sprintf("[PERF] Tank JSON building: %.2fms (tank_count: %d)",
+                $tank_time, scalar @tank_ids));
         }
 
         # Batch process archive IDs with a single query
         if (@archive_ids) {
             # Use batch query to fetch all archives and their tags at once
+            my $query_start = time();
             my $placeholders = join(',', ('?') x @archive_ids);
             my $sth = $dbh->prepare(qq{
                 SELECT a.arcid, a.filename, a.title, a.summary, a.thumbhash,
@@ -341,13 +349,19 @@ sub get_archive_json_multi (@ids) {
                 }
             }
             $sth->finish;
+            my $query_time = (time() - $query_start) * 1000;
+            $logger->debug(sprintf("[PERF] Archive batch query execution: %.2fms (archive_count: %d)",
+                $query_time, scalar @archive_ids));
 
             # Add archives to result array in the original order (preserving input order)
+            my $transform_start = time();
             foreach my $id (@archive_ids) {
                 if (exists $archive_data{$id}) {
                     push @archives, $archive_data{$id};
                 }
             }
+            my $transform_time = (time() - $transform_start) * 1000;
+            $logger->debug(sprintf("[PERF] JSON transformation: %.2fms", $transform_time));
         }
     };
 

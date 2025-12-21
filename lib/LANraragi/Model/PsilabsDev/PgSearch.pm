@@ -8,6 +8,7 @@ use warnings;
 use utf8;
 
 use List::Util qw(min);
+use Time::HiRes qw(time);
 use LANraragi::Utils::Generic qw(intersect_arrays);
 use LANraragi::Utils::String qw(trim);
 use LANraragi::Utils::Logging qw(get_logger);
@@ -24,9 +25,11 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
     my $dbh = get_postgresql_dbh();
 
     my ( $total, $filtered, @ids );
+    my $start_time = time();
 
     eval {
         # Get total count of archives
+        my $count_start = time();
         if ($grouptanks) {
             # When grouping tanks: count standalone archives + tank count
             # Standalone archives = archives not in any tank
@@ -51,18 +54,23 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
             $count_sth->finish;
             $total = $count || 0;
         }
+        my $count_time = (time() - $count_start) * 1000;
+        $logger->debug(sprintf("[PERF] Total count: %.2fms (grouptanks: %s)", $count_time, $grouptanks ? 'true' : 'false'));
 
         # Determine pagination parameters
         my $keysperpage = LANraragi::Model::Config->get_pagesize;
         my $use_pagination = ( $start != -1 );
 
         # Perform the search with SQL-level pagination
+        my $search_start = time();
         ( $filtered, @ids ) = search_postgres(
             $dbh, $category_id, $filter, $sortkey, $sortorder,
             $newonly, $untaggedonly, $grouptanks,
             $use_pagination ? $start : undef,
             $use_pagination ? $keysperpage : undef
         );
+        my $search_time = (time() - $search_start) * 1000;
+        $logger->debug(sprintf("[PERF] search_postgres total: %.2fms", $search_time));
     };
 
     if ( my $error = $@ ) {
@@ -72,6 +80,9 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
     }
 
     $dbh->disconnect();
+
+    my $total_time = (time() - $start_time) * 1000;
+    $logger->debug(sprintf("[PERF] do_search total: %.2fms", $total_time));
 
     return ( $total, $filtered, @ids );
 }
@@ -83,7 +94,10 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
     my $logger = get_logger( "PgSearch Core", "lanraragi" );
 
     # Compute search filters
+    my $token_start = time();
     my @tokens = compute_search_filter($filter);
+    my $token_time = (time() - $token_start) * 1000;
+    $logger->debug(sprintf("[PERF] Token computation: %.2fms (token_count: %d)", $token_time, scalar @tokens));
 
     # Build the SQL query
     my @where_clauses = ();
@@ -99,7 +113,10 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
 
     # Category filter
     if ( $category_id && $category_id ne "" ) {
+        my $cat_start = time();
         my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($category_id);
+        my $cat_time = (time() - $cat_start) * 1000;
+        $logger->debug(sprintf("[PERF] Category lookup: %.2fms", $cat_time));
 
         if (%category) {
             if ( $category{search} && $category{search} ne "" ) {
@@ -309,10 +326,14 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
     # Get total count of matching archives (without pagination)
     my $count_sql = "SELECT COUNT(*) as total FROM lrr_archive a $lateral_join_sql $where_sql";
     $logger->debug("COUNT SQL: $count_sql");
+    my $count_start = time();
     my $count_sth = $dbh->prepare($count_sql);
     $count_sth->execute(@lateral_params, @params);
     my $archive_filtered_count = $count_sth->fetchrow_hashref->{total} || 0;
     $count_sth->finish;
+    my $count_time = (time() - $count_start) * 1000;
+    $logger->debug(sprintf("[PERF] Filtered COUNT query: %.2fms (lateral_join: %s)",
+        $count_time, $use_lateral_sort ? 'true' : 'false'));
 
     # Build LIMIT/OFFSET clause
     my $limit_sql = "";
@@ -330,6 +351,7 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
     $logger->debug("WHERE params: " . join(", ", @params));
     $logger->debug("LIMIT params: " . join(", ", @limit_params));
 
+    my $select_start = time();
     my $sth = $dbh->prepare($sql);
     # Execute with LATERAL params first (appear first in SQL), then WHERE params, then LIMIT params
     $sth->execute(@lateral_params, @params, @limit_params);
@@ -339,12 +361,29 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
         push @ids, $row->{arcid};
     }
     $sth->finish;
+    my $select_time = (time() - $select_start) * 1000;
+
+    # Determine sort type for logging
+    my $sort_desc = $sortkey || "title";
+    if ($sortkey && $sortkey ne "title" && $sortkey ne "lastread" && $use_lateral_sort) {
+        $sort_desc = "tag:$sortkey";
+    }
+
+    $logger->debug(sprintf("[PERF] Results SELECT query: %.2fms (sort: %s, lateral_join: %s, limit: %s, offset: %s)",
+        $select_time,
+        $sort_desc,
+        $use_lateral_sort ? 'true' : 'false',
+        defined $keysperpage ? $keysperpage : 'none',
+        defined $start ? $start : 'none'));
 
     # When grouptanks=true, we also need to fetch tank IDs that match the search criteria
     # and prepend them to the results (tanks typically come first)
     my $tank_filtered_count = 0;
     if ($grouptanks) {
+        my $tank_start = time();
         my ( $tank_count, @tank_ids ) = search_tanks_postgres($dbh, $category_id, $filter, $sortkey, $sortorder, $start, $keysperpage);
+        my $tank_time = (time() - $tank_start) * 1000;
+        $logger->debug(sprintf("[PERF] Tank search: %.2fms", $tank_time));
         $tank_filtered_count = $tank_count;
         if (@tank_ids) {
             $logger->debug( "Found " . scalar @tank_ids . " tank results (paginated)" );
@@ -490,10 +529,13 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $
     # Get total count of matching tanks (without pagination)
     my $count_sql = "SELECT COUNT(*) as total FROM lrr_tank t $where_sql";
     $logger->debug("Tank COUNT SQL: $count_sql");
+    my $count_start = time();
     my $count_sth = $dbh->prepare($count_sql);
     $count_sth->execute(@params);
     my $tank_filtered_count = $count_sth->fetchrow_hashref->{total} || 0;
     $count_sth->finish;
+    my $count_time = (time() - $count_start) * 1000;
+    $logger->debug(sprintf("[PERF] Tank COUNT query: %.2fms", $count_time));
 
     # Build LIMIT/OFFSET clause
     my $limit_sql = "";
@@ -510,6 +552,7 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $
     $logger->debug("Tank Params: " . join(", ", @params));
     $logger->debug("Tank LIMIT params: " . join(", ", @limit_params));
 
+    my $select_start = time();
     my $sth = $dbh->prepare($sql);
     $sth->execute(@params, @limit_params);
 
@@ -518,6 +561,11 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $
         push @tank_ids, $row->{tankid};
     }
     $sth->finish;
+    my $select_time = (time() - $select_start) * 1000;
+    $logger->debug(sprintf("[PERF] Tank SELECT query: %.2fms (limit: %s, offset: %s)",
+        $select_time,
+        defined $keysperpage ? $keysperpage : 'none',
+        defined $start ? $start : 'none'));
 
     return ( $tank_filtered_count, @tank_ids );
 }
