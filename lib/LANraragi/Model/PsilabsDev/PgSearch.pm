@@ -425,8 +425,9 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $
 
         if (%category) {
             if ( $category{search} && $category{search} ne "" ) {
-                # Dynamic category - search predicate is already in tokens
-                # No additional filtering needed here
+                # Dynamic category - add its search predicate to tokens
+                my @cat_tokens = compute_search_filter( $category{search} );
+                push @tokens, @cat_tokens;
             } else {
                 # Static category - filter by category membership
                 # Tanks can be in categories directly
