@@ -179,7 +179,7 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
         # For non-exact, we use ILIKE for partial matching
 
         my ($namespace, $value);
-        if ( $tag =~ /^([^:]+):(.+)$/ ) {
+        if ( $tag =~ /^([^:]+):(.*)$/ ) {
             $namespace = $1;
             $value = $2;
         } else {
@@ -211,18 +211,35 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
         if ($isexact) {
             # Exact match
             if (defined $namespace) {
-                $tag_clause = "EXISTS (
-                    SELECT 1 FROM lrr_archive_to_tag_map atm
-                    JOIN lrr_tag t ON atm.tagid = t.tagid
-                    WHERE atm.arcid = a.arcid
-                    AND t.namespace = ?
-                    AND t.value = ?
-                )";
-                if ($isneg) {
-                    $tag_clause = "NOT $tag_clause";
+                # Handle namespace-only search (e.g., "date_uploaded:")
+                if ($value eq "") {
+                    # Search for ANY tag with this namespace
+                    $tag_clause = "EXISTS (
+                        SELECT 1 FROM lrr_archive_to_tag_map atm
+                        JOIN lrr_tag t ON atm.tagid = t.tagid
+                        WHERE atm.arcid = a.arcid
+                        AND t.namespace = ?
+                    )";
+                    if ($isneg) {
+                        $tag_clause = "NOT $tag_clause";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, $namespace;
+                } else {
+                    # Search for specific namespace:value
+                    $tag_clause = "EXISTS (
+                        SELECT 1 FROM lrr_archive_to_tag_map atm
+                        JOIN lrr_tag t ON atm.tagid = t.tagid
+                        WHERE atm.arcid = a.arcid
+                        AND t.namespace = ?
+                        AND t.value = ?
+                    )";
+                    if ($isneg) {
+                        $tag_clause = "NOT $tag_clause";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, $namespace, $value;
                 }
-                push @where_clauses, $tag_clause;
-                push @params, $namespace, $value;
             } else {
                 # No namespace - match tag value only (archive IDs searchable via partial search)
                 $tag_clause = "EXISTS (
@@ -240,18 +257,35 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
         } else {
             # Partial match using ILIKE
             if (defined $namespace) {
-                $tag_clause = "EXISTS (
-                    SELECT 1 FROM lrr_archive_to_tag_map atm
-                    JOIN lrr_tag t ON atm.tagid = t.tagid
-                    WHERE atm.arcid = a.arcid
-                    AND t.namespace ILIKE ?
-                    AND t.value ILIKE ?
-                )";
-                if ($isneg) {
-                    $tag_clause = "NOT $tag_clause";
+                # Handle namespace-only search (e.g., "date_uploaded:")
+                if ($value eq "") {
+                    # Search for ANY tag with this namespace (partial namespace match)
+                    $tag_clause = "EXISTS (
+                        SELECT 1 FROM lrr_archive_to_tag_map atm
+                        JOIN lrr_tag t ON atm.tagid = t.tagid
+                        WHERE atm.arcid = a.arcid
+                        AND t.namespace ILIKE ?
+                    )";
+                    if ($isneg) {
+                        $tag_clause = "NOT $tag_clause";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace%";
+                } else {
+                    # Search for namespace and value (both partial match)
+                    $tag_clause = "EXISTS (
+                        SELECT 1 FROM lrr_archive_to_tag_map atm
+                        JOIN lrr_tag t ON atm.tagid = t.tagid
+                        WHERE atm.arcid = a.arcid
+                        AND t.namespace ILIKE ?
+                        AND t.value ILIKE ?
+                    )";
+                    if ($isneg) {
+                        $tag_clause = "NOT $tag_clause";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace%", "%$value%";
                 }
-                push @where_clauses, $tag_clause;
-                push @params, "%$namespace%", "%$value%";
             } else {
                 # No namespace - use FTS for simple searches, ILIKE for wildcards
                 # Check if value contains wildcards (before they were converted to SQL LIKE patterns)
@@ -452,7 +486,7 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $
 
         # Tag-based search for tanks
         my ($namespace, $value);
-        if ( $tag =~ /^([^:]+):(.+)$/ ) {
+        if ( $tag =~ /^([^:]+):(.*)$/ ) {
             $namespace = $1;
             $value = $2;
         } else {
@@ -473,12 +507,24 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $
             # Exact match - search in tank name or tags field
             if (defined $namespace) {
                 # For tanks, tags are stored as a text field, so we search within it
-                $tag_clause = "t.tags LIKE ?";
-                if ($isneg) {
-                    $tag_clause = "NOT ($tag_clause)";
+                # Handle namespace-only search (e.g., "date_uploaded:")
+                if ($value eq "") {
+                    # Search for ANY tag with this namespace
+                    $tag_clause = "t.tags LIKE ?";
+                    if ($isneg) {
+                        $tag_clause = "NOT ($tag_clause)";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace:%";
+                } else {
+                    # Search for specific namespace:value
+                    $tag_clause = "t.tags LIKE ?";
+                    if ($isneg) {
+                        $tag_clause = "NOT ($tag_clause)";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace:$value%";
                 }
-                push @where_clauses, $tag_clause;
-                push @params, "%$namespace:$value%";
             } else {
                 # No namespace - match in name or tags (tank IDs searchable via partial search)
                 $tag_clause = "(t.name = ? OR t.tags LIKE ?)";
@@ -491,12 +537,24 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $
         } else {
             # Partial match using ILIKE
             if (defined $namespace) {
-                $tag_clause = "t.tags ILIKE ?";
-                if ($isneg) {
-                    $tag_clause = "NOT ($tag_clause)";
+                # Handle namespace-only search (e.g., "date_uploaded:")
+                if ($value eq "") {
+                    # Search for ANY tag with this namespace (partial namespace match)
+                    $tag_clause = "t.tags ILIKE ?";
+                    if ($isneg) {
+                        $tag_clause = "NOT ($tag_clause)";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace:%";
+                } else {
+                    # Search for namespace and value (both partial match)
+                    $tag_clause = "t.tags ILIKE ?";
+                    if ($isneg) {
+                        $tag_clause = "NOT ($tag_clause)";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace%$value%";
                 }
-                push @where_clauses, $tag_clause;
-                push @params, "%$namespace%$value%";
             } else {
                 # No namespace - search in tank ID, name, summary, or tags
                 $tag_clause = "(
