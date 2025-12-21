@@ -195,7 +195,7 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
                 push @where_clauses, $tag_clause;
                 push @params, $namespace, $value;
             } else {
-                # No namespace - match value only
+                # No namespace - match tag value only (archive IDs searchable via partial search)
                 $tag_clause = "EXISTS (
                     SELECT 1 FROM lrr_archive_to_tag_map atm
                     JOIN lrr_tag t ON atm.tagid = t.tagid
@@ -224,10 +224,11 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
                 push @where_clauses, $tag_clause;
                 push @params, "%$namespace%", "%$value%";
             } else {
-                # No namespace - search in both title and tag values
-                # Use title search OR tag value search
+                # No namespace - search in title, archive ID, and tag values
+                # Use title search OR archive ID search OR tag value search
                 $tag_clause = "(
                     a.title ILIKE ?
+                    OR a.arcid ILIKE ?
                     OR EXISTS (
                         SELECT 1 FROM lrr_archive_to_tag_map atm
                         JOIN lrr_tag t ON atm.tagid = t.tagid
@@ -239,7 +240,7 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
                     $tag_clause = "NOT $tag_clause";
                 }
                 push @where_clauses, $tag_clause;
-                push @params, "%$value%", "%$value%", "%$value%";
+                push @params, "%$value%", "%$value%", "%$value%", "%$value%";
             }
         }
     }
@@ -381,7 +382,7 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder ) 
                 push @where_clauses, $tag_clause;
                 push @params, "%$namespace:$value%";
             } else {
-                # No namespace - match in name or tags
+                # No namespace - match in name or tags (tank IDs searchable via partial search)
                 $tag_clause = "(t.name = ? OR t.tags LIKE ?)";
                 if ($isneg) {
                     $tag_clause = "NOT $tag_clause";
@@ -399,9 +400,10 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder ) 
                 push @where_clauses, $tag_clause;
                 push @params, "%$namespace%$value%";
             } else {
-                # No namespace - search in name, summary, or tags
+                # No namespace - search in tank ID, name, summary, or tags
                 $tag_clause = "(
-                    t.name ILIKE ?
+                    t.tankid ILIKE ?
+                    OR t.name ILIKE ?
                     OR t.summary ILIKE ?
                     OR t.tags ILIKE ?
                 )";
@@ -409,7 +411,7 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder ) 
                     $tag_clause = "NOT $tag_clause";
                 }
                 push @where_clauses, $tag_clause;
-                push @params, "%$value%", "%$value%", "%$value%";
+                push @params, "%$value%", "%$value%", "%$value%", "%$value%";
             }
         }
     }
