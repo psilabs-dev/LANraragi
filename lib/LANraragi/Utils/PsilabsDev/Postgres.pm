@@ -384,6 +384,18 @@ SQL
     }
     $logger->info("Created index: idx_lrr_archive_to_tag_arcid_tagid");
 
+    # P15: Covering index for LATERAL JOIN optimization (tag-based sorting)
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_tag_tagid_namespace_value ON lrr_tag (tagid, namespace) INCLUDE (value)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_tag_tagid_namespace_value index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_tag_tagid_namespace_value");
+
     $logger->info("PostgreSQL database initialized successfully");
 }
 

@@ -709,6 +709,11 @@ sub change_archive_id ( $old_id, $new_id ) {
                 $update_size_sth->finish;
             }
 
+            # Update tag mappings FIRST (before updating search_tsv which queries this table)
+            my $update_tag_sth = $dbh->prepare('UPDATE lrr_archive_to_tag_map SET arcid = ? WHERE arcid = ?');
+            $update_tag_sth->execute($new_id, $old_id);
+            $update_tag_sth->finish;
+
             # Update the search_tsv column with the new arcid
             # The search_tsv includes arcid, title and tags, so we need to regenerate it
             my $update_tsv_sth = $dbh->prepare(q{
@@ -840,6 +845,11 @@ sub change_archive_id_with_dbh ( $dbh, $old_id, $new_id ) {
             $update_size_sth->execute($arcsize, $new_id);
             $update_size_sth->finish;
         }
+
+        # Update tag mappings FIRST (before updating search_tsv which queries this table)
+        my $update_tag_sth = $dbh->prepare('UPDATE lrr_archive_to_tag_map SET arcid = ? WHERE arcid = ?');
+        $update_tag_sth->execute($new_id, $old_id);
+        $update_tag_sth->finish;
 
         # Update the search_tsv column with the new arcid
         # The search_tsv includes arcid, title and tags, so we need to regenerate it

@@ -284,6 +284,7 @@ sub add_timestamp_tag_with_dbh ( $dbh, $id ) {
             $date = time();
         }
 
+        # Set date_added tag
         set_tags( $id, "date_added:$date", 1 );
     }
 }
