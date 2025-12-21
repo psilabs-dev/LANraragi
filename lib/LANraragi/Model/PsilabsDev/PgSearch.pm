@@ -324,16 +324,16 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
     }
 
     # Get total count of matching archives (without pagination)
-    my $count_sql = "SELECT COUNT(*) as total FROM lrr_archive a $lateral_join_sql $where_sql";
+    # NOTE: COUNT query does not need LATERAL JOIN (only used for sorting)
+    my $count_sql = "SELECT COUNT(*) as total FROM lrr_archive a $where_sql";
     $logger->debug("COUNT SQL: $count_sql");
     my $count_start = time();
     my $count_sth = $dbh->prepare($count_sql);
-    $count_sth->execute(@lateral_params, @params);
+    $count_sth->execute(@params);
     my $archive_filtered_count = $count_sth->fetchrow_hashref->{total} || 0;
     $count_sth->finish;
     my $count_time = (time() - $count_start) * 1000;
-    $logger->debug(sprintf("[PERF] Filtered COUNT query: %.2fms (lateral_join: %s)",
-        $count_time, $use_lateral_sort ? 'true' : 'false'));
+    $logger->debug(sprintf("[PERF] Filtered COUNT query: %.2fms", $count_time));
 
     # Build LIMIT/OFFSET clause
     my $limit_sql = "";
