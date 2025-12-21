@@ -163,6 +163,18 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
             $value = $tag;
         }
 
+        # Check if this looks like an archive ID (40-char hex string)
+        # Archive IDs need direct matching since FTS tokenizes them poorly
+        if (!defined $namespace && $value =~ /^[a-f0-9]{40}$/i) {
+            my $tag_clause = "a.arcid = ?";
+            if ($isneg) {
+                $tag_clause = "a.arcid != ?";
+            }
+            push @where_clauses, $tag_clause;
+            push @params, lc($value);  # arcids are lowercase in DB
+            next;
+        }
+
         # Convert wildcards: ? to _, * to %
         if (defined $namespace) {
             $namespace =~ s/\?/_/g;

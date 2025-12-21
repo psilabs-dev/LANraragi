@@ -271,6 +271,7 @@ sub add_to_filemap ( $redis_cfg, $file ) {
                     my $update_tsv_sth = $dbh->prepare(q{
                         UPDATE lrr_archive
                         SET search_tsv = to_tsvector('simple',
+                            COALESCE(arcid, '') || ' ' ||
                             COALESCE(title, '') || ' ' ||
                             COALESCE(
                                 (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
