@@ -48,6 +48,7 @@ SQL
             while (my $arc_row = $arc_sth->fetchrow_hashref) {
                 push @archives, $arc_row->{arcid};
             }
+            $arc_sth->finish;
         }
 
         # Build category hash matching Redis implementation format
@@ -61,6 +62,7 @@ SQL
 
         push @result, \%category;
     }
+    $cat_sth->finish;
 
     $dbh->disconnect();
 
@@ -172,6 +174,7 @@ SQL
         while (my $arc_row = $arc_sth->fetchrow_hashref) {
             push @archives, $arc_row->{arcid};
         }
+        $arc_sth->finish;
 
         # Build category hash matching Redis implementation format
         my %category = (
@@ -184,6 +187,7 @@ SQL
 
         push @result, \%category;
     }
+    $cat_sth->finish;
 
     $dbh->disconnect();
 
@@ -238,6 +242,7 @@ SQL
         while (my $arc_row = $arc_sth->fetchrow_hashref) {
             push @archives, $arc_row->{arcid};
         }
+        $arc_sth->finish;
 
         # Build category hash matching Redis implementation format
         my %category = (
@@ -250,6 +255,7 @@ SQL
 
         push @result, \%category;
     }
+    $cat_sth->finish;
 
     $dbh->disconnect();
 
@@ -272,6 +278,7 @@ sub add_to_category {
     my $cat_sth = $dbh->prepare($cat_check_sql);
     $cat_sth->execute($cat_id);
     my $cat_row = $cat_sth->fetchrow_hashref;
+    $cat_sth->finish;
 
     if (!$cat_row) {
         $err = "$cat_id doesn't exist in the database!";
@@ -294,6 +301,7 @@ sub add_to_category {
     my $arc_sth = $dbh->prepare($arc_check_sql);
     $arc_sth->execute($arc_id);
     my $arc_row = $arc_sth->fetchrow_hashref;
+    $arc_sth->finish;
 
     if (!$arc_row) {
         $err = "$arc_id does not exist in the database.";
@@ -307,6 +315,7 @@ sub add_to_category {
     my $check_sth = $dbh->prepare($check_sql);
     $check_sth->execute($cat_id, $arc_id);
     my $exists = $check_sth->fetchrow_hashref;
+    $check_sth->finish;
 
     if ($exists) {
         $err = "$arc_id already present in category $cat_id, doing nothing.";

@@ -39,6 +39,7 @@ SQL
     my $row = $sth->fetchrow_hashref;
     my $count = $row->{count} || 0;
 
+    $sth->finish;
     $dbh->disconnect();
 
     $logger->debug("Archive count: $count");
@@ -86,6 +87,7 @@ SQL
     my $row = $sth->fetchrow_hashref;
     my $size = $row->{total_size} || 0;
 
+    $sth->finish;
     $dbh->disconnect();
 
     # Convert to GB (matching Redis implementation)

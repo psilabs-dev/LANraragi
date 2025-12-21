@@ -163,6 +163,7 @@ sub handle_incoming_file ( $tempfile, $catid, $tags, $title, $summary ) {
             my $cat_sth = $dbh->prepare($cat_sql);
             $cat_sth->execute($catid);
             my $cat_row = $cat_sth->fetchrow_hashref;
+            $cat_sth->finish();
             my $catname = $cat_row ? $cat_row->{name} : "Unknown";
             $dbh->disconnect();
 

@@ -54,6 +54,7 @@ SQL
             while (my $arc_row = $arc_sth->fetchrow_hashref) {
                 push @archives, $arc_row->{arcid};
             }
+            $arc_sth->finish;
 
             # Build category hash matching Redis backup format
             my %category = (
@@ -68,6 +69,7 @@ SQL
 
         $logger->trace("Backing up category $catid: $@");
     }
+    $cat_sth->finish;
 
     # Backup tanks
     my ($total, $filtered, @tanks) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon_list(-1);
@@ -118,6 +120,7 @@ SQL
             while (my $tag_row = $tag_sth->fetchrow_hashref) {
                 push @tags, $tag_row->{tag};
             }
+            $tag_sth->finish;
 
             my $tags_str = join(', ', @tags);
 
@@ -136,6 +139,7 @@ SQL
 
         $logger->trace("Backing up archive $id: $@");
     }
+    $arc_sth->finish;
 
     $dbh->disconnect();
     return encode_json \%backup;
@@ -187,6 +191,7 @@ SQL
 
             my $insert_cat_sth = $dbh->prepare($insert_cat_sql);
             $insert_cat_sth->execute($cat_id, $name, 0, $search);
+            $insert_cat_sth->finish;
 
             # Add archives to category
             foreach my $arcid (@archives) {
@@ -195,6 +200,7 @@ SQL
                 my $check_arc_sth = $dbh->prepare($check_arc_sql);
                 $check_arc_sth->execute($arcid);
                 my $arc_exists = $check_arc_sth->fetchrow_hashref;
+                $check_arc_sth->finish;
 
                 if ($arc_exists) {
                     my $insert_map_sql = <<'SQL';
@@ -205,6 +211,7 @@ SQL
 
                     my $insert_map_sth = $dbh->prepare($insert_map_sql);
                     $insert_map_sth->execute($cat_id, $arcid);
+                    $insert_map_sth->finish;
                 }
             }
 
@@ -239,6 +246,7 @@ SQL
 
             my $insert_tank_sth = $dbh->prepare($insert_tank_sql);
             $insert_tank_sth->execute($tank_id, $name);
+            $insert_tank_sth->finish;
 
             # Add archives to tankoubon with position
             my $position = 1;
@@ -248,6 +256,7 @@ SQL
                 my $check_arc_sth = $dbh->prepare($check_arc_sql);
                 $check_arc_sth->execute($arcid);
                 my $arc_exists = $check_arc_sth->fetchrow_hashref;
+                $check_arc_sth->finish;
 
                 if ($arc_exists) {
                     my $insert_map_sql = <<'SQL';
@@ -258,6 +267,7 @@ SQL
 
                     my $insert_map_sth = $dbh->prepare($insert_map_sql);
                     $insert_map_sth->execute($tank_id, $arcid, $position);
+                    $insert_map_sth->finish;
                     $position++;
                 }
             }
@@ -282,6 +292,7 @@ SQL
             my $check_sth = $dbh->prepare($check_sql);
             $check_sth->execute($id);
             my $exists = $check_sth->fetchrow_hashref;
+            $check_sth->finish;
 
             if ($exists) {
                 $logger->info("Restoring metadata for Archive $id...");
@@ -302,6 +313,7 @@ SQL
                     $archive->{"thumbhash"} // '',
                     $id
                 );
+                $update_sth->finish;
 
                 # Parse and insert tags
                 my $tags_str = $archive->{"tags"} // '';
@@ -310,6 +322,7 @@ SQL
                     my $delete_tags_sql = 'DELETE FROM lrr_archive_to_tag_map WHERE arcid = ?';
                     my $delete_tags_sth = $dbh->prepare($delete_tags_sql);
                     $delete_tags_sth->execute($id);
+                    $delete_tags_sth->finish;
 
                     # Split tags by comma
                     my @tags = split(/,\s*/, $tags_str);
@@ -338,6 +351,7 @@ SQL
                         $insert_tag_sth->execute($namespace, $value);
                         my $tag_row = $insert_tag_sth->fetchrow_hashref;
                         my $tagid = $tag_row->{tagid};
+                        $insert_tag_sth->finish;
 
                         # Link tag to archive
                         my $insert_map_sql = <<'SQL';
@@ -348,6 +362,7 @@ SQL
 
                         my $insert_map_sth = $dbh->prepare($insert_map_sql);
                         $insert_map_sth->execute($id, $tagid);
+                        $insert_map_sth->finish;
                     }
                 }
 
@@ -371,6 +386,7 @@ SQL
 
                 my $update_tsv_sth = $dbh->prepare($update_tsv_sql);
                 $update_tsv_sth->execute($id);
+                $update_tsv_sth->finish;
 
                 $dbh->commit();
             }

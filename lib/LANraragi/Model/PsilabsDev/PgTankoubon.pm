@@ -47,6 +47,7 @@ SQL
         while (my $arc_row = $arc_sth->fetchrow_hashref) {
             push @archives, $arc_row->{arcid};
         }
+        $arc_sth->finish;
 
         # Build tankoubon hash matching Redis implementation format
         my %tankoubon = (
@@ -59,6 +60,7 @@ SQL
 
         push @result, \%tankoubon;
     }
+    $tank_sth->finish;
 
     $dbh->disconnect();
 
