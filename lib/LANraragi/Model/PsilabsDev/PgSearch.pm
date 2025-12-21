@@ -326,7 +326,9 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
         $where_sql = "WHERE " . join( " AND ", @where_clauses );
     }
 
-    # Build LATERAL JOIN for tag-based sorting (optimization to avoid correlated subquery)
+    # Build JOIN for tag-based sorting
+    # Using DISTINCT ON to efficiently get one tag value per archive
+    # This is much faster than LATERAL JOIN which executes for every archive row
     my $lateral_join_sql = "";
     my $use_lateral_sort = 0;
     if ( $sortkey && $sortkey ne "title" && $sortkey ne "lastread" ) {
@@ -334,15 +336,15 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
         if ( $sortkey !~ /^[a-zA-Z0-9_-]+$/ ) {
             $logger->warn("Invalid sortkey: $sortkey. Falling back to title sort.");
         } else {
-            # Use LATERAL JOIN instead of correlated subquery for better performance
-            $lateral_join_sql = "LEFT JOIN LATERAL (
-                SELECT t.value as sort_value
-                FROM lrr_archive_to_tag_map atm
-                JOIN lrr_tag t ON atm.tagid = t.tagid
-                WHERE atm.arcid = a.arcid
-                AND t.namespace = ?
-                LIMIT 1
-            ) sort_tag ON true";
+            # Use LEFT JOIN with DISTINCT ON - filter tags by namespace first, then join to archives
+            # This reverses the join order and is much faster than LATERAL JOIN
+            $lateral_join_sql = "LEFT JOIN (
+                SELECT DISTINCT ON (atm.arcid) atm.arcid, t.value as sort_value
+                FROM lrr_tag t
+                JOIN lrr_archive_to_tag_map atm ON t.tagid = atm.tagid
+                WHERE t.namespace = ?
+                ORDER BY atm.arcid, t.value DESC
+            ) sort_tag ON sort_tag.arcid = a.arcid";
             push @lateral_params, $sortkey;  # Add to lateral_params instead of params
             $use_lateral_sort = 1;
         }
