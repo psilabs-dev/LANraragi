@@ -228,9 +228,10 @@ SQL
     $sth->finish;
 
     # Update the search_tsv column for full-text search
+    # Include arcid in the initial population (tags will be added later via set_tags_with_dbh)
     my $update_tsv_sql = <<'SQL';
         UPDATE lrr_archive
-        SET search_tsv = to_tsvector('simple', COALESCE(title, ''))
+        SET search_tsv = to_tsvector('simple', COALESCE(arcid, '') || ' ' || COALESCE(title, ''))
         WHERE arcid = ?
 SQL
 

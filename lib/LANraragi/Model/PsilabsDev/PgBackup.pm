@@ -356,6 +356,7 @@ SQL
                 my $update_tsv_sql = <<'SQL';
                     UPDATE lrr_archive
                     SET search_tsv = to_tsvector('simple',
+                        COALESCE(arcid, '') || ' ' ||
                         COALESCE(title, '') || ' ' ||
                         COALESCE(
                             (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')

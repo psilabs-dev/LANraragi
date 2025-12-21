@@ -52,13 +52,17 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
             $total = $count || 0;
         }
 
-        # Perform the search
-        @ids = search_postgres(
-            $dbh, $category_id, $filter, $sortkey, $sortorder,
-            $newonly, $untaggedonly, $grouptanks
-        );
+        # Determine pagination parameters
+        my $keysperpage = LANraragi::Model::Config->get_pagesize;
+        my $use_pagination = ( $start != -1 );
 
-        $filtered = scalar @ids;
+        # Perform the search with SQL-level pagination
+        ( $filtered, @ids ) = search_postgres(
+            $dbh, $category_id, $filter, $sortkey, $sortorder,
+            $newonly, $untaggedonly, $grouptanks,
+            $use_pagination ? $start : undef,
+            $use_pagination ? $keysperpage : undef
+        );
     };
 
     if ( my $error = $@ ) {
@@ -69,24 +73,12 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
 
     $dbh->disconnect();
 
-    # If start is negative, return all possible data
-    if ( $start == -1 ) {
-        return ( $total, $filtered, @ids );
-    }
-
-    # Only get the first X keys
-    my $keysperpage = LANraragi::Model::Config->get_pagesize;
-
-    # Return total keys and the filtered ones
-    my $end = min( $start + $keysperpage - 1, $#ids );
-    if ( $end < $start ) {
-        return ( $total, $filtered, () );
-    }
-    return ( $total, $filtered, @ids[ $start .. $end ] );
+    return ( $total, $filtered, @ids );
 }
 
 # Main search logic using Postgres
-sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks ) {
+# Returns ($filtered_count, @ids)
+sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks, $start, $keysperpage ) {
 
     my $logger = get_logger( "PgSearch Core", "lanraragi" );
 
@@ -96,6 +88,7 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
     # Build the SQL query
     my @where_clauses = ();
     my @params = ();
+    my @lateral_params = ();  # Separate array for LATERAL JOIN parameters
 
     # Tank grouping: When grouptanks=true, we want to return tank IDs and standalone archives.
     # When grouptanks=false, we want to return individual archives excluding those in tanks.
@@ -224,23 +217,35 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
                 push @where_clauses, $tag_clause;
                 push @params, "%$namespace%", "%$value%";
             } else {
-                # No namespace - search in title, archive ID, and tag values
-                # Use title search OR archive ID search OR tag value search
-                $tag_clause = "(
-                    a.title ILIKE ?
-                    OR a.arcid ILIKE ?
-                    OR EXISTS (
-                        SELECT 1 FROM lrr_archive_to_tag_map atm
-                        JOIN lrr_tag t ON atm.tagid = t.tagid
-                        WHERE atm.arcid = a.arcid
-                        AND (t.namespace ILIKE ? OR t.value ILIKE ?)
-                    )
-                )";
-                if ($isneg) {
-                    $tag_clause = "NOT $tag_clause";
+                # No namespace - use FTS for simple searches, ILIKE for wildcards
+                # Check if value contains wildcards (before they were converted to SQL LIKE patterns)
+                # We already converted ? to _ and * to %, so check for those
+                if ($value =~ /[%_]/) {
+                    # Wildcard search - use ILIKE (fallback for pattern matching)
+                    $tag_clause = "(
+                        a.title ILIKE ?
+                        OR a.arcid ILIKE ?
+                        OR EXISTS (
+                            SELECT 1 FROM lrr_archive_to_tag_map atm
+                            JOIN lrr_tag t ON atm.tagid = t.tagid
+                            WHERE atm.arcid = a.arcid
+                            AND (t.namespace ILIKE ? OR t.value ILIKE ?)
+                        )
+                    )";
+                    if ($isneg) {
+                        $tag_clause = "NOT $tag_clause";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$value%", "%$value%", "%$value%", "%$value%";
+                } else {
+                    # Simple word search - use FTS (fast path)
+                    $tag_clause = "a.search_tsv @@ plainto_tsquery('simple', ?)";
+                    if ($isneg) {
+                        $tag_clause = "NOT ($tag_clause)";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, $value;
                 }
-                push @where_clauses, $tag_clause;
-                push @params, "%$value%", "%$value%", "%$value%", "%$value%";
             }
         }
     }
@@ -251,6 +256,28 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
         $where_sql = "WHERE " . join( " AND ", @where_clauses );
     }
 
+    # Build LATERAL JOIN for tag-based sorting (optimization to avoid correlated subquery)
+    my $lateral_join_sql = "";
+    my $use_lateral_sort = 0;
+    if ( $sortkey && $sortkey ne "title" && $sortkey ne "lastread" ) {
+        # Validate sortkey to prevent SQL injection (whitelist alphanumeric, underscore, hyphen)
+        if ( $sortkey !~ /^[a-zA-Z0-9_-]+$/ ) {
+            $logger->warn("Invalid sortkey: $sortkey. Falling back to title sort.");
+        } else {
+            # Use LATERAL JOIN instead of correlated subquery for better performance
+            $lateral_join_sql = "LEFT JOIN LATERAL (
+                SELECT t.value as sort_value
+                FROM lrr_archive_to_tag_map atm
+                JOIN lrr_tag t ON atm.tagid = t.tagid
+                WHERE atm.arcid = a.arcid
+                AND t.namespace = ?
+                LIMIT 1
+            ) sort_tag ON true";
+            push @lateral_params, $sortkey;  # Add to lateral_params instead of params
+            $use_lateral_sort = 1;
+        }
+    }
+
     # Build ORDER BY clause
     my $order_sql = "";
     if ( !$sortkey || $sortkey eq "title" ) {
@@ -258,33 +285,42 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
     } elsif ( $sortkey eq "lastread" ) {
         $order_sql = "ORDER BY a.lastreadtime" . ( $sortorder ? " ASC" : " DESC" );
     } else {
-        # Sort by a specific tag namespace
-        # Validate sortkey to prevent SQL injection (whitelist alphanumeric, underscore, hyphen)
-        if ( $sortkey !~ /^[a-zA-Z0-9_-]+$/ ) {
-            $logger->warn("Invalid sortkey: $sortkey. Falling back to title sort.");
-            $order_sql = "ORDER BY a.title" . ( $sortorder ? " DESC" : " ASC" );
+        # Sort by tag namespace value (using LATERAL JOIN result)
+        if ($use_lateral_sort) {
+            $order_sql = "ORDER BY sort_tag.sort_value" . ( $sortorder ? " DESC" : " ASC" ) . " NULLS LAST, a.title ASC";
         } else {
-            # This is more complex - we need to join with tags and order by the tag value
-            $order_sql = "ORDER BY (
-                SELECT t.value
-                FROM lrr_archive_to_tag_map atm
-                JOIN lrr_tag t ON atm.tagid = t.tagid
-                WHERE atm.arcid = a.arcid
-                AND t.namespace = ?
-                LIMIT 1
-            )" . ( $sortorder ? " DESC" : " ASC" ) . " NULLS LAST, a.title ASC";
-            push @params, $sortkey;
+            # Fallback to title sort if sortkey was invalid
+            $order_sql = "ORDER BY a.title" . ( $sortorder ? " DESC" : " ASC" );
         }
     }
 
-    # Build final SQL
-    my $sql = "SELECT a.arcid FROM lrr_archive a $where_sql $order_sql";
+    # Get total count of matching archives (without pagination)
+    my $count_sql = "SELECT COUNT(*) as total FROM lrr_archive a $lateral_join_sql $where_sql";
+    $logger->debug("COUNT SQL: $count_sql");
+    my $count_sth = $dbh->prepare($count_sql);
+    $count_sth->execute(@lateral_params, @params);
+    my $archive_filtered_count = $count_sth->fetchrow_hashref->{total} || 0;
+    $count_sth->finish;
+
+    # Build LIMIT/OFFSET clause
+    my $limit_sql = "";
+    my @limit_params = ();
+    if ( defined $start && defined $keysperpage && $keysperpage > 0 ) {
+        $limit_sql = "LIMIT ? OFFSET ?";
+        push @limit_params, $keysperpage, $start;
+    }
+
+    # Build final SQL with pagination
+    my $sql = "SELECT a.arcid FROM lrr_archive a $lateral_join_sql $where_sql $order_sql $limit_sql";
 
     $logger->debug("SQL: $sql");
-    $logger->debug("Params: " . join(", ", @params));
+    $logger->debug("LATERAL params: " . join(", ", @lateral_params));
+    $logger->debug("WHERE params: " . join(", ", @params));
+    $logger->debug("LIMIT params: " . join(", ", @limit_params));
 
     my $sth = $dbh->prepare($sql);
-    $sth->execute(@params);
+    # Execute with LATERAL params first (appear first in SQL), then WHERE params, then LIMIT params
+    $sth->execute(@lateral_params, @params, @limit_params);
 
     my @ids;
     while ( my $row = $sth->fetchrow_hashref ) {
@@ -294,23 +330,26 @@ sub search_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonl
 
     # When grouptanks=true, we also need to fetch tank IDs that match the search criteria
     # and prepend them to the results (tanks typically come first)
+    my $tank_filtered_count = 0;
     if ($grouptanks) {
-        my @tank_ids = search_tanks_postgres($dbh, $category_id, $filter, $sortkey, $sortorder);
+        my ( $tank_count, @tank_ids ) = search_tanks_postgres($dbh, $category_id, $filter, $sortkey, $sortorder, $start, $keysperpage);
+        $tank_filtered_count = $tank_count;
         if (@tank_ids) {
-            $logger->debug( "Found " . scalar @tank_ids . " tank results" );
+            $logger->debug( "Found " . scalar @tank_ids . " tank results (paginated)" );
             # Prepend tank IDs to archive IDs
             unshift @ids, @tank_ids;
         }
     }
 
-    $logger->debug( "Found " . scalar @ids . " total results" );
+    my $total_filtered = $archive_filtered_count + $tank_filtered_count;
+    $logger->debug( "Found $total_filtered total filtered results, returning " . scalar @ids . " paginated results" );
 
-    return @ids;
+    return ( $total_filtered, @ids );
 }
 
 # Search for tanks matching the given criteria
-# Returns a list of tank IDs
-sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder ) {
+# Returns ($filtered_count, @tank_ids)
+sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder, $start, $keysperpage ) {
 
     my $logger = get_logger( "PgSearch Tank", "lanraragi" );
 
@@ -436,14 +475,31 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder ) 
         $order_sql = "ORDER BY t.name" . ( $sortorder ? " DESC" : " ASC" );
     }
 
-    # Build final SQL for tanks
-    my $sql = "SELECT t.tankid FROM lrr_tank t $where_sql $order_sql";
+    # Get total count of matching tanks (without pagination)
+    my $count_sql = "SELECT COUNT(*) as total FROM lrr_tank t $where_sql";
+    $logger->debug("Tank COUNT SQL: $count_sql");
+    my $count_sth = $dbh->prepare($count_sql);
+    $count_sth->execute(@params);
+    my $tank_filtered_count = $count_sth->fetchrow_hashref->{total} || 0;
+    $count_sth->finish;
+
+    # Build LIMIT/OFFSET clause
+    my $limit_sql = "";
+    my @limit_params = ();
+    if ( defined $start && defined $keysperpage && $keysperpage > 0 ) {
+        $limit_sql = "LIMIT ? OFFSET ?";
+        push @limit_params, $keysperpage, $start;
+    }
+
+    # Build final SQL for tanks with pagination
+    my $sql = "SELECT t.tankid FROM lrr_tank t $where_sql $order_sql $limit_sql";
 
     $logger->debug("Tank SQL: $sql");
     $logger->debug("Tank Params: " . join(", ", @params));
+    $logger->debug("Tank LIMIT params: " . join(", ", @limit_params));
 
     my $sth = $dbh->prepare($sql);
-    $sth->execute(@params);
+    $sth->execute(@params, @limit_params);
 
     my @tank_ids;
     while ( my $row = $sth->fetchrow_hashref ) {
@@ -451,7 +507,7 @@ sub search_tanks_postgres ( $dbh, $category_id, $filter, $sortkey, $sortorder ) 
     }
     $sth->finish;
 
-    return @tank_ids;
+    return ( $tank_filtered_count, @tank_ids );
 }
 
 # replaces LANraragi::Model::Search::compute_search_filter

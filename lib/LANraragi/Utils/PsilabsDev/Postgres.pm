@@ -246,6 +246,144 @@ SQL
     }
     $logger->info("Created index: idx_lrr_archive_isnew");
 
+    # P7: Category to archive mapping indexes
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_category_to_archive_catid ON lrr_category_to_archive_map (catid)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_category_to_archive_catid index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_category_to_archive_catid");
+
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_category_to_archive_arcid ON lrr_category_to_archive_map (arcid)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_category_to_archive_arcid index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_category_to_archive_arcid");
+
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_category_to_archive_catid_arcid ON lrr_category_to_archive_map (catid, arcid)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_category_to_archive_catid_arcid index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_category_to_archive_catid_arcid");
+
+    # P7: Tank to archive mapping indexes
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_tank_to_archive_tankid ON lrr_tank_to_archive_map (tankid)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_tank_to_archive_tankid index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_tank_to_archive_tankid");
+
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_tank_to_archive_arcid ON lrr_tank_to_archive_map (arcid)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_tank_to_archive_arcid index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_tank_to_archive_arcid");
+
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_tank_to_archive_tankid_position ON lrr_tank_to_archive_map (tankid, position)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_tank_to_archive_tankid_position index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_tank_to_archive_tankid_position");
+
+    # P8: Tag namespace trigram index
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_tag_namespace_trgm ON lrr_tag USING gin (namespace gin_trgm_ops)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_tag_namespace_trgm index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_tag_namespace_trgm");
+
+    # P9: Sort optimization index
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_lastreadtime ON lrr_archive (lastreadtime DESC)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_archive_lastreadtime index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_archive_lastreadtime");
+
+    # P14: Filter optimization indexes
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_pagecount ON lrr_archive (pagecount)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_archive_pagecount index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_archive_pagecount");
+
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_progress ON lrr_archive (progress)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_archive_progress index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_archive_progress");
+
+    # P2-Lite: Composite indexes for EXISTS subquery optimization
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_tag_namespace_value ON lrr_tag (namespace, value)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_tag_namespace_value index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_tag_namespace_value");
+
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_arcid_tagid ON lrr_archive_to_tag_map (arcid, tagid)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_archive_to_tag_arcid_tagid index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_archive_to_tag_arcid_tagid");
+
     $logger->info("PostgreSQL database initialized successfully");
 }
 

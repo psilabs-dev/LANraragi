@@ -224,8 +224,10 @@ sub get_tankoubon {
     if ($fulldata) {
         my @full_data;
 
-        foreach my $arc_id (@archives) {
-            my $arc_sql = q{
+        # Batch query optimization: fetch all archive data in a single query
+        if (@archives) {
+            my $placeholders = join(',', ('?') x @archives);
+            my $batch_sql = qq{
                 SELECT
                     a.arcid,
                     a.filename,
@@ -250,38 +252,53 @@ sub get_tankoubon {
                 FROM lrr_archive a
                 LEFT JOIN lrr_archive_to_tag_map atm ON a.arcid = atm.arcid
                 LEFT JOIN lrr_tag t ON atm.tagid = t.tagid
-                WHERE a.arcid = ?
+                WHERE a.arcid IN ($placeholders)
                 GROUP BY a.arcid, a.filename, a.title, a.summary, a.isnew,
                          a.progress, a.pagecount, a.lastreadtime, a.arcsize, a.extension
             };
 
-            my $arc_sth = $dbh->prepare($arc_sql);
-            $arc_sth->execute($arc_id);
-            my $arc_row = $arc_sth->fetchrow_hashref;
-            $arc_sth->finish;
+            my $batch_sth = $dbh->prepare($batch_sql);
+            $batch_sth->execute(@archives);
 
-            if ($arc_row) {
-                # Handle whitespace-only title
-                my $title = $arc_row->{title};
-                if ( !defined($title) || $title =~ /^\s*$/ ) {
-                    $title = $arc_row->{filename};
+            # Build hash map of results keyed by arcid
+            my %archive_data;
+            while (my $arc_row = $batch_sth->fetchrow_hashref) {
+                $archive_data{$arc_row->{arcid}} = $arc_row;
+            }
+            $batch_sth->finish;
+
+            # Build response in original order, preserving tankoubon sequence
+            foreach my $arc_id (@archives) {
+                if (exists $archive_data{$arc_id}) {
+                    my $arc_row = $archive_data{$arc_id};
+
+                    # Check if the file exists on disk (matching Redis behavior)
+                    my $filename = $arc_row->{filename};
+                    next unless (defined($filename) && -e $filename);
+
+                    # Handle whitespace-only title
+                    my $title = $arc_row->{title};
+                    if ( !defined($title) || $title =~ /^\s*$/ ) {
+                        $title = $arc_row->{filename};
+                    }
+
+                    my $arcdata = {
+                        arcid        => $arc_row->{arcid},
+                        title        => $title,
+                        filename     => $arc_row->{filename},
+                        tags         => $arc_row->{tags} // '',
+                        summary      => $arc_row->{summary} // '',
+                        isnew        => $arc_row->{isnew} ? 'true' : 'false',
+                        extension    => $arc_row->{extension} // '',
+                        progress     => $arc_row->{progress} ? int($arc_row->{progress}) : 0,
+                        pagecount    => $arc_row->{pagecount} ? int($arc_row->{pagecount}) : 0,
+                        lastreadtime => $arc_row->{lastreadtime} ? int($arc_row->{lastreadtime}) : 0,
+                        size         => $arc_row->{arcsize} ? int($arc_row->{arcsize}) : 0
+                    };
+
+                    push @full_data, $arcdata;
                 }
-
-                my $arcdata = {
-                    arcid        => $arc_row->{arcid},
-                    title        => $title,
-                    filename     => $arc_row->{filename},
-                    tags         => $arc_row->{tags} // '',
-                    summary      => $arc_row->{summary} // '',
-                    isnew        => $arc_row->{isnew} ? 'true' : 'false',
-                    extension    => $arc_row->{extension} // '',
-                    progress     => $arc_row->{progress} ? int($arc_row->{progress}) : 0,
-                    pagecount    => $arc_row->{pagecount} ? int($arc_row->{pagecount}) : 0,
-                    lastreadtime => $arc_row->{lastreadtime} ? int($arc_row->{lastreadtime}) : 0,
-                    size         => $arc_row->{arcsize} ? int($arc_row->{arcsize}) : 0
-                };
-
-                push @full_data, $arcdata;
+                # If archive doesn't exist in results, gracefully skip it (missing archive)
             }
         }
 

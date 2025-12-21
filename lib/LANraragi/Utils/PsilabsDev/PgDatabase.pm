@@ -271,10 +271,82 @@ sub get_archive_json_multi (@ids) {
     my @archives;
 
     eval {
+        # Return empty array if no IDs provided
+        return unless @ids;
+
+        # Separate tank IDs from archive IDs
+        my @tank_ids;
+        my @archive_ids;
         foreach my $id (@ids) {
-            my $arcdata = get_archive_json( $dbh, $id );
+            if ( $id =~ /^TANK/ ) {
+                push @tank_ids, $id;
+            } else {
+                push @archive_ids, $id;
+            }
+        }
+
+        # Process tank IDs individually (they require complex aggregation logic)
+        foreach my $tank_id (@tank_ids) {
+            my $arcdata = build_tank_json_pg($tank_id);
             if ($arcdata) {
                 push @archives, $arcdata;
+            }
+        }
+
+        # Batch process archive IDs with a single query
+        if (@archive_ids) {
+            # Use batch query to fetch all archives and their tags at once
+            my $placeholders = join(',', ('?') x @archive_ids);
+            my $sth = $dbh->prepare(qq{
+                SELECT a.arcid, a.filename, a.title, a.summary, a.thumbhash,
+                       a.isnew, a.progress, a.pagecount, a.lastreadtime, a.arcsize,
+                       COALESCE(string_agg(
+                           CASE WHEN t.namespace = '' THEN t.value
+                                ELSE t.namespace || ':' || t.value END,
+                           ', '
+                       ), '') as tags
+                FROM lrr_archive a
+                LEFT JOIN lrr_archive_to_tag_map atm ON a.arcid = atm.arcid
+                LEFT JOIN lrr_tag t ON atm.tagid = t.tagid
+                WHERE a.arcid IN ($placeholders)
+                GROUP BY a.arcid, a.filename, a.title, a.summary, a.thumbhash,
+                         a.isnew, a.progress, a.pagecount, a.lastreadtime, a.arcsize
+            });
+            $sth->execute(@archive_ids);
+
+            # Store results in a hash for quick lookup
+            my %archive_data;
+            while (my $row = $sth->fetchrow_hashref) {
+                # Extract name from filename
+                my ( $name, $path, $suffix ) = fileparse( $row->{filename}, qr/\.[^.]*/ );
+
+                # Build hash for build_json_pg
+                my %hash = (
+                    name         => $name,
+                    title        => $row->{title} // "",
+                    tags         => $row->{tags} // "",
+                    summary      => $row->{summary} // "",
+                    file         => $row->{filename},
+                    isnew        => $row->{isnew} ? "true" : "false",
+                    progress     => $row->{progress} // 0,
+                    pagecount    => $row->{pagecount} // 0,
+                    lastreadtime => $row->{lastreadtime} // 0,
+                    arcsize      => $row->{arcsize} // 0
+                );
+
+                # Use Postgres-specific build_json_pg which doesn't apply redis_decode
+                my $arcdata = build_json_pg( $row->{arcid}, %hash );
+                if ($arcdata) {
+                    $archive_data{$row->{arcid}} = $arcdata;
+                }
+            }
+            $sth->finish;
+
+            # Add archives to result array in the original order (preserving input order)
+            foreach my $id (@archive_ids) {
+                if (exists $archive_data{$id}) {
+                    push @archives, $archive_data{$id};
+                }
             }
         }
     };
@@ -320,10 +392,11 @@ sub set_title_with_dbh ( $dbh, $id, $newtitle ) {
         $sth->finish;
 
         # Update the search_tsv column for full-text search
-        # The search_tsv includes title and tags, so we need to regenerate it
+        # The search_tsv includes arcid, title and tags, so we need to regenerate it
         my $update_tsv_sth = $dbh->prepare(q{
             UPDATE lrr_archive
             SET search_tsv = to_tsvector('simple',
+                COALESCE(arcid, '') || ' ' ||
                 COALESCE(title, '') || ' ' ||
                 COALESCE(
                     (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
@@ -466,6 +539,7 @@ sub set_tags_with_dbh ( $dbh, $id, $newtags, $append = 0 ) {
     my $update_tsv_sth = $dbh->prepare(q{
         UPDATE lrr_archive
         SET search_tsv = to_tsvector('simple',
+            COALESCE(arcid, '') || ' ' ||
             COALESCE(title, '') || ' ' ||
             COALESCE(
                 (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
@@ -621,6 +695,26 @@ sub change_archive_id ( $old_id, $new_id ) {
                 $update_size_sth->finish;
             }
 
+            # Update the search_tsv column with the new arcid
+            # The search_tsv includes arcid, title and tags, so we need to regenerate it
+            my $update_tsv_sth = $dbh->prepare(q{
+                UPDATE lrr_archive
+                SET search_tsv = to_tsvector('simple',
+                    COALESCE(arcid, '') || ' ' ||
+                    COALESCE(title, '') || ' ' ||
+                    COALESCE(
+                        (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
+                         FROM lrr_archive_to_tag_map atm
+                         JOIN lrr_tag t ON atm.tagid = t.tagid
+                         WHERE atm.arcid = lrr_archive.arcid),
+                        ''
+                    )
+                )
+                WHERE arcid = ?
+            });
+            $update_tsv_sth->execute($new_id);
+            $update_tsv_sth->finish;
+
             # Update category mappings
             my $update_cat_sth = $dbh->prepare('UPDATE lrr_category_to_archive_map SET arcid = ? WHERE arcid = ?');
             $update_cat_sth->execute($new_id, $old_id);
@@ -732,6 +826,26 @@ sub change_archive_id_with_dbh ( $dbh, $old_id, $new_id ) {
             $update_size_sth->execute($arcsize, $new_id);
             $update_size_sth->finish;
         }
+
+        # Update the search_tsv column with the new arcid
+        # The search_tsv includes arcid, title and tags, so we need to regenerate it
+        my $update_tsv_sth = $dbh->prepare(q{
+            UPDATE lrr_archive
+            SET search_tsv = to_tsvector('simple',
+                COALESCE(arcid, '') || ' ' ||
+                COALESCE(title, '') || ' ' ||
+                COALESCE(
+                    (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
+                     FROM lrr_archive_to_tag_map atm
+                     JOIN lrr_tag t ON atm.tagid = t.tagid
+                     WHERE atm.arcid = lrr_archive.arcid),
+                    ''
+                )
+            )
+            WHERE arcid = ?
+        });
+        $update_tsv_sth->execute($new_id);
+        $update_tsv_sth->finish;
 
         # Update category mappings
         my $update_cat_sth = $dbh->prepare('UPDATE lrr_category_to_archive_map SET arcid = ? WHERE arcid = ?');
