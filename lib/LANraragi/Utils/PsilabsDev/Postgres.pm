@@ -30,7 +30,8 @@ sub get_postgresql_dbh {
         {
             AutoCommit => 1,
             RaiseError => 1,
-            PrintError => 0
+            PrintError => 0,
+            pg_enable_utf8 => 1,
         }
     );
 
