@@ -256,6 +256,11 @@ sub serve_page {
 
     $logger->debug("Page /$id/$path was requested");
 
+    # Set cache headers for archive pages.
+    # Archive pages are immutable (same ID + path = same content), so we can cache aggressively.
+    # This prevents Safari/WebKit from re-fetching preloaded images. (GitHub issue #1433)
+    $self->res->headers->cache_control('public, max-age=31536000, immutable');
+
     # Apply resizing transformation if set in Settings
     if ( LANraragi::Model::Config->enable_resize ) {
 

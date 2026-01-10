@@ -14,6 +14,8 @@ Reader.showingSinglePage = true;
 Reader.pageThumbnails = [];
 Reader.preloadedImg = {};
 Reader.preloadedSizes = {};
+Reader.blobUrls = {};       // Stores blob URLs for cross-browser caching
+Reader.blobPromises = {};   // Promises for blob URL loading
 Reader.spaceScroll = { timeout: null, animationId: null };
 //Spacebar Scroll Config
 Reader.scrollConfig = {
@@ -752,16 +754,43 @@ Reader.loadBookmarkStatus = function () {
 
 Reader.updateMetadata = function () {
     const img = $("#img")[0];
-    const imageUrl = new URL(img.src);
-    const filename = imageUrl.searchParams.get("path");
+
+    // Update page numbers in the paginator (do this first, before any early returns)
+    const newVal = Reader.showingSinglePage
+        ? Reader.currentPage + 1
+        : `${Reader.currentPage + 1} + ${Reader.currentPage + 2}`;
+    $(".current-page").each((_i, el) => $(el).html(newVal));
+
+    Reader.currentPageLoaded = true;
+    $("#i3").removeClass("loading");
+
+    // For blob URLs, we can't extract filename from URL params, so get it from the original page URL
+    let filename;
+    if (img.src.startsWith("blob:")) {
+        const originalUrl = Reader.pages[Reader.currentPage];
+        if (originalUrl) {
+            const originalUrlObj = new URL(originalUrl, window.location.origin);
+            filename = originalUrlObj.searchParams.get("path");
+        }
+    } else {
+        const imageUrl = new URL(img.src);
+        filename = imageUrl.searchParams.get("path");
+    }
 
     const imgDoublePage = $("#img_doublepage")[0];
-    const imageUrlDoublePage = new URL(imgDoublePage.src);
-    const filenameDoublePage = imageUrlDoublePage.searchParams.get("path");
+    let filenameDoublePage;
+    if (imgDoublePage.src && imgDoublePage.src.startsWith("blob:")) {
+        const originalUrl = Reader.pages[Reader.currentPage + 1];
+        if (originalUrl) {
+            const originalUrlObj = new URL(originalUrl, window.location.origin);
+            filenameDoublePage = originalUrlObj.searchParams.get("path");
+        }
+    } else if (imgDoublePage.src) {
+        const imageUrlDoublePage = new URL(imgDoublePage.src);
+        filenameDoublePage = imageUrlDoublePage.searchParams.get("path");
+    }
 
     if (!filename && Reader.showingSinglePage) {
-        Reader.currentPageLoaded = true;
-        $("#i3").removeClass("loading");
         return;
     }
 
@@ -797,15 +826,6 @@ Reader.updateMetadata = function () {
         $(".file-info").text(`${filename} - ${filenameDoublePage} :: ${widthView} x ${height} :: ${sizeView} KB`);
         $(".file-info").attr("title", `${filename} :: ${width} x ${height} :: ${size} KB - ${filenameDoublePage} :: ${widthDoublePage} x ${heightDoublePage} :: ${sizePre} KB`);
     }
-
-    // Update page numbers in the paginator
-    const newVal = Reader.showingSinglePage
-        ? Reader.currentPage + 1
-        : `${Reader.currentPage + 1} + ${Reader.currentPage + 2}`;
-    $(".current-page").each((_i, el) => $(el).html(newVal));
-
-    Reader.currentPageLoaded = true;
-    $("#i3").removeClass("loading");
 };
 
 Reader.goToPage = function (page) {
@@ -821,27 +841,35 @@ Reader.goToPage = function (page) {
         if (Reader.doublePageMode && Reader.currentPage > 0
             && Reader.currentPage < Reader.maxPage) {
             // Composite an image and use that as the source
-            const img1 = Reader.loadImage(Reader.currentPage);
-            const img2 = Reader.loadImage(Reader.currentPage + 1);
+            const img1 = Reader.preloadedImg[Reader.pages[Reader.currentPage]];
+            const img2 = Reader.preloadedImg[Reader.pages[Reader.currentPage + 1]];
             // If w > h on one of the images(widespread), set canvasdata to the first image only
-            if (img1.naturalWidth > img1.naturalHeight || img2.naturalWidth > img2.naturalHeight) {
+            // Only check dimensions if images are already loaded
+            const isWide1 = img1 && img1.naturalWidth > img1.naturalHeight;
+            const isWide2 = img2 && img2.naturalWidth > img2.naturalHeight;
+            if (isWide1 || isWide2) {
                 // Depending on whether we were going forward or backward, display img1 or img2
-                const wideSrc = Reader.previousPage > Reader.currentPage ? img2.src : img1.src;
-                $("#img").attr("src", wideSrc);
+                const wideIndex = Reader.previousPage > Reader.currentPage ? Reader.currentPage + 1 : Reader.currentPage;
+                Reader.loadImage(wideIndex);
+                Reader.displayImage("#img", wideIndex);
                 Reader.showingSinglePage = true;
             } else {
                 if (Reader.mangaMode) {
-                    $("#img").attr("src", img2.src);
-                    $("#img_doublepage").attr("src", img1.src);
+                    Reader.loadImage(Reader.currentPage + 1);
+                    Reader.loadImage(Reader.currentPage);
+                    Reader.displayImage("#img", Reader.currentPage + 1);
+                    Reader.displayImage("#img_doublepage", Reader.currentPage);
                 } else {
-                    $("#img").attr("src", img1.src);
-                    $("#img_doublepage").attr("src", img2.src);
+                    Reader.loadImage(Reader.currentPage);
+                    Reader.loadImage(Reader.currentPage + 1);
+                    Reader.displayImage("#img", Reader.currentPage);
+                    Reader.displayImage("#img_doublepage", Reader.currentPage + 1);
                 }
                 $("#display").addClass("double-mode");
             }
         } else {
-            const img = Reader.loadImage(Reader.currentPage);
-            $("#img").attr("src", img.src);
+            Reader.loadImage(Reader.currentPage);
+            Reader.displayImage("#img", Reader.currentPage);
             Reader.showingSinglePage = true;
         }
 
@@ -892,22 +920,80 @@ Reader.preloadImages = function () {
     }
 };
 
+// Preloads an image using fetch + blob URL to ensure reliable caching across all browsers.
+// This prevents Safari/WebKit from re-fetching images when displaying. (GitHub issue #1433)
 Reader.loadImage = function (index) {
     const src = Reader.pages[index];
 
-    if (!Reader.preloadedImg[src]) {
-        const img = new Image();
-        img.src = src;
-        Reader.preloadedImg[src] = img;
-        if (!Reader.preloadedSizes[index]) {
-            LRR.getImgSizeAsync(src).done((data, textStatus, request) => {
-                const size = parseInt(request.getResponseHeader("Content-Length") / 1024, 10);
-                Reader.preloadedSizes[index] = size;
+    if (!Reader.blobPromises[src]) {
+        // Create a promise that fetches the image as a blob and creates an object URL
+        Reader.blobPromises[src] = fetch(src)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch image: ${response.status}`);
+                }
+                // Get size from Content-Length header
+                if (!Reader.preloadedSizes[index]) {
+                    const contentLength = response.headers.get("Content-Length");
+                    if (contentLength) {
+                        Reader.preloadedSizes[index] = parseInt(contentLength / 1024, 10);
+                    }
+                }
+                return response.blob();
+            })
+            .then((blob) => {
+                const blobUrl = URL.createObjectURL(blob);
+                Reader.blobUrls[src] = blobUrl;
+
+                // Create Image object with blob URL (no network request since blob is local)
+                const img = new Image();
+                img.src = blobUrl;
+                Reader.preloadedImg[src] = img;
+
+                return img;
+            })
+            .catch((error) => {
+                console.warn("Blob preload failed, falling back to direct load:", error);
+                // Fallback: create Image with original URL
+                const img = new Image();
+                img.src = src;
+                Reader.preloadedImg[src] = img;
+                return img;
             });
-        }
     }
 
+    // Return the cached Image object if available, otherwise undefined
+    // Callers that need the image should await Reader.blobPromises[src]
     return Reader.preloadedImg[src];
+};
+
+// Displays an image using the blob URL for reliable cross-browser caching.
+// If the blob isn't ready yet, sets up the display to update when it becomes available.
+Reader.displayImage = function (targetSelector, index) {
+    const src = Reader.pages[index];
+    const $target = $(targetSelector);
+
+    // Check if blob URL is already available
+    if (Reader.blobUrls[src]) {
+        $target.attr("src", Reader.blobUrls[src]);
+        return;
+    }
+
+    // Check if we have a pending promise for this image
+    if (Reader.blobPromises[src]) {
+        // Wait for the blob to be ready, then display
+        Reader.blobPromises[src].then(() => {
+            if (Reader.blobUrls[src]) {
+                $target.attr("src", Reader.blobUrls[src]);
+            } else {
+                // Fallback if blob creation failed
+                $target.attr("src", src);
+            }
+        });
+    } else {
+        // No preload started, fall back to direct load
+        $target.attr("src", src);
+    }
 };
 
 Reader.toggleFitMode = function (e) {
