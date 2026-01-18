@@ -39,23 +39,23 @@ sub check_id_parameter {
 }
 
 sub serve_archivelist {
-    my $self   = shift;
+    my $self   = shift->openapi->valid_input or return;
     my @idlist = LANraragi::Model::Archive::generate_archive_list;
-    $self->render( json => \@idlist );
+    $self->render( openapi => \@idlist );
 }
 
 sub serve_untagged_archivelist {
-    my $self  = shift;
+    my $self  = shift->openapi->valid_input or return;
     my $redis = $self->LRR_CONF->get_redis_search;
 
     my @untagged = $redis->smembers("LRR_UNTAGGED");
     $redis->quit;
 
-    $self->render( json => \@untagged );
+    $self->render( openapi => \@untagged );
 }
 
 sub serve_metadata {
-    my $self  = shift;
+    my $self  = shift->openapi->valid_input or return;
     my $id    = check_id_parameter( $self, "metadata" ) || return;
     my $redis = $self->LRR_CONF->get_redis;
 
@@ -63,7 +63,7 @@ sub serve_metadata {
     $redis->quit;
 
     if ($arcdata) {
-        $self->render( json => $arcdata );
+        $self->render( openapi => $arcdata );
     } else {
         render_api_response( $self, "metadata", "This ID doesn't exist on the server." );
     }
@@ -72,13 +72,13 @@ sub serve_metadata {
 # Find which categories this ID is saved in.
 sub get_categories {
 
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "find_arc_categories" ) || return;
 
     my @categories = LANraragi::Model::Category::get_categories_containing_archive($id);
 
     $self->render(
-        json => {
+        openapi => {
             operation  => "find_arc_categories",
             categories => \@categories,
             success    => 1
@@ -87,19 +87,19 @@ sub get_categories {
 }
 
 sub serve_thumbnail {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "serve_thumbnail" ) || return;
     LANraragi::Model::Archive::serve_thumbnail( $self, $id );
 }
 
 sub update_thumbnail {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "update_thumbnail" ) || return;
     LANraragi::Model::Archive::update_thumbnail( $self, $id );
 }
 
 sub generate_page_thumbnails {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "generate_page_thumbnails" ) || return;
     LANraragi::Model::Archive::generate_page_thumbnails( $self, $id );
 }
@@ -107,7 +107,7 @@ sub generate_page_thumbnails {
 # Use RenderFile to get the file of the provided id to the client.
 sub serve_file {
 
-    my $self  = shift;
+    my $self  = shift->openapi->valid_input or return;
     my $id    = check_id_parameter( $self, "serve_file" ) || return;
     my $redis = $self->LRR_CONF->get_redis;
 
@@ -119,7 +119,7 @@ sub serve_file {
 # Create a file archive along with any metadata.
 # adapted from Upload.pm
 sub create_archive {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
 
     my $logger = get_logger( "Archive API ", "lanraragi" );
     my $redis  = LANraragi::Model::Config->get_redis;
@@ -131,7 +131,7 @@ sub create_archive {
     # require file
     if ( !defined $upload || !$upload ) {
         return $self->render(
-            json => {
+            openapi => {
                 operation => "upload",
                 success   => 0,
                 error     => "No file attached"
@@ -146,7 +146,7 @@ sub create_archive {
         my $actual_checksum = sha1_hex($file_content);
         if ( $expected_checksum ne $actual_checksum ) {
             return $self->render(
-                json => {
+                openapi => {
                     operation => "upload",
                     success   => 0,
                     error     => "Checksum mismatch: expected $expected_checksum, got $actual_checksum."
@@ -170,7 +170,7 @@ sub create_archive {
         # return error if archive is not supported.
         if ( !is_archive($filename) ) {
             return $self->render(
-                json => {
+                openapi => {
                     operation => "upload",
                     success   => 0,
                     error     => "Unsupported file extension ($filename)"
@@ -200,7 +200,7 @@ sub create_archive {
         if ( !$upload->move_to($mojo_temp) ) {
             $logger->error("Could not move uploaded file $filename to $mojo_temp");
             return $self->render(
-                json => {
+                openapi => {
                     operation => "upload",
                     success   => 0,
                     error     => "Couldn't move uploaded file to temporary location."
@@ -230,7 +230,7 @@ sub create_archive {
 
         unless ( $status_code == 200 ) {
             return $self->render(
-                json => {
+                openapi => {
                     operation => "upload",
                     success   => 0,
                     error     => $message,
@@ -241,7 +241,7 @@ sub create_archive {
         }
 
         return $self->render(
-            json => {
+            openapi => {
                 operation => "upload",
                 success   => 1,
                 id        => $id
@@ -253,7 +253,7 @@ sub create_archive {
 
 # Serve an archive page from the temporary folder, using RenderFile.
 sub serve_page {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "serve_page" ) || return;
     my $path = $self->req->param('path')                 || "404.xyz";
 
@@ -261,7 +261,7 @@ sub serve_page {
 }
 
 sub get_file_list {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "get_file_list" ) || return;
 
     my $force = $self->req->param('force') eq "true" || "0";
@@ -273,12 +273,12 @@ sub get_file_list {
     if ($err) {
         render_api_response( $self, "get_file_list", $err );
     } else {
-        $self->render( json => $reader_json );
+        $self->render( openapi => $reader_json );
     }
 }
 
 sub clear_new {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "clear_new" ) || return;
 
     my $redis = LANraragi::Model::Config->get_redis;
@@ -287,7 +287,7 @@ sub clear_new {
         set_isnew( $id, "false" );
 
         $self->render(
-            json => {
+            openapi => {
                 operation => "clear_new",
                 id        => $id,
                 success   => 1
@@ -297,7 +297,7 @@ sub clear_new {
 }
 
 sub delete_archive {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "delete_archive" ) || return;
 
     my $redis = LANraragi::Model::Config->get_redis;
@@ -306,7 +306,7 @@ sub delete_archive {
         my $delStatus = LANraragi::Model::Archive::delete_archive($id);
 
         $self->render(
-            json => {
+            openapi => {
                 operation => "delete_archive",
                 id        => $id,
                 filename  => decode_utf8($delStatus),
@@ -317,7 +317,7 @@ sub delete_archive {
 }
 
 sub update_metadata {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "update_metadata" ) || return;
 
     my $title   = $self->req->param('title');
@@ -341,7 +341,7 @@ sub update_metadata {
 }
 
 sub update_progress {
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $id   = check_id_parameter( $self, "update_progress" ) || return;
 
     my $page = $self->stash('page') || 0;
@@ -381,7 +381,7 @@ sub update_progress {
         $redis_cfg->quit();
 
         $self->render(
-            json => {
+            openapi => {
                 operation    => "update_progress",
                 id           => $id,
                 page         => $page,

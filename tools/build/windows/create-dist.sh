@@ -47,6 +47,7 @@ rm -rf ./Redis-7.2.9-Windows-x64-msys2
 # Copy the actual app
 cp ./package.json ./win-dist
 cp ./lrr.conf ./win-dist
+cp ./openapi.json ./win-dist
 cp -R ./lib ./win-dist
 cp -R ./public ./win-dist
 cp -R ./script ./win-dist

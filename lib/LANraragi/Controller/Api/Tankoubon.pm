@@ -9,19 +9,19 @@ use LANraragi::Utils::Generic qw(render_api_response exec_with_lock);
 
 sub get_tankoubon_list {
 
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $req  = $self->req;
 
     my $page = $req->param('page');
 
     my ( $total, $filtered, @rgs ) = LANraragi::Model::Tankoubon::get_tankoubon_list($page);
-    $self->render( json => { result => \@rgs, total => $total, filtered => $filtered } );
+    $self->render( openapi => { result => \@rgs, total => $total, filtered => $filtered } );
 
 }
 
 sub get_tankoubon {
 
-    my $self    = shift;
+    my $self    = shift->openapi->valid_input or return;
     my $tank_id = $self->stash('id');
     my $req     = $self->req;
 
@@ -35,12 +35,12 @@ sub get_tankoubon {
         return;
     }
 
-    $self->render( json => { result => \%tankoubon, total => $total, filtered => $filtered } );
+    $self->render( openapi => { result => \%tankoubon, total => $total, filtered => $filtered } );
 }
 
 sub create_tankoubon {
 
-    my $self   = shift;
+    my $self   = shift->openapi->valid_input or return;
     my $name   = $self->req->param('name')   || "";
     my $tankid = $self->req->param('tankid') || "";
 
@@ -51,7 +51,7 @@ sub create_tankoubon {
 
     my $created_id = LANraragi::Model::Tankoubon::create_tankoubon( $name, $tankid );
     $self->render(
-        json => {
+        openapi => {
             operation    => "create_tankoubon",
             tankoubon_id => $created_id,
             success      => 1
@@ -62,7 +62,7 @@ sub create_tankoubon {
 
 sub delete_tankoubon {
 
-    my $self   = shift;
+    my $self   = shift->openapi->valid_input or return;
     my $tankid = $self->stash('id');
 
     my $redis = LANraragi::Model::Config->get_redis;
@@ -86,7 +86,7 @@ sub delete_tankoubon {
 
 sub update_tankoubon {
 
-    my $self   = shift;
+    my $self   = shift->openapi->valid_input or return;
     my $tankid = $self->stash('id');
     my $data   = $self->req->json;
 
@@ -114,7 +114,7 @@ sub update_tankoubon {
 
 sub add_to_tankoubon {
 
-    my $self   = shift;
+    my $self   = shift->openapi->valid_input or return;
     my $tankid = $self->stash('id');
     my $arcid  = $self->stash('archive');
 
@@ -147,7 +147,7 @@ sub add_to_tankoubon {
 
 sub remove_from_tankoubon {
 
-    my $self   = shift;
+    my $self   = shift->openapi->valid_input or return;
     my $tankid = $self->stash('id');
     my $arcid  = $self->stash('archive');
 
@@ -180,7 +180,7 @@ sub remove_from_tankoubon {
 
 sub get_tankoubons_file {
 
-    my $self  = shift;
+    my $self  = shift->openapi->valid_input or return;
     my $arcid = $self->stash('id');
 
     if ( $arcid eq "" ) {
@@ -191,7 +191,7 @@ sub get_tankoubons_file {
     my @tanks = LANraragi::Model::Tankoubon::get_tankoubons_containing_archive($arcid);
 
     $self->render(
-        json => {
+        openapi => {
             operation  => "find_arc_tankoubons",
             tankoubons => \@tanks,
             success    => 1

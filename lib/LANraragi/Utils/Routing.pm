@@ -9,11 +9,46 @@ use Encode;
 
 use Mojolicious::Plugin::Minion::Admin;
 
+use LANraragi::Utils::Login      qw(is_logged_in_api);
+
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
 #Contains all the routes used by the app, and applies them on boot.
 sub apply_routes {
     my $self = shift;
+
+    # Initialize Mojolicious::Plugin::OpenAPI
+    my $api = $self->routes;
+
+    # The API router outputs CORS headers if the user allows it in the settings.
+    if ( $self->LRR_CONF->enable_cors ) {
+
+        # Private API requests are non-simple due to the Authorization header, so browsers send a preflight request.
+        # Preflight requests are OPTIONS requests, which we need to support explicitly
+        $api = $api->under('/')->to('login#setup_cors');
+    }
+    if ( $self->LRR_CONF->enable_nofun ) {
+        $api = $api->under('/')->to('login#logged_in_api');
+    }
+
+    # All "/api/*" endpoints are passed to OpenAPI.
+    $self->plugin(
+        "OpenAPI" => {
+            url    => $self->home->rel_file("openapi.json"),
+            route  => $api,
+            security => {
+                api_key => sub {
+                    my ( $c, $definition, $scopes, $cb ) = @_;
+                    if ( is_logged_in_api($c) ) {
+                        return $c->$cb();
+                    }
+                    else {
+                        return $c->$cb('Unauthorized');
+                    }
+                }
+            }
+        }
+    );
 
     if ( !IS_UNIX ) {
 
@@ -23,35 +58,18 @@ sub apply_routes {
 
     # Routers used for all loginless routes
     my $public_routes = $self->routes;
-    my $public_api    = $public_routes;
 
     # Normal route to controller
     $public_routes->get('/login')->to('login#index');
     $public_routes->post('/login')->to('login#check');
     $public_routes->get('/logout')->to('login#logout');
 
-    # The API router outputs CORS headers if the user allows it in the settings.
-    if ( $self->LRR_CONF->enable_cors ) {
-        $public_api = $public_api->under('/')->to('login#setup_cors');
-
-        # Private API requests are non-simple due to the Authorization header, so browsers send a preflight request.
-        # Preflight requests are OPTIONS requests, which we need to support explicitly
-        $public_api->options(
-            '/api/*' => sub {
-                my $self = shift;
-                $self->rendered(200);
-            }
-        );
-    }
-
     # Routers for routes that require auth
     my $logged_in     = $public_routes->under('/')->to('login#logged_in');
-    my $logged_in_api = $public_api->under('/')->to('login#logged_in_api');
 
     # No-Fun Mode locks the base routes behind login as well
     if ( $self->LRR_CONF->enable_nofun ) {
         $public_routes = $logged_in;
-        $public_api    = $logged_in_api;
     }
 
     $public_routes->get('/')->to('index#index');

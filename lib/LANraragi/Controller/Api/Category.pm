@@ -10,15 +10,15 @@ use LANraragi::Utils::Generic qw(render_api_response exec_with_lock);
 
 sub get_category_list {
 
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my @cats = LANraragi::Model::Category->get_category_list;
-    $self->render( json => \@cats );
+    $self->render( openapi => \@cats );
 
 }
 
 sub get_category {
 
-    my $self     = shift;
+    my $self     = shift->openapi->valid_input or return;
     my $catid    = $self->stash('id');
     my %category = LANraragi::Model::Category::get_category($catid);
 
@@ -27,12 +27,12 @@ sub get_category {
         return;
     }
 
-    $self->render( json => \%category );
+    $self->render( openapi => \%category );
 }
 
 sub create_category {
 
-    my $self   = shift;
+    my $self   = shift->openapi->valid_input or return;
     my $name   = $self->req->param('name') || "";
     my $search = $self->req->param('search') || "";
     my $pinned = ( $self->req->param('pinned') && $self->req->param('pinned') ne "false" ) ? 1 : 0;
@@ -44,7 +44,7 @@ sub create_category {
 
     my $created_id = LANraragi::Model::Category::create_category( $name, $search, $pinned, "" );
     $self->render(
-        json => {
+        openapi => {
             operation   => "create_category",
             category_id => $created_id,
             success     => 1
@@ -55,7 +55,7 @@ sub create_category {
 
 sub update_category {
 
-    my $self     = shift;
+    my $self     = shift->openapi->valid_input or return;
     my $catid    = $self->stash('id');
     my %category = LANraragi::Model::Category::get_category($catid);
 
@@ -74,7 +74,7 @@ sub update_category {
         my $updated_id = LANraragi::Model::Category::create_category( $name, $search, $pinned, $catid );
         
         $self->render(
-            json => {
+            openapi => {
                 operation   => "update_category",
                 category_id => $updated_id,
                 success     => 1
@@ -85,7 +85,7 @@ sub update_category {
 
 sub delete_category {
 
-    my $self  = shift;
+    my $self  = shift->openapi->valid_input or return;
     my $catid = $self->stash('id');
 
     my $redis = LANraragi::Model::Config->get_redis;
@@ -103,7 +103,7 @@ sub delete_category {
 
 sub add_to_category {
 
-    my $self  = shift;
+    my $self  = shift->openapi->valid_input or return;
     my $catid = $self->stash('id');
     my $arcid = $self->stash('archive');
 
@@ -130,7 +130,7 @@ sub add_to_category {
 
 sub remove_from_category {
 
-    my $self  = shift;
+    my $self  = shift->openapi->valid_input or return;
     my $catid = $self->stash('id');
     my $arcid = $self->stash('archive');
 
@@ -157,10 +157,10 @@ sub remove_from_category {
 
 sub get_bookmark_link {
 
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $catid = LANraragi::Model::Category::get_bookmark_link();
     return $self->render(
-        json => {
+        openapi => {
             operation   => "get_bookmark_link",
             success     => 1,
             category_id => $catid
@@ -171,13 +171,13 @@ sub get_bookmark_link {
 
 sub update_bookmark_link {
 
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $catid = $self->stash('id');
     my ($status_code, $message);
     ($status_code, $catid, $message) = LANraragi::Model::Category::update_bookmark_link($catid);
     unless ( $status_code == 200 ) {
         return $self->render(
-            json => {
+            openapi => {
                 operation   => "update_bookmark_link",
                 success     => 0,
                 category_id => $catid,
@@ -187,7 +187,7 @@ sub update_bookmark_link {
         );
     }
     return $self->render(
-        json => {
+        openapi => {
             operation   => "update_bookmark_link",
             category_id => $catid,
             success     => 1
@@ -199,10 +199,10 @@ sub update_bookmark_link {
 
 sub remove_bookmark_link {
 
-    my $self = shift;
+    my $self = shift->openapi->valid_input or return;
     my $catid = LANraragi::Model::Category::remove_bookmark_link();
     return $self->render(
-        json => {
+        openapi => {
             operation   => "remove_bookmark_link",
             category_id => $catid,
             success     => 1
