@@ -34,7 +34,7 @@ sub apply_routes {
     # All "/api/*" endpoints are passed to OpenAPI.
     $self->plugin(
         "OpenAPI" => {
-            url    => $self->home->rel_file("openapi.json"),
+            url    => $self->home->rel_file("tools/openapi.yaml"),
             route  => $api,
             security => {
                 api_key => sub {

@@ -58,7 +58,7 @@ class Lanraragi < Formula
               "'#{ENV["ARCHIVE_LIBARCHIVE_LIB_DLL"]}'"
 
     (libexec/"lib").install Dir["lib/*"]
-    libexec.install "script", "package.json", "public", "locales", "templates", "tests", "lrr.conf", "openapi.json"
+    libexec.install "script", "package.json", "public", "locales", "templates", "tests", "lrr.conf", "tools/openapi.yaml"
     libexec.install "tools/build/homebrew/redis.conf"
     bin.install "tools/build/homebrew/lanraragi"
   end
