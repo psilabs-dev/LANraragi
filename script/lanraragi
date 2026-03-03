@@ -3,6 +3,8 @@
 use strict;
 use warnings;
 
+BEGIN { printf "[TIMING] perl_started: delta=%ds\n", time() - $^T; }
+
 use FindBin;
 BEGIN { unshift @INC, "$FindBin::Bin/../lib"; }
 use Mojolicious::Commands;
