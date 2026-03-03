@@ -1,5 +1,7 @@
 package LANraragi;
 
+BEGIN { printf "[TIMING] lanraragi_compile_begin: delta=%ds\n", time() - $^T; }
+
 use local::lib;
 
 use open ':std', ':encoding(UTF-8)';
@@ -10,8 +12,6 @@ use Mojo::JSON qw(decode_json encode_json);
 use Storable;
 use Sys::Hostname;
 use Config;
-
-use Time::HiRes qw(time);
 
 use LANraragi::Utils::Generic    qw(start_shinobu start_minion);
 use LANraragi::Utils::Logging    qw(get_logger get_logdir);
@@ -36,7 +36,7 @@ sub startup {
     say "";
     say "ｷﾀ━━━━━━(ﾟ∀ﾟ)━━━━━━!!!!!";
 
-    my $t0 = time();
+    printf "[TIMING] startup_entered: delta=%ds\n", time() - $^T;
 
     # Load package.json to get version/vername/description
     my $packagejson = decode_json( Mojo::File->new('package.json')->slurp );
@@ -86,8 +86,6 @@ sub startup {
     my $prefix = $self->LRR_CONF->get_baseurl();
     $self->helper( LRR_BASEURL => sub { return $prefix } );
 
-    say sprintf("[TIMING] startup: helpers_ready=%.3fs", time() - $t0);
-
     #Check if a Redis server is running on the provided address/port
     eval { $self->LRR_CONF->get_redis->ping(); };
     if ($@) {
@@ -110,8 +108,6 @@ sub startup {
         sleep 2;
     }
 
-    say sprintf("[TIMING] startup: redis_ready=%.3fs", time() - $t0);
-
     # Initialize cache
     LANraragi::Utils::PageCache::initialize();
 
@@ -123,8 +119,6 @@ sub startup {
         say "Migrating old settings to new format...";
         migrate_old_settings($self);
     }
-
-    say sprintf("[TIMING] startup: cache_i18n_ready=%.3fs", time() - $t0);
 
     if ( $self->LRR_CONF->enable_devmode ) {
         $self->mode('development');
@@ -171,8 +165,6 @@ sub startup {
         $self->LRR_LOGGER->info( "Downloader Detected: " . $name );
     }
 
-    say sprintf("[TIMING] startup: plugins_discovered=%.3fs", time() - $t0);
-
     # Enable Minion capabilities in the app
     if ( IS_UNIX ) {
         shutdown_from_pid( get_temp . "/minion.pid" );
@@ -205,8 +197,6 @@ sub startup {
         shutdown_from_pid( get_temp . "/shinobu.pid" );
     }
     start_shinobu($self);
-
-    say sprintf("[TIMING] startup: workers_spawned=%.3fs", time() - $t0);
 
     # Check if this is a first-time installation.
     first_install_actions();
@@ -241,7 +231,6 @@ sub startup {
 
     LANraragi::Utils::Routing::apply_routes($self);
     $self->LRR_LOGGER->info("Routing done! Ready to receive requests.");
-    say sprintf("[TIMING] startup: total=%.3fs", time() - $t0);
 }
 
 sub shutdown_from_pid {
