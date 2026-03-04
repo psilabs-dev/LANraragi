@@ -1,7 +1,5 @@
 package LANraragi;
 
-BEGIN { printf "[TIMING] lanraragi_compile_begin: delta=%ds\n", time() - $^T; }
-
 use local::lib;
 
 use open ':std', ':encoding(UTF-8)';
@@ -35,8 +33,6 @@ sub startup {
     say "";
     say "";
     say "ｷﾀ━━━━━━(ﾟ∀ﾟ)━━━━━━!!!!!";
-
-    printf "[TIMING] startup_entered: delta=%ds\n", time() - $^T;
 
     # Load package.json to get version/vername/description
     my $packagejson = decode_json( Mojo::File->new('package.json')->slurp );
