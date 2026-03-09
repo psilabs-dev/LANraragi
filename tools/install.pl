@@ -104,10 +104,10 @@ say("\r\nWill now check if all LRR software dependencies are met. \r\n");
 #Fails on win even if redis is in the path
 if (IS_UNIX) {
 
-    #Check for Redis
-    say("Checking for Redis...");
-    can_run('redis-server')
-      or die 'NOT FOUND! Please install a Redis server before proceeding.';
+    #Check for Redis/Valkey
+    say("Checking for Redis/Valkey...");
+    can_run('valkey-server') || can_run('redis-server')
+      or die 'NOT FOUND! Please install a Redis/Valkey server before proceeding.';
     say("OK!");
 }
 
