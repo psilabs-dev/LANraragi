@@ -280,12 +280,6 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
         } else {
             # Partial match using ILIKE
             if (defined $namespace) {
-                # Determine if namespace contains wildcards (already converted from * and ? to % and _)
-                # If wildcards present: use ILIKE with namespace as-is
-                # If no wildcards: use exact match (ILIKE without adding wildcards)
-                my $namespace_has_wildcards = ($namespace =~ /[%_]/);
-                my $namespace_param = $namespace_has_wildcards ? $namespace : $namespace;
-
                 # Handle namespace-only search (e.g., "date_uploaded:")
                 if ($value eq "") {
                     # Search for ANY tag with this namespace
@@ -299,7 +293,7 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
                         $tag_clause = "NOT $tag_clause";
                     }
                     push @where_clauses, $tag_clause;
-                    push @params, $namespace_param;
+                    push @params, $namespace;
                 } else {
                     # Search for namespace (exact unless wildcards) and value (fuzzy)
                     $tag_clause = "EXISTS (
@@ -313,7 +307,7 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
                         $tag_clause = "NOT $tag_clause";
                     }
                     push @where_clauses, $tag_clause;
-                    push @params, $namespace_param, "%$value%";
+                    push @params, $namespace, "%$value%";
                 }
             } else {
                 # No namespace - use FTS for simple searches, ILIKE for wildcards
@@ -393,11 +387,15 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
     if ( !$sortkey || $sortkey eq "title" ) {
         $order_sql = "ORDER BY a.title" . ( $sortorder ? " DESC" : " ASC" );
     } elsif ( $sortkey eq "lastread" ) {
-        $order_sql = "ORDER BY a.lastreadtime" . ( $sortorder ? " DESC" : " ASC" );
+        # Partition: archives with lastreadtime > 0 first, unread archives last
+        $order_sql = "ORDER BY CASE WHEN a.lastreadtime IS NULL OR a.lastreadtime = 0 THEN 1 ELSE 0 END, a.lastreadtime"
+            . ( $sortorder ? " DESC" : " ASC" );
     } else {
         # Sort by tag namespace value (using LATERAL JOIN result)
         if ($use_lateral_sort) {
-            $order_sql = "ORDER BY COALESCE(sort_tag.sort_value, 'zzzzzzzzzz')" . ( $sortorder ? " DESC" : " ASC" ) . ", a.title ASC";
+            # Partition: keyed archives (have sort namespace tag) first, unkeyed last
+            $order_sql = "ORDER BY CASE WHEN sort_tag.sort_value IS NULL THEN 1 ELSE 0 END, sort_tag.sort_value"
+                . ( $sortorder ? " DESC" : " ASC" ) . ", a.title ASC";
         } else {
             # Fallback to title sort if sortkey was invalid
             $order_sql = "ORDER BY a.title" . ( $sortorder ? " DESC" : " ASC" );
