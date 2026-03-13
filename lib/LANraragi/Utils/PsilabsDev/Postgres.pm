@@ -46,7 +46,21 @@ sub initialize_database {
 
     $logger->info("Initializing PostgreSQL database...");
 
+    # Natural sort collation: numeric sequences sort by value, not lexicographically.
+    my $collate_clause = "";
     $sql = <<'SQL';
+CREATE COLLATION IF NOT EXISTS natural_sort (provider = icu, locale = 'en-u-kn-true')
+SQL
+    eval { $dbh->do($sql); };
+    if ($@) {
+        $logger->warn("Failed to create natural_sort collation (ICU may not be available): $@");
+        $logger->warn("Falling back to default collation — title sort will be lexicographic");
+    } else {
+        $logger->info("Created collation: natural_sort");
+        $collate_clause = "COLLATE natural_sort";
+    }
+
+    $sql = <<"SQL";
 CREATE TABLE IF NOT EXISTS lrr_archive (
     arcid           VARCHAR(255) PRIMARY KEY,
     filename        VARCHAR(255) NOT NULL,
@@ -55,7 +69,7 @@ CREATE TABLE IF NOT EXISTS lrr_archive (
     lastreadtime    INTEGER NOT NULL,
     pagecount       INTEGER NOT NULL,
     progress        INTEGER NOT NULL,
-    title           VARCHAR(255) NOT NULL,
+    title           VARCHAR(255) $collate_clause NOT NULL,
     summary         TEXT,
     thumbhash       VARCHAR(255),
     arcsize         BIGINT,
@@ -86,10 +100,10 @@ SQL
     }
     $logger->info("Created table: lrr_category");
     
-    $sql = <<'SQL';
+    $sql = <<"SQL";
 CREATE TABLE IF NOT EXISTS lrr_tank (
     tankid          VARCHAR(255) PRIMARY KEY,
-    name            VARCHAR(255) NOT NULL,
+    name            VARCHAR(255) $collate_clause NOT NULL,
     summary         TEXT,
     tags            TEXT
 )
