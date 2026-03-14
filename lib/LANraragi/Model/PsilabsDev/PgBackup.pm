@@ -364,28 +364,6 @@ SQL
                     }
                 }
 
-                # Update the search_tsv column for full-text search
-                # This is critical for making restored archives searchable
-                my $update_tsv_sql = <<'SQL';
-                    UPDATE lrr_archive
-                    SET search_tsv = to_tsvector('simple',
-                        COALESCE(arcid, '') || ' ' ||
-                        COALESCE(title, '') || ' ' ||
-                        COALESCE(
-                            (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
-                             FROM lrr_archive_to_tag_map atm
-                             JOIN lrr_tag t ON atm.tagid = t.tagid
-                             WHERE atm.arcid = lrr_archive.arcid),
-                            ''
-                        )
-                    )
-                    WHERE arcid = ?
-SQL
-
-                my $update_tsv_sth = $dbh->prepare($update_tsv_sql);
-                $update_tsv_sth->execute($id);
-                $update_tsv_sth->finish;
-
                 $dbh->commit();
             }
         };

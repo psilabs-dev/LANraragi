@@ -72,8 +72,7 @@ CREATE TABLE IF NOT EXISTS lrr_archive (
     title           VARCHAR(255) $collate_clause NOT NULL,
     summary         TEXT,
     thumbhash       VARCHAR(255),
-    arcsize         BIGINT,
-    search_tsv      tsvector
+    arcsize         BIGINT
 )
 SQL
     $rv = $dbh->do($sql);
@@ -222,17 +221,6 @@ SQL
         die "Failed to create idx_lrr_archive_title_trgm index: $errorcode - $errorstr";
     }
     $logger->info("Created index: idx_lrr_archive_title_trgm");
-
-    $sql = <<'SQL';
-CREATE INDEX IF NOT EXISTS idx_lrr_archive_search_tsv ON lrr_archive USING gin (search_tsv)
-SQL
-    $rv = $dbh->do($sql);
-    unless ( defined $rv ) {
-        my $errorcode   = $dbh->err // '';
-        my $errorstr    = $dbh->errstr // '';
-        die "Failed to create idx_lrr_archive_search_tsv index: $errorcode - $errorstr";
-    }
-    $logger->info("Created index: idx_lrr_archive_search_tsv");
 
     $sql = <<'SQL';
 CREATE INDEX IF NOT EXISTS idx_lrr_tag_value_trgm ON lrr_tag USING gin (value gin_trgm_ops)

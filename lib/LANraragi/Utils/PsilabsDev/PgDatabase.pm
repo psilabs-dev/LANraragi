@@ -438,26 +438,6 @@ sub set_title_with_dbh ( $dbh, $id, $newtitle ) {
         $sth->execute($newtitle, $id);
         $sth->finish;
 
-        # Update the search_tsv column for full-text search
-        # The search_tsv includes arcid, title and tags, so we need to regenerate it
-        my $update_tsv_sth = $dbh->prepare(q{
-            UPDATE lrr_archive
-            SET search_tsv = to_tsvector('simple',
-                COALESCE(arcid, '') || ' ' ||
-                COALESCE(title, '') || ' ' ||
-                COALESCE(
-                    (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
-                     FROM lrr_archive_to_tag_map atm
-                     JOIN lrr_tag t ON atm.tagid = t.tagid
-                     WHERE atm.arcid = lrr_archive.arcid),
-                    ''
-                )
-            )
-            WHERE arcid = ?
-        });
-        $update_tsv_sth->execute($id);
-        $update_tsv_sth->finish;
-
         # NO commit - caller manages transaction
 
         $logger->debug("Updated title for archive $id to: $newtitle");
@@ -586,31 +566,9 @@ sub set_tags_with_dbh ( $dbh, $id, $newtags, $append = 0 ) {
     $tagid_sth->finish;
     $map_sth->finish;
 
-    # Update the search_tsv column for full-text search
-    my $update_tsv_sth = $dbh->prepare(q{
-        UPDATE lrr_archive
-        SET search_tsv = to_tsvector('simple',
-            COALESCE(arcid, '') || ' ' ||
-            COALESCE(title, '') || ' ' ||
-            COALESCE(
-                (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
-                 FROM lrr_archive_to_tag_map atm
-                 JOIN lrr_tag t ON atm.tagid = t.tagid
-                 WHERE atm.arcid = lrr_archive.arcid),
-                ''
-            )
-        )
-        WHERE arcid = ?
-    });
-    $update_tsv_sth->execute($id);
-    $update_tsv_sth->finish;
-
     # NO commit - caller manages transaction
 
     $logger->debug("Successfully updated tags for archive $id");
-
-    # Postgres doesn't need a separate search cache like Redis
-    # The search_tsv column is updated automatically above
 }
 
 # replaces LANraragi::Utils::Database::set_summary
@@ -704,10 +662,7 @@ sub clear_new_all {
 
 # replaces LANraragi::Utils::Database::invalidate_cache
 # In Postgres, there's no separate search cache to invalidate.
-# The search_tsv column is kept in sync with updates, so this is a no-op.
 sub invalidate_cache ( $rebuild_indexes = 0 ) {
-    # No-op for Postgres - search index is always up to date via search_tsv
-    # The $rebuild_indexes parameter is ignored as well
     return;
 }
 
@@ -746,30 +701,10 @@ sub change_archive_id ( $old_id, $new_id ) {
                 $update_size_sth->finish;
             }
 
-            # Update tag mappings FIRST (before updating search_tsv which queries this table)
+            # Update tag mappings
             my $update_tag_sth = $dbh->prepare('UPDATE lrr_archive_to_tag_map SET arcid = ? WHERE arcid = ?');
             $update_tag_sth->execute($new_id, $old_id);
             $update_tag_sth->finish;
-
-            # Update the search_tsv column with the new arcid
-            # The search_tsv includes arcid, title and tags, so we need to regenerate it
-            my $update_tsv_sth = $dbh->prepare(q{
-                UPDATE lrr_archive
-                SET search_tsv = to_tsvector('simple',
-                    COALESCE(arcid, '') || ' ' ||
-                    COALESCE(title, '') || ' ' ||
-                    COALESCE(
-                        (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
-                         FROM lrr_archive_to_tag_map atm
-                         JOIN lrr_tag t ON atm.tagid = t.tagid
-                         WHERE atm.arcid = lrr_archive.arcid),
-                        ''
-                    )
-                )
-                WHERE arcid = ?
-            });
-            $update_tsv_sth->execute($new_id);
-            $update_tsv_sth->finish;
 
             # Update category mappings
             my $update_cat_sth = $dbh->prepare('UPDATE lrr_category_to_archive_map SET arcid = ? WHERE arcid = ?');
@@ -883,30 +818,10 @@ sub change_archive_id_with_dbh ( $dbh, $old_id, $new_id ) {
             $update_size_sth->finish;
         }
 
-        # Update tag mappings FIRST (before updating search_tsv which queries this table)
+        # Update tag mappings
         my $update_tag_sth = $dbh->prepare('UPDATE lrr_archive_to_tag_map SET arcid = ? WHERE arcid = ?');
         $update_tag_sth->execute($new_id, $old_id);
         $update_tag_sth->finish;
-
-        # Update the search_tsv column with the new arcid
-        # The search_tsv includes arcid, title and tags, so we need to regenerate it
-        my $update_tsv_sth = $dbh->prepare(q{
-            UPDATE lrr_archive
-            SET search_tsv = to_tsvector('simple',
-                COALESCE(arcid, '') || ' ' ||
-                COALESCE(title, '') || ' ' ||
-                COALESCE(
-                    (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
-                     FROM lrr_archive_to_tag_map atm
-                     JOIN lrr_tag t ON atm.tagid = t.tagid
-                     WHERE atm.arcid = lrr_archive.arcid),
-                    ''
-                )
-            )
-            WHERE arcid = ?
-        });
-        $update_tsv_sth->execute($new_id);
-        $update_tsv_sth->finish;
 
         # Update category mappings
         my $update_cat_sth = $dbh->prepare('UPDATE lrr_category_to_archive_map SET arcid = ? WHERE arcid = ?');

@@ -208,7 +208,6 @@ SQL
 #     - INDEX_<tag> (individual tag search indexes)
 #
 #   In Postgres, these indexes are maintained automatically:
-#     - search_tsv column provides full-text search (auto-updated via triggers)
 #     - Tag statistics are computed on-the-fly via SQL queries
 #     - URL lookups use JOIN queries on lrr_tag table
 #     - Untagged/new filtering uses WHERE clauses
@@ -219,8 +218,7 @@ sub build_stat_hashes {
 
     $logger->info("build_stat_hashes called - no-op for Postgres (indexes maintained automatically)");
 
-    # Postgres maintains search indexes automatically via the search_tsv column
-    # and database triggers. No manual index building is required.
+    # No manual index building is required for Postgres.
     # This function exists only for compatibility with the Minion task system.
 
     return;

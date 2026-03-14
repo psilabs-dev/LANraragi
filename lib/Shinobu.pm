@@ -267,25 +267,6 @@ sub add_to_filemap ( $redis_cfg, $file ) {
                     $update_sth->execute($file, $name, $id);
                     $update_sth->finish;
 
-                    # Update search_tsv
-                    my $update_tsv_sth = $dbh->prepare(q{
-                        UPDATE lrr_archive
-                        SET search_tsv = to_tsvector('simple',
-                            COALESCE(arcid, '') || ' ' ||
-                            COALESCE(title, '') || ' ' ||
-                            COALESCE(
-                                (SELECT string_agg(COALESCE(t.namespace, '') || ':' || t.value, ' ')
-                                 FROM lrr_archive_to_tag_map atm
-                                 JOIN lrr_tag t ON atm.tagid = t.tagid
-                                 WHERE atm.arcid = lrr_archive.arcid),
-                                ''
-                            )
-                        )
-                        WHERE arcid = ?
-                    });
-                    $update_tsv_sth->execute($id);
-                    $update_tsv_sth->finish;
-
                     $dbh->commit;
 
                     invalidate_cache();
