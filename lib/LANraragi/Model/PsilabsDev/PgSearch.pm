@@ -368,14 +368,16 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
         if ( $sortkey !~ /^[a-zA-Z0-9_-]+$/ ) {
             $logger->warn("Invalid sortkey: $sortkey. Falling back to title sort.");
         } else {
-            # Use LEFT JOIN with DISTINCT ON - filter tags by namespace first, then join to archives
-            # This reverses the join order and is much faster than LATERAL JOIN
+            # Use LEFT JOIN with GROUP BY + MAX on the denormalized namespace in the tag map.
+            # Filtering on atm.namespace uses the (namespace, arcid) index to narrow rows
+            # before joining to lrr_tag for the sort value. GROUP BY + MAX replaces DISTINCT ON,
+            # allowing hash aggregate (O(N)) instead of sort + unique (O(N log N)).
             $lateral_join_sql = "LEFT JOIN (
-                SELECT DISTINCT ON (atm.arcid) atm.arcid, t.value as sort_value
-                FROM lrr_tag t
-                JOIN lrr_archive_to_tag_map atm ON t.tagid = atm.tagid
-                WHERE t.namespace = ?
-                ORDER BY atm.arcid, t.value DESC
+                SELECT atm.arcid, MAX(t.value) as sort_value
+                FROM lrr_archive_to_tag_map atm
+                JOIN lrr_tag t ON atm.tagid = t.tagid
+                WHERE atm.namespace = ?
+                GROUP BY atm.arcid
             ) sort_tag ON sort_tag.arcid = a.arcid";
             push @lateral_params, $sortkey;  # Add to lateral_params instead of params
             $use_lateral_sort = 1;
@@ -413,6 +415,27 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
     $count_sth->finish;
     my $count_time = (time() - $count_start) * 1000;
     $logger->debug(sprintf("[PERF] Filtered COUNT query: %.2fms", $count_time));
+
+    # EXPLAIN ANALYZE for slow COUNT queries
+    if ($count_time > 50) {
+        eval {
+            my $explain_count_sql = "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) $count_sql";
+            my $explain_sth = $dbh->prepare($explain_count_sql);
+            $explain_sth->execute(@params);
+            my @plan_lines;
+            while ( my @row = $explain_sth->fetchrow_array ) {
+                push @plan_lines, $row[0];
+            }
+            $explain_sth->finish;
+            $logger->info("[EXPLAIN-COUNT] Query: $count_sql");
+            foreach my $line (@plan_lines) {
+                $logger->info("[EXPLAIN-COUNT] $line");
+            }
+        };
+        if ($@) {
+            $logger->info("[EXPLAIN-COUNT] Failed: $@");
+        }
+    }
 
     # Build LIMIT/OFFSET clause
     my $limit_sql = "";
@@ -454,6 +477,28 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
         $use_lateral_sort ? 'true' : 'false',
         defined $keysperpage ? $keysperpage : 'none',
         defined $start ? $start : 'none'));
+
+    # EXPLAIN ANALYZE for diagnostic purposes (debug mode only)
+    if ($select_time > 50) {
+        eval {
+            my $explain_sql = "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) $sql";
+            my $explain_sth = $dbh->prepare($explain_sql);
+            $explain_sth->execute(@lateral_params, @params, @limit_params);
+            my @plan_lines;
+            while ( my @row = $explain_sth->fetchrow_array ) {
+                push @plan_lines, $row[0];
+            }
+            $explain_sth->finish;
+            $logger->info("[EXPLAIN] Query: $sql");
+            $logger->info("[EXPLAIN] Params: " . join(", ", @lateral_params, @params, @limit_params));
+            foreach my $line (@plan_lines) {
+                $logger->info("[EXPLAIN] $line");
+            }
+        };
+        if ($@) {
+            $logger->info("[EXPLAIN] Failed to run EXPLAIN ANALYZE: $@");
+        }
+    }
 
     # When grouptanks=true, we also need to fetch tank IDs that match the search criteria
     # and prepend them to the results (tanks typically come first)

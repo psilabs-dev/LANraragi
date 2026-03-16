@@ -293,8 +293,8 @@ SQL
 SQL
 
     my $insert_map_sth = $dbh->prepare(<<'SQL');
-        INSERT INTO lrr_archive_to_tag_map (arcid, tagid, update_date)
-        VALUES (?, ?, CURRENT_DATE)
+        INSERT INTO lrr_archive_to_tag_map (arcid, tagid, namespace, update_date)
+        VALUES (?, ?, ?, CURRENT_DATE)
         ON CONFLICT DO NOTHING
 SQL
 
@@ -360,7 +360,7 @@ SQL
                         my $tagid = $tag_row->{tagid};
 
                         # Link tag to archive (using pre-prepared statement)
-                        $insert_map_sth->execute($id, $tagid);
+                        $insert_map_sth->execute($id, $tagid, $namespace);
                     }
                 }
 

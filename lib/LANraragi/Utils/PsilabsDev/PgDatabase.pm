@@ -528,8 +528,8 @@ sub set_tags_with_dbh ( $dbh, $id, $newtags, $append = 0 ) {
         SELECT tagid FROM lrr_tag WHERE namespace = ? AND value = ?
     });
     my $map_sth = $dbh->prepare(q{
-        INSERT INTO lrr_archive_to_tag_map (arcid, tagid, update_date)
-        VALUES (?, ?, CURRENT_DATE)
+        INSERT INTO lrr_archive_to_tag_map (arcid, tagid, namespace, update_date)
+        VALUES (?, ?, ?, CURRENT_DATE)
     });
 
     foreach my $tag (@tag_array) {
@@ -558,7 +558,7 @@ sub set_tags_with_dbh ( $dbh, $id, $newtags, $append = 0 ) {
         my $tagid = $row->{tagid};
 
         # Insert mapping
-        $map_sth->execute($id, $tagid);
+        $map_sth->execute($id, $tagid, $namespace);
     }
 
     # Finish all statements AFTER the loop
