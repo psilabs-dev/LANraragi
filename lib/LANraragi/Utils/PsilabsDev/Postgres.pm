@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS lrr_archive_to_tag_map (
     arcid           VARCHAR(255) NOT NULL,
     tagid           INTEGER NOT NULL,
     namespace       VARCHAR(255) NOT NULL DEFAULT '',
+    value           VARCHAR(255) NOT NULL DEFAULT '',
     update_date     DATE,
     FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
     FOREIGN KEY (tagid) REFERENCES lrr_tag (tagid)
@@ -420,7 +421,7 @@ SQL
     # P16: Namespace-based sort index on tag map (denormalized namespace enables direct namespace lookups
     # without joining to lrr_tag, critical for namespace sort queries at scale)
     $sql = <<'SQL';
-CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_namespace_arcid ON lrr_archive_to_tag_map (namespace, arcid) INCLUDE (tagid)
+CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_namespace_arcid ON lrr_archive_to_tag_map (namespace, arcid) INCLUDE (tagid, value)
 SQL
     $rv = $dbh->do($sql);
     unless ( defined $rv ) {

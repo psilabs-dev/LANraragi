@@ -138,13 +138,12 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
 
     # Untagged filter - archives with no "meaningful" tags
     # Excludes basic metadata namespaces that don't count as "tagged"
-    # (matches logic in PgArchive::get_untagged_archives and Model::Stats)
+    # Uses denormalized namespace on tag map — no join to lrr_tag needed.
     if ($untaggedonly) {
         push @where_clauses, "NOT EXISTS (
         SELECT 1 FROM lrr_archive_to_tag_map atm
-        INNER JOIN lrr_tag t ON atm.tagid = t.tagid
         WHERE atm.arcid = a.arcid
-        AND t.namespace NOT IN ('artist', 'parody', 'series', 'language', 'event', 'group', 'date_added', 'timestamp', 'source')
+        AND atm.namespace NOT IN ('artist', 'parody', 'series', 'language', 'event', 'group', 'date_added', 'timestamp', 'source')
     )";
     }
 
@@ -368,14 +367,12 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
         if ( $sortkey !~ /^[a-zA-Z0-9_-]+$/ ) {
             $logger->warn("Invalid sortkey: $sortkey. Falling back to title sort.");
         } else {
-            # Use LEFT JOIN with GROUP BY + MAX on the denormalized namespace in the tag map.
-            # Filtering on atm.namespace uses the (namespace, arcid) index to narrow rows
-            # before joining to lrr_tag for the sort value. GROUP BY + MAX replaces DISTINCT ON,
-            # allowing hash aggregate (O(N)) instead of sort + unique (O(N log N)).
+            # Single-table sort subquery using denormalized (namespace, value) on the tag map.
+            # No join to lrr_tag needed — the covering index (namespace, arcid) INCLUDE (value)
+            # services the entire subquery from a single index-only scan.
             $lateral_join_sql = "LEFT JOIN (
-                SELECT atm.arcid, MAX(t.value) as sort_value
+                SELECT atm.arcid, MAX(atm.value) as sort_value
                 FROM lrr_archive_to_tag_map atm
-                JOIN lrr_tag t ON atm.tagid = t.tagid
                 WHERE atm.namespace = ?
                 GROUP BY atm.arcid
             ) sort_tag ON sort_tag.arcid = a.arcid";
