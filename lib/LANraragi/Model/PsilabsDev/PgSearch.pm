@@ -401,39 +401,6 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
         }
     }
 
-    # Get total count of matching archives (without pagination)
-    # NOTE: COUNT query does not need LATERAL JOIN (only used for sorting)
-    my $count_sql = "SELECT COUNT(*) as total FROM lrr_archive a $where_sql";
-    $logger->debug("COUNT SQL: $count_sql");
-    my $count_start = time();
-    my $count_sth = $dbh->prepare($count_sql);
-    $count_sth->execute(@params);
-    my $archive_filtered_count = $count_sth->fetchrow_hashref->{total} || 0;
-    $count_sth->finish;
-    my $count_time = (time() - $count_start) * 1000;
-    $logger->debug(sprintf("[PERF] Filtered COUNT query: %.2fms", $count_time));
-
-    # EXPLAIN ANALYZE for slow COUNT queries
-    if ($count_time > 50) {
-        eval {
-            my $explain_count_sql = "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) $count_sql";
-            my $explain_sth = $dbh->prepare($explain_count_sql);
-            $explain_sth->execute(@params);
-            my @plan_lines;
-            while ( my @row = $explain_sth->fetchrow_array ) {
-                push @plan_lines, $row[0];
-            }
-            $explain_sth->finish;
-            $logger->info("[EXPLAIN-COUNT] Query: $count_sql");
-            foreach my $line (@plan_lines) {
-                $logger->info("[EXPLAIN-COUNT] $line");
-            }
-        };
-        if ($@) {
-            $logger->info("[EXPLAIN-COUNT] Failed: $@");
-        }
-    }
-
     # Build LIMIT/OFFSET clause
     my $limit_sql = "";
     my @limit_params = ();
@@ -442,8 +409,9 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
         push @limit_params, $keysperpage, $start;
     }
 
-    # Build final SQL with pagination
-    my $sql = "SELECT a.arcid FROM lrr_archive a $lateral_join_sql $where_sql $order_sql $limit_sql";
+    # Single query: SELECT with COUNT(*) OVER() to get filtered count and paginated results together.
+    # This avoids running the filter twice (once for COUNT, once for SELECT).
+    my $sql = "SELECT a.arcid, COUNT(*) OVER() as filtered_total FROM lrr_archive a $lateral_join_sql $where_sql $order_sql $limit_sql";
 
     $logger->debug("SQL: $sql");
     $logger->debug("LATERAL params: " . join(", ", @lateral_params));
@@ -452,14 +420,26 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
 
     my $select_start = time();
     my $sth = $dbh->prepare($sql);
-    # Execute with LATERAL params first (appear first in SQL), then WHERE params, then LIMIT params
     $sth->execute(@lateral_params, @params, @limit_params);
 
     my @ids;
+    my $archive_filtered_count = 0;
     while ( my $row = $sth->fetchrow_hashref ) {
+        $archive_filtered_count = $row->{filtered_total} unless $archive_filtered_count;
         push @ids, $row->{arcid};
     }
     $sth->finish;
+
+    # When OFFSET exceeds result count, no rows are returned and filtered_total is unknown.
+    # Fall back to a COUNT query only in this edge case (paginated query with 0 results).
+    if ( !$archive_filtered_count && !@ids && defined $start ) {
+        my $count_sql = "SELECT COUNT(*) as total FROM lrr_archive a $where_sql";
+        my $count_sth = $dbh->prepare($count_sql);
+        $count_sth->execute(@params);
+        $archive_filtered_count = $count_sth->fetchrow_hashref->{total} || 0;
+        $count_sth->finish;
+    }
+
     my $select_time = (time() - $select_start) * 1000;
 
     # Determine sort type for logging
@@ -672,17 +652,6 @@ sub search_tanks_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sor
         $order_sql = "ORDER BY t.name" . ( $sortorder ? " DESC" : " ASC" );
     }
 
-    # Get total count of matching tanks (without pagination)
-    my $count_sql = "SELECT COUNT(*) as total FROM lrr_tank t $where_sql";
-    $logger->debug("Tank COUNT SQL: $count_sql");
-    my $count_start = time();
-    my $count_sth = $dbh->prepare($count_sql);
-    $count_sth->execute(@params);
-    my $tank_filtered_count = $count_sth->fetchrow_hashref->{total} || 0;
-    $count_sth->finish;
-    my $count_time = (time() - $count_start) * 1000;
-    $logger->debug(sprintf("[PERF] Tank COUNT query: %.2fms", $count_time));
-
     # Build LIMIT/OFFSET clause
     my $limit_sql = "";
     my @limit_params = ();
@@ -691,8 +660,8 @@ sub search_tanks_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sor
         push @limit_params, $keysperpage, $start;
     }
 
-    # Build final SQL for tanks with pagination
-    my $sql = "SELECT t.tankid FROM lrr_tank t $where_sql $order_sql $limit_sql";
+    # Single query with COUNT(*) OVER() to get filtered count and paginated results together.
+    my $sql = "SELECT t.tankid, COUNT(*) OVER() as filtered_total FROM lrr_tank t $where_sql $order_sql $limit_sql";
 
     $logger->debug("Tank SQL: $sql");
     $logger->debug("Tank Params: " . join(", ", @params));
@@ -703,7 +672,9 @@ sub search_tanks_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sor
     $sth->execute(@params, @limit_params);
 
     my @tank_ids;
+    my $tank_filtered_count = 0;
     while ( my $row = $sth->fetchrow_hashref ) {
+        $tank_filtered_count = $row->{filtered_total} unless $tank_filtered_count;
         push @tank_ids, $row->{tankid};
     }
     $sth->finish;
