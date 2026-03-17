@@ -217,7 +217,7 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
                         SELECT 1 FROM lrr_archive_to_tag_map atm
                         JOIN lrr_tag t ON atm.tagid = t.tagid
                         WHERE atm.arcid = a.arcid
-                        AND t.namespace = ?
+                        AND LOWER(t.namespace) = ?
                     )";
                     if ($isneg) {
                         $tag_clause = "NOT $tag_clause";
@@ -230,8 +230,8 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
                         SELECT 1 FROM lrr_archive_to_tag_map atm
                         JOIN lrr_tag t ON atm.tagid = t.tagid
                         WHERE atm.arcid = a.arcid
-                        AND t.namespace = ?
-                        AND t.value = ?
+                        AND LOWER(t.namespace) = ?
+                        AND LOWER(t.value) = ?
                     )";
                     if ($isneg) {
                         $tag_clause = "NOT $tag_clause";
@@ -266,7 +266,7 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
                             SELECT 1 FROM lrr_archive_to_tag_map atm
                             JOIN lrr_tag t ON atm.tagid = t.tagid
                             WHERE atm.arcid = a.arcid
-                            AND t.value = ?
+                            AND LOWER(t.value) = ?
                         )
                     )";
                     if ($isneg) {
