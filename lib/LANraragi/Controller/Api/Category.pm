@@ -113,10 +113,11 @@ sub add_to_category {
 
             if ($result) {
                 my $successMessage = "Added $arcid to Category $catid!";
+                my %category       = LANraragi::Model::PsilabsDev::PgCategory::get_category($catid);
                 my $title          = LANraragi::Model::PsilabsDev::PgArchive::get_title($arcid);
 
-                if ( defined($title) ) {
-                    $successMessage = "Added \"$title\" to category $catid!";
+                if ( %category && defined($title) ) {
+                    $successMessage = "Added \"$title\" to category \"$category{name}\"!";
                 }
 
                 render_api_response( $self, "add_to_category", undef, $successMessage );
