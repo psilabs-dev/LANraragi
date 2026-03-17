@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS lrr_archive (
     lastreadtime    INTEGER NOT NULL,
     pagecount       INTEGER NOT NULL,
     progress        INTEGER NOT NULL,
-    title           VARCHAR(255) $collate_clause NOT NULL,
+    title           TEXT $collate_clause NOT NULL,
     summary         TEXT,
     thumbhash       VARCHAR(255),
     arcsize         BIGINT
@@ -189,7 +189,7 @@ SQL
 CREATE TABLE IF NOT EXISTS lrr_toc (
     arcid           VARCHAR(255) NOT NULL,
     page            INTEGER NOT NULL,
-    title           VARCHAR(255) NOT NULL,
+    title           TEXT NOT NULL,
     FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
     UNIQUE (arcid, page)
 )
@@ -394,6 +394,19 @@ SQL
         die "Failed to create idx_lrr_tag_namespace_value index: $errorcode - $errorstr";
     }
     $logger->info("Created index: idx_lrr_tag_namespace_value");
+
+    # Functional index for case-insensitive exact match (LOWER() in PgSearch).
+    # Matches Redis behavior where INDEX keys are lowercased via lc().
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_tag_lower_namespace_value ON lrr_tag (LOWER(namespace), LOWER(value))
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_tag_lower_namespace_value index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_tag_lower_namespace_value");
 
     $sql = <<'SQL';
 CREATE INDEX IF NOT EXISTS idx_lrr_archive_to_tag_arcid_tagid ON lrr_archive_to_tag_map (arcid, tagid)
