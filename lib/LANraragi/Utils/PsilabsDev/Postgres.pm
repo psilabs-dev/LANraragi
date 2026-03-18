@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS lrr_archive (
     lastreadtime    INTEGER NOT NULL,
     pagecount       INTEGER NOT NULL,
     progress        INTEGER NOT NULL,
-    title           VARCHAR(255) $collate_clause NOT NULL,
+    title           TEXT $collate_clause NOT NULL,
     summary         TEXT,
     thumbhash       VARCHAR(255),
     arcsize         BIGINT
@@ -189,7 +189,7 @@ SQL
 CREATE TABLE IF NOT EXISTS lrr_toc (
     arcid           VARCHAR(255) NOT NULL,
     page            INTEGER NOT NULL,
-    title           VARCHAR(255) NOT NULL,
+    title           TEXT NOT NULL,
     FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
     UNIQUE (arcid, page)
 )
