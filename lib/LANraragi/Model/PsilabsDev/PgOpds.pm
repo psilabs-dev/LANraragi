@@ -14,7 +14,7 @@ use LANraragi::Utils::PageCache qw(fetch put);
 use LANraragi::Utils::Resizer  qw(get_resizer);
 use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive_json);
 use LANraragi::Utils::PsilabsDev::PgPath     qw(get_archive_path);
-use LANraragi::Utils::PsilabsDev::Postgres   qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database    qw(get_dbh);
 
 use LANraragi::Model::PsilabsDev::PgCategory;
 use LANraragi::Model::PsilabsDev::PgSearch;
@@ -99,7 +99,7 @@ sub generate_opds_item {
 sub get_opds_data {
 
     my $id  = shift;
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     my $file = get_archive_path( $dbh, $id );
     unless ( -e $file ) {
@@ -153,7 +153,7 @@ sub render_archive_page {
 
     my $logger = LANraragi::Utils::Logging::get_logger( "OPDS Page Serving", "lanraragi" );
 
-    my $dbh     = get_postgresql_dbh();
+    my $dbh     = get_dbh();
     my $archive = get_archive_path( $dbh, $id );
     $dbh->disconnect();
 

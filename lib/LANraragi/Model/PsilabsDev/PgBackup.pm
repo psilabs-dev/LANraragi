@@ -6,7 +6,7 @@ use utf8;
 
 use Mojo::JSON qw(encode_json decode_json);
 
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Model::PsilabsDev::PgTankoubon;
 use LANraragi::Utils::PsilabsDev::PgDatabase qw(clean_categories_and_tanks);
@@ -15,7 +15,7 @@ use LANraragi::Utils::PsilabsDev::PgDatabase qw(clean_categories_and_tanks);
 # build_backup_JSON()
 #   Goes through the Postgres database and builds a JSON string containing archive metadata.
 sub build_backup_JSON {
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $logger = get_logger("Backup/Restore", "lanraragi");
 
     # Basic structure of the backup object
@@ -157,7 +157,7 @@ sub restore_from_JSON {
 
     $logger->info("Received a JSON backup to restore.");
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Clean categories and tankoubons before restoring from JSON
     eval {

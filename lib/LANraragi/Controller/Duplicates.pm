@@ -6,7 +6,8 @@ use POSIX qw(strftime);
 use Mojo::JSON qw(decode_json encode_json);
 
 use LANraragi::Utils::Generic  qw(generate_themes_header);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive_summary_with_dbh);
 use LANraragi::Model::Config;
 
 # Go through the archives in the content directory and build the template at the end.
@@ -42,27 +43,7 @@ sub index {
 
     my $dbh;
     eval {
-        $dbh = get_postgresql_dbh();
-
-        # Prepare statement once before loops for efficiency
-        my $sth = $dbh->prepare(q{
-            SELECT arcid, filename, title,
-                COALESCE(
-                    (SELECT string_agg(
-                        CASE
-                            WHEN t.namespace = '' THEN t.value
-                            ELSE t.namespace || ':' || t.value
-                        END,
-                        ', '
-                    )
-                    FROM lrr_archive_to_tag_map atm
-                    JOIN lrr_tag t ON atm.tagid = t.tagid
-                    WHERE atm.arcid = ?),
-                    ''
-                ) as tags
-            FROM lrr_archive
-            WHERE arcid = ?
-        });
+        $dbh = get_dbh();
 
         foreach my $key ( keys %duplicate_groups ) {
 
@@ -72,8 +53,7 @@ sub index {
 
             my @archives;
             foreach my $id (@ids) {
-                $sth->execute($id, $id);
-                my $row = $sth->fetchrow_hashref;
+                my $row = get_archive_summary_with_dbh($dbh, $id);
 
                 # Check if archive still exists
                 if ($row) {
@@ -122,7 +102,6 @@ sub index {
             push @duplicates, \@archives;
         }
 
-        $sth->finish;
         $dbh->disconnect();
     };
     if ( my $error = $@ ) {

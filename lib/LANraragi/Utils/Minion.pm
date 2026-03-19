@@ -19,7 +19,7 @@ use LANraragi::Utils::Plugins    qw(get_downloader_for_url get_plugin get_plugin
 use LANraragi::Utils::PsilabsDev::PgPlugins qw(use_plugin);
 use LANraragi::Utils::String     qw(trim_url);
 use LANraragi::Utils::TempFolder qw(get_temp);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::PsilabsDev::PgArchive qw(extract_thumbnail extract_thumbnail_with_dbh);
 
 use LANraragi::Model::Upload;
@@ -115,7 +115,7 @@ sub add_tasks {
             $logger->debug("Generating page thumbnails for archive $id...");
 
             # Get the number of pages in the archive from Postgres
-            my $dbh = get_postgresql_dbh();
+            my $dbh = get_dbh();
             my $pages;
 
             eval {
@@ -210,7 +210,7 @@ sub add_tasks {
             my ( $thumbdir, $force ) = @args;
 
             my $logger = get_logger( "Minion", "minion" );
-            my $dbh = get_postgresql_dbh();
+            my $dbh = get_dbh();
             my $sth = $dbh->prepare('SELECT arcid FROM lrr_archive');
             $sth->execute();
             my @keys;
@@ -227,7 +227,7 @@ sub add_tasks {
                 my (@keys) = @_;
 
                 # Each thread/process needs its own database connection
-                my $dbh_worker = get_postgresql_dbh();
+                my $dbh_worker = get_dbh();
 
                 foreach my $id (@keys) {
 
@@ -324,7 +324,7 @@ sub add_tasks {
             $logger->info("Starting find duplicate job (threshold = $threshold)");
 
             # Gather thumbhashes from Postgres instead of Redis
-            my $dbh = get_postgresql_dbh();
+            my $dbh = get_dbh();
             my %thumbhashes;
 
             eval {

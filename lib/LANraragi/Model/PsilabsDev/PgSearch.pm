@@ -12,7 +12,7 @@ use Time::HiRes qw(time);
 use LANraragi::Utils::Generic qw(intersect_arrays);
 use LANraragi::Utils::String qw(trim);
 use LANraragi::Utils::Logging qw(get_logger);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Model::Config;
 use LANraragi::Model::PsilabsDev::PgCategory;
 
@@ -22,7 +22,7 @@ use LANraragi::Model::PsilabsDev::PgCategory;
 sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks ) {
 
     my $logger = get_logger( "PgSearch Engine", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     my ( $total, $filtered, @ids );
     my $start_time = time();
