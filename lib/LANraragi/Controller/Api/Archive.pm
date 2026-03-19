@@ -17,7 +17,7 @@ use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive_json set_isnew);
 use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Redis    qw(redis_encode);
 use LANraragi::Utils::Path     qw(compat_path get_archive_path move_path);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::PsilabsDev::PgPath;
 
 use LANraragi::Utils::Login qw(is_logged_in_api);
@@ -50,7 +50,7 @@ sub serve_untagged_archivelist {
 sub serve_metadata {
     my $self  = shift->openapi->valid_input or return;
     my $id    = $self->stash('id');
-    my $dbh   = get_postgresql_dbh();
+    my $dbh   = get_dbh();
 
     my $arcdata = get_archive_json( $dbh, $id );
     $dbh->disconnect();
@@ -109,7 +109,7 @@ sub serve_file {
 
     my $self  = shift->openapi->valid_input or return;
     my $id    = $self->stash('id');
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     my $file = LANraragi::Utils::PsilabsDev::PgPath::get_archive_path( $dbh, $id );
     $dbh->disconnect();

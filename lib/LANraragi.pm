@@ -25,7 +25,7 @@ use LANraragi::Model::Search;
 use LANraragi::Model::Config;
 use LANraragi::Model::Setup qw(first_install_actions);
 
-use LANraragi::Utils::PsilabsDev::Postgres;
+use LANraragi::Utils::PsilabsDev::Database;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -110,17 +110,14 @@ sub startup {
     # Initialize cache
     LANraragi::Utils::PageCache::initialize();
 
-    # Initialize Postgres schema
-    my $dbh = LANraragi::Utils::PsilabsDev::Postgres::get_postgresql_dbh();
+    # Initialize database schema
     eval {
-        LANraragi::Utils::PsilabsDev::Postgres::initialize_database($dbh);
-        $dbh->disconnect();
-        $self->LRR_LOGGER->info("Initialized Postgres schema.");
+        LANraragi::Utils::PsilabsDev::Database::initialize();
+        $self->LRR_LOGGER->info("Initialized database schema.");
     } or do {
         my $error = $@;
-        $dbh->disconnect();
-        $self->LRR_LOGGER->error("Failed to initialize Postgres schema: $error");
-        die "Failed to initialize Postgres schema: $error";
+        $self->LRR_LOGGER->error("Failed to initialize database schema: $error");
+        die "Failed to initialize database schema: $error";
     };
 
     # Load i18n

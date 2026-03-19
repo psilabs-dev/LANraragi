@@ -40,7 +40,7 @@ use LANraragi::Model::Config;
 use LANraragi::Model::PsilabsDev::PgUpload qw(add_timestamp_tag add_pagecount add_arcsize add_timestamp_tag_with_dbh add_pagecount_with_dbh add_arcsize_with_dbh add_archive_to_postgres);
 use LANraragi::Model::PsilabsDev::PgPlugins;
 use LANraragi::Utils::PsilabsDev::PgDatabase qw(change_archive_id);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::PsilabsDev::PgPath qw(get_archive_path);
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
@@ -171,7 +171,7 @@ sub update_filemap {
 
 sub add_to_filemap ( $redis_cfg, $file ) {
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     unless ($dbh) {
         $logger->error("Failed to connect to PostgreSQL database");
         return;
@@ -367,7 +367,7 @@ sub add_new_files (@files) {
 
 sub add_new_file ( $id, $file ) {
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     unless ($dbh) {
         $logger->error("Failed to connect to PostgreSQL database");
         return;
