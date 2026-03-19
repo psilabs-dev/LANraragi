@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use utf8;
 
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Model::Config;
 
@@ -19,7 +19,7 @@ use LANraragi::Model::Config;
 #     - All archives that are not in any tank
 sub get_archive_count {
     my $logger = get_logger("PgStats", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Count non-empty tanks + archives not in any tank (matching Redis LRR_TANKGROUPED semantics)
     my $sql = <<'SQL';
@@ -73,7 +73,7 @@ sub get_page_stat {
 #   Returns the size in GB (as a decimal number).
 sub compute_content_size {
     my $logger = get_logger("PgStats", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Sum all archive sizes
     my $sql = <<'SQL';
@@ -108,7 +108,7 @@ sub is_url_recorded {
     my $url = shift;
 
     my $logger = get_logger("PgStats", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     $logger->debug("Checking if url $url is in the database.");
 
@@ -153,7 +153,7 @@ sub build_tag_stats {
 
     $logger->debug("Serving tag statistics with a minimum weight of $minscore");
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Count tag occurrences across all archives, filtering by minimum score
     # Join lrr_tag with lrr_archive_to_tag_map to count how many times each tag appears

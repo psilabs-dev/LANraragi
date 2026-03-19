@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use utf8;
 
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Model::Config;
 
@@ -13,7 +13,7 @@ use LANraragi::Model::Config;
 #   Returns a list of all the category objects.
 sub get_category_list {
     my $logger = get_logger("PgCategory", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Query for all categories
     my $cat_sql = <<'SQL';
@@ -80,7 +80,7 @@ SQL
 sub get_category {
     my $cat_id = $_[0];
     my $logger = get_logger("PgCategory", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     if ( $cat_id eq "" ) {
         $logger->debug("No category ID provided.");
@@ -143,7 +143,7 @@ SQL
 #   Returns a list of all the static category objects.
 sub get_static_category_list {
     my $logger = get_logger("PgCategory", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Query for static categories (where search is NULL or empty string)
     my $cat_sql = <<'SQL';
@@ -209,7 +209,7 @@ sub get_categories_containing_archive {
     my $logger = get_logger("PgCategory", "lanraragi");
     $logger->debug("Finding categories containing $archive_id");
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Query for static categories containing the archive
     my $sql = <<'SQL';
@@ -276,7 +276,7 @@ SQL
 sub add_to_category {
     my ( $cat_id, $arc_id ) = @_;
     my $logger = get_logger("PgCategory", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $err = "";
 
     # Check if category exists
@@ -368,7 +368,7 @@ SQL
 sub create_category {
     my ( $name, $favtag, $pinned, $cat_id ) = @_;
     my $logger = get_logger("PgCategory", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Set all fields of the category object
     unless ( length($cat_id) ) {
@@ -447,7 +447,7 @@ sub update_bookmark_link {
         return (400, $cat_id, "Input category ID is invalid.");
     }
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Check if category exists using Postgres
     my $check_sql = 'SELECT catid, search FROM lrr_category WHERE catid = ?';
@@ -500,7 +500,7 @@ sub remove_bookmark_link {
 sub remove_from_category {
     my ( $cat_id, $arc_id ) = @_;
     my $logger = get_logger("PgCategory", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $err = "";
 
     # Check if category exists
@@ -565,7 +565,7 @@ sub delete_category {
         return 0;
     }
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Check if category exists
     my $check_sql = 'SELECT catid FROM lrr_category WHERE catid = ?';

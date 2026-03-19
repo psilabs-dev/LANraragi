@@ -17,7 +17,7 @@ use LANraragi::Utils::Logging    qw(get_logger);
 use LANraragi::Utils::Generic    qw(shasum_str);
 use LANraragi::Utils::Archive    qw(get_filelist extract_single_file generate_thumbnail);
 use LANraragi::Utils::Path       qw(unlink_path);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::PsilabsDev::PgPath qw(get_archive_path);
 
 # replaces LANraragi::Model::Archive::delete_archive
@@ -25,7 +25,7 @@ use LANraragi::Utils::PsilabsDev::PgPath qw(get_archive_path);
 sub delete_archive ($id) {
 
     my $logger = get_logger( "Archive", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     my $filename;  # Declare outside transaction
 
@@ -97,7 +97,7 @@ sub delete_archive ($id) {
 # replaces LANraragi::Utils::Archive::extract_thumbnail
 # Wrapper function with original signature that manages its own database connection
 sub extract_thumbnail ( $thumbdir, $id, $page, $set_cover, $use_hq ) {
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $result;
     eval {
         $result = extract_thumbnail_with_dbh( $dbh, $thumbdir, $id, $page, $set_cover, $use_hq );

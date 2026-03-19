@@ -23,7 +23,7 @@ use LANraragi::Model::PsilabsDev::PgCategory;
 use LANraragi::Model::PsilabsDev::PgPlugins;
 use LANraragi::Utils::PsilabsDev::PgArchive qw(extract_thumbnail);
 use LANraragi::Utils::PsilabsDev::PgDatabase qw(set_tags set_title set_summary invalidate_cache);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -58,7 +58,7 @@ sub handle_incoming_file ( $tempfile, $catid, $tags, $title, $summary ) {
 
     # Check if the ID is already in the database, and
     # that the file it references still exists on the filesystem
-    my $dbh          = get_postgresql_dbh();
+    my $dbh          = get_dbh();
     my $replace_dupe = LANraragi::Model::Config->get_replacedupe;
 
     my $check_sql = 'SELECT arcid, filename FROM lrr_archive WHERE arcid = ?';
@@ -136,7 +136,7 @@ sub handle_incoming_file ( $tempfile, $catid, $tags, $title, $summary ) {
     # Now that the file has been copied, we can add the timestamp tag and calculate pagecount.
     # (The file being physically present is necessary in case last modified time is used)
     # Reuse database connection and fetch filename once to avoid redundant queries
-    my $metadata_dbh = get_postgresql_dbh();
+    my $metadata_dbh = get_dbh();
     add_timestamp_tag_with_dbh( $metadata_dbh, $id, $output_file );
     add_pagecount_with_dbh( $metadata_dbh, $id, $output_file );
     add_arcsize_with_dbh( $metadata_dbh, $id, $output_file );
@@ -227,7 +227,7 @@ SQL
 # Helper function: add_timestamp_tag
 # Adds a timestamp tag to the given ID.
 sub add_timestamp_tag ( $id ) {
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $result = add_timestamp_tag_with_dbh( $dbh, $id );
     $dbh->disconnect();
     return $result;
@@ -277,7 +277,7 @@ sub add_timestamp_tag_with_dbh ( $dbh, $id, $filepath = undef ) {
 # Helper function: add_pagecount
 # Adds pagecount to the archive metadata.
 sub add_pagecount ( $id ) {
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $result = add_pagecount_with_dbh( $dbh, $id );
     $dbh->disconnect();
     return $result;
@@ -322,7 +322,7 @@ sub add_pagecount_with_dbh ( $dbh, $id, $filepath = undef ) {
 # Helper function: add_arcsize
 # Adds archive size to the archive metadata.
 sub add_arcsize ( $id ) {
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $result = add_arcsize_with_dbh( $dbh, $id );
     $dbh->disconnect();
     return $result;
