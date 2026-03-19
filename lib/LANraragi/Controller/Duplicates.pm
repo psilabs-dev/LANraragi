@@ -6,8 +6,8 @@ use POSIX qw(strftime);
 use Mojo::JSON qw(decode_json encode_json);
 
 use LANraragi::Utils::Generic  qw(generate_themes_header);
-use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
-use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive_summary_with_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_handle close_handle);
+use LANraragi::Utils::PsilabsDev::DatabaseUtils qw(get_archive_summary_with_dbh);
 use LANraragi::Model::Config;
 
 # Go through the archives in the content directory and build the template at the end.
@@ -41,9 +41,9 @@ sub index {
 
     my @duplicates;
 
-    my $dbh;
+    my $handle;
     eval {
-        $dbh = get_dbh();
+        $handle = get_handle();
 
         foreach my $key ( keys %duplicate_groups ) {
 
@@ -53,7 +53,7 @@ sub index {
 
             my @archives;
             foreach my $id (@ids) {
-                my $row = get_archive_summary_with_dbh($dbh, $id);
+                my $row = get_archive_summary_with_dbh($handle, $id);
 
                 # Check if archive still exists
                 if ($row) {
@@ -102,11 +102,11 @@ sub index {
             push @duplicates, \@archives;
         }
 
-        $dbh->disconnect();
+        close_handle($handle);
     };
     if ( my $error = $@ ) {
         $self->LRR_LOGGER->error("Database error in duplicates endpoint: $error");
-        $dbh->disconnect() if $dbh;
+        close_handle($handle) if $handle;
     }
 
     $self->render(

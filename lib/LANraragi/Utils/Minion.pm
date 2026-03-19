@@ -13,17 +13,18 @@ use Config;
 
 use LANraragi::Utils::Logging    qw(get_logger);
 use LANraragi::Utils::Plugins    qw(get_downloader_for_url get_plugin get_plugin_parameters);
-use LANraragi::Utils::PsilabsDev::PgPlugins qw(use_plugin);
+use LANraragi::Utils::PsilabsDev::PluginUtils qw(use_plugin);
 use LANraragi::Utils::String     qw(trim_url);
 use LANraragi::Utils::TempFolder qw(get_temp);
-use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
-use LANraragi::Utils::PsilabsDev::PgArchive qw(extract_thumbnail extract_thumbnail_with_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_handle close_handle);
+use LANraragi::Utils::PsilabsDev::ArchiveUtils qw(extract_thumbnail extract_thumbnail_with_dbh);
 
 use LANraragi::Model::Upload;
 use LANraragi::Model::Config;
 use LANraragi::Model::Stats;
-use LANraragi::Model::PsilabsDev::PgStats;
-use LANraragi::Model::PsilabsDev::PgUpload;
+use LANraragi::Model::PsilabsDev::Archive;
+use LANraragi::Model::PsilabsDev::Stats;
+use LANraragi::Model::PsilabsDev::Upload;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -43,7 +44,7 @@ sub add_tasks {
             my $thumbname = "";
 
             # Take a shortcut here - Minion jobs can keep the old basic behavior of page 0 = cover.
-            eval { $thumbname = LANraragi::Utils::PsilabsDev::PgArchive::extract_thumbnail( $thumbdir, $id, $page, $page eq 0, $use_hq ); };
+            eval { $thumbname = LANraragi::Utils::PsilabsDev::ArchiveUtils::extract_thumbnail( $thumbdir, $id, $page, $page eq 0, $use_hq ); };
             if ($@) {
                 my $msg = "Error building thumbnail: $@";
                 $logger->error($msg);
@@ -64,34 +65,29 @@ sub add_tasks {
             my $logger = get_logger( "Minion", "minion" );
             $logger->debug("Generating page thumbnails for archive $id...");
 
-            # Get the number of pages in the archive from Postgres
-            my $dbh = get_dbh();
+            # Get the number of pages in the archive
+            my $handle = get_handle();
             my $pages;
 
             eval {
-                my $sql = q{SELECT pagecount FROM lrr_archive WHERE arcid = ?};
-                my $sth = $dbh->prepare($sql);
-                $sth->execute($id);
-                my $row = $sth->fetchrow_hashref;
-                $pages = $row->{pagecount} if $row;
-                $sth->finish;
+                $pages = LANraragi::Model::PsilabsDev::Archive::get_pagecount_with_handle( $handle, $id );
             };
 
             if (my $error = $@) {
                 $logger->error("Error retrieving pagecount for archive $id: $error");
-                $dbh->disconnect();
+                close_handle($handle);
                 $job->fail({ error => "Failed to retrieve pagecount: $error" });
                 return;
             }
 
             unless ($pages) {
                 $logger->error("Archive $id has no pagecount in database");
-                $dbh->disconnect();
+                close_handle($handle);
                 $job->fail({ error => "Archive has no pagecount" });
                 return;
             }
 
-            $dbh->disconnect();
+            close_handle($handle);
 
             my $use_hq   = LANraragi::Model::Config->get_hqthumbpages;
             my $thumbdir = LANraragi::Model::Config->get_thumbdir;
@@ -117,7 +113,7 @@ sub add_tasks {
                     my $thumbname = "$thumbdir/$subfolder/$id/$i.$format";
                     unless ( $force == 0 && -e $thumbname ) {
                         $logger->debug("Generating thumbnail for page $i... ($thumbname)");
-                        eval { $thumbname = LANraragi::Utils::PsilabsDev::PgArchive::extract_thumbnail( $thumbdir, $id, $i, 0, $use_hq ); };
+                        eval { $thumbname = LANraragi::Utils::PsilabsDev::ArchiveUtils::extract_thumbnail( $thumbdir, $id, $i, 0, $use_hq ); };
                         if ($@) {
                             $logger->warn("Error while generating thumbnail: $@");
                             $errors->push($@);
@@ -158,14 +154,9 @@ sub add_tasks {
             my ( $thumbdir, $force ) = @args;
 
             my $logger = get_logger( "Minion", "minion" );
-            my $dbh = get_dbh();
-            my $sth = $dbh->prepare('SELECT arcid FROM lrr_archive');
-            $sth->execute();
-            my @keys;
-            while (my $row = $sth->fetchrow_hashref) {
-                push @keys, $row->{arcid};
-            }
-            $sth->finish;
+            my $handle = get_handle();
+            my @keys = LANraragi::Model::PsilabsDev::Archive::get_all_archive_ids_with_handle($handle);
+            close_handle($handle);
 
             $logger->info("Starting thumbnail regen job (force = $force)");
             my $errors = MCE::Shared->array;
@@ -173,9 +164,6 @@ sub add_tasks {
             # Regen thumbnails for errythang if $force = 1, only missing thumbs o therwise
             my $sub = sub {
                 my (@keys) = @_;
-
-                # Each thread/process needs its own database connection
-                my $dbh_worker = get_dbh();
 
                 foreach my $id (@keys) {
 
@@ -187,7 +175,7 @@ sub add_tasks {
                     unless ( $force == 0 && -e $thumbname ) {
                         eval {
                             $logger->debug("Regenerating for $id...");
-                            extract_thumbnail_with_dbh( $dbh_worker, $thumbdir, $id, 0, 1, 1 );
+                            extract_thumbnail( $thumbdir, $id, 0, 1, 1 );
                         };
 
                         if ($@) {
@@ -196,8 +184,6 @@ sub add_tasks {
                         }
                     }
                 }
-
-                $dbh_worker->disconnect;
             };
 
             eval {
@@ -211,8 +197,6 @@ sub add_tasks {
                     $sub->(@keys);
                 }
             };
-
-            $dbh->disconnect;
 
             my @err = $errors->values;
             $job->finish( { errors => \@err } );
@@ -233,30 +217,22 @@ sub add_tasks {
 
             $logger->info("Starting find duplicate job (threshold = $threshold)");
 
-            # Gather thumbhashes from Postgres instead of Redis
-            my $dbh = get_dbh();
+            # Gather thumbhashes from database
+            my $handle = get_handle();
             my %thumbhashes;
 
             eval {
-                my $sql = 'SELECT arcid, thumbhash FROM lrr_archive WHERE thumbhash IS NOT NULL';
-                my $sth = $dbh->prepare($sql);
-                $sth->execute();
-
-                while (my $row = $sth->fetchrow_hashref) {
-                    $thumbhashes{$row->{arcid}} = $row->{thumbhash};
-                }
-
-                $sth->finish;
+                %thumbhashes = LANraragi::Model::PsilabsDev::Archive::get_all_thumbhashes_with_handle($handle);
             };
 
             if (my $error = $@) {
-                $logger->error("Error fetching thumbhashes from Postgres: $error");
-                $dbh->disconnect();
+                $logger->error("Error fetching thumbhashes: $error");
+                close_handle($handle);
                 $job->fail( { errors => [$error] } );
                 return;
             }
 
-            $dbh->disconnect();
+            close_handle($handle);
 
             # Prepare to track visited nodes
             my $visited = MCE::Shared->hash;
@@ -343,7 +319,7 @@ sub add_tasks {
     $minion->add_task(
         build_stat_hashes => sub {
             my ( $job, @args ) = @_;
-            LANraragi::Model::PsilabsDev::PgStats::build_stat_hashes();
+            LANraragi::Model::PsilabsDev::Stats::build_stat_hashes();
             $job->finish;
         }
     );
@@ -363,7 +339,7 @@ sub add_tasks {
 
             # Since we already have a file, this goes straight to handle_incoming_file.
             my ( $status_code, $id, $title, $message ) =
-              LANraragi::Model::PsilabsDev::PgUpload::handle_incoming_file( $file, $catid, "", "", "" );
+              LANraragi::Model::PsilabsDev::Upload::handle_incoming_file( $file, $catid, "", "", "" );
             my $status = $status_code == 200 ? 1 : 0;
             $job->finish(
                 {   success  => $status,
@@ -390,7 +366,7 @@ sub add_tasks {
             $og_url = trim_url($og_url);
 
             # If the URL is already recorded, abort the download
-            my $recorded_id = LANraragi::Model::PsilabsDev::PgStats::is_url_recorded($og_url);
+            my $recorded_id = LANraragi::Model::PsilabsDev::Stats::is_url_recorded($og_url);
             if ($recorded_id) {
                 $job->finish(
                     {   success => 0,
@@ -437,7 +413,7 @@ sub add_tasks {
 
                     # Hand off the result to handle_incoming_file
                     my ( $status_code, $id, $title, $message ) =
-                      LANraragi::Model::PsilabsDev::PgUpload::handle_incoming_file( $tempfile, $catid, $tag, "", "" );
+                      LANraragi::Model::PsilabsDev::Upload::handle_incoming_file( $tempfile, $catid, $tag, "", "" );
                     my $status = $status_code == 200 ? 1 : 0;
 
                     $job->finish(
@@ -470,7 +446,7 @@ sub add_tasks {
 
                 # Hand off the result to handle_incoming_file
                 my ( $status_code, $id, $title, $message ) =
-                  LANraragi::Model::PsilabsDev::PgUpload::handle_incoming_file( $tempfile, $catid, $tag, "", "" );
+                  LANraragi::Model::PsilabsDev::Upload::handle_incoming_file( $tempfile, $catid, $tag, "", "" );
                 my $status = $status_code == 200 ? 1 : 0;
 
                 $job->finish(

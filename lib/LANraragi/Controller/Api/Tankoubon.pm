@@ -1,8 +1,8 @@
 package LANraragi::Controller::Api::Tankoubon;
 use Mojo::Base 'Mojolicious::Controller';
 
-use LANraragi::Model::PsilabsDev::PgTankoubon;
-use LANraragi::Model::PsilabsDev::PgArchive;
+use LANraragi::Model::PsilabsDev::Tankoubon;
+use LANraragi::Model::PsilabsDev::Archive;
 use LANraragi::Utils::Generic qw(render_api_response);
 
 sub get_tankoubon_list {
@@ -12,7 +12,7 @@ sub get_tankoubon_list {
 
     my $page = $req->param('page');
 
-    my ( $total, $filtered, @rgs ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon_list($page);
+    my ( $total, $filtered, @rgs ) = LANraragi::Model::PsilabsDev::Tankoubon::get_tankoubon_list($page);
     $self->render( openapi => { result => \@rgs, total => $total, filtered => $filtered } );
 
 }
@@ -26,7 +26,7 @@ sub get_tankoubon {
     my $fulldata = ( $self->req->param('include_full_data') && $self->req->param('include_full_data') ne "false" ) ? 1 : 0;
     my $page     = $req->param('page');
 
-    my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon( $tank_id, $fulldata, $page );
+    my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::Tankoubon::get_tankoubon( $tank_id, $fulldata, $page );
 
     unless (%tankoubon) {
         return $self->render(
@@ -53,7 +53,7 @@ sub create_tankoubon {
         return;
     }
 
-    my $created_id = LANraragi::Model::PsilabsDev::PgTankoubon::create_tankoubon( $name, $tankid );
+    my $created_id = LANraragi::Model::PsilabsDev::Tankoubon::create_tankoubon( $name, $tankid );
     $self->render(
         openapi => {
             operation    => "create_tankoubon",
@@ -69,7 +69,7 @@ sub delete_tankoubon {
     my $self   = shift->openapi->valid_input or return;
     my $tankid = $self->stash('id');
 
-    my $result = LANraragi::Model::PsilabsDev::PgTankoubon::delete_tankoubon($tankid);
+    my $result = LANraragi::Model::PsilabsDev::Tankoubon::delete_tankoubon($tankid);
 
     if ($result) {
         render_api_response( $self, "delete_tankoubon" );
@@ -91,10 +91,10 @@ sub update_tankoubon {
     my $tankid = $self->stash('id');
     my $data   = $self->req->json;
 
-    my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgTankoubon::update_tankoubon( $tankid, $data );
+    my ( $result, $err ) = LANraragi::Model::PsilabsDev::Tankoubon::update_tankoubon( $tankid, $data );
 
     if ($result) {
-        my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon($tankid);
+        my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::Tankoubon::get_tankoubon($tankid);
         my $successMessage = "Updated tankoubon \"$tankoubon{name}\"!";
 
         render_api_response( $self, "update_tankoubon", undef, $successMessage );
@@ -109,12 +109,12 @@ sub add_to_tankoubon {
     my $tankid = $self->stash('id');
     my $arcid  = $self->stash('archive');
 
-    my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgTankoubon::add_to_tankoubon( $tankid, $arcid );
+    my ( $result, $err ) = LANraragi::Model::PsilabsDev::Tankoubon::add_to_tankoubon( $tankid, $arcid );
 
     if ($result) {
         my $successMessage = "Added $arcid to tankoubon $tankid!";
-        my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon($tankid);
-        my $title = LANraragi::Model::PsilabsDev::PgArchive::get_title($arcid);
+        my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::Tankoubon::get_tankoubon($tankid);
+        my $title = LANraragi::Model::PsilabsDev::Archive::get_title($arcid);
 
         if ( %tankoubon && defined($title) ) {
             $successMessage = "Added \"$title\" to tankoubon \"$tankoubon{name}\"!";
@@ -132,12 +132,12 @@ sub remove_from_tankoubon {
     my $tankid = $self->stash('id');
     my $arcid  = $self->stash('archive');
 
-    my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgTankoubon::remove_from_tankoubon( $tankid, $arcid );
+    my ( $result, $err ) = LANraragi::Model::PsilabsDev::Tankoubon::remove_from_tankoubon( $tankid, $arcid );
 
     if ($result) {
         my $successMessage = "Removed $arcid from tankoubon $tankid!";
-        my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon($tankid);
-        my $title = LANraragi::Model::PsilabsDev::PgArchive::get_title($arcid);
+        my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::Tankoubon::get_tankoubon($tankid);
+        my $title = LANraragi::Model::PsilabsDev::Archive::get_title($arcid);
 
         if ( %tankoubon && defined($title) ) {
             $successMessage = "Removed \"$title\" from tankoubon \"$tankoubon{name}\"!";
@@ -159,7 +159,7 @@ sub get_tankoubons_file {
         return;
     }
 
-    my @tanks = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubons_containing_archive($arcid);
+    my @tanks = LANraragi::Model::PsilabsDev::Tankoubon::get_tankoubons_containing_archive($arcid);
 
     $self->render(
         openapi => {

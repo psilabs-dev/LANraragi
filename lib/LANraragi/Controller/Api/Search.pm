@@ -7,10 +7,10 @@ no warnings 'experimental::signatures';
 use List::Util qw(min);
 use Time::HiRes qw(time);
 
-use LANraragi::Model::PsilabsDev::PgSearch;
+use LANraragi::Model::PsilabsDev::Search;
 use LANraragi::Utils::Generic  qw(render_api_response);
 use LANraragi::Utils::Logging qw(get_logger);
-use LANraragi::Utils::PsilabsDev::PgDatabase qw(invalidate_cache get_archive_json_multi);
+use LANraragi::Utils::PsilabsDev::DatabaseUtils qw(invalidate_cache get_archive_json_multi);
 
 # Undocumented API matching the Datatables spec.
 sub handle_datatables ($self) {
@@ -67,7 +67,7 @@ sub handle_datatables ($self) {
     # TODO add a parameter to datatables for grouptanks? Not really essential rn tho
     my $search_start = time();
     my ( $total, $filtered, @ids ) =
-      LANraragi::Model::PsilabsDev::PgSearch::do_search( $filter, $categoryfilter, $start, $sortkey, $sortorder, $newfilter, $untaggedfilter, 0 );
+      LANraragi::Model::PsilabsDev::Search::do_search( $filter, $categoryfilter, $start, $sortkey, $sortorder, $newfilter, $untaggedfilter, 0 );
     my $search_time = (time() - $search_start) * 1000;
     $logger->debug(sprintf("[PERF] Search execution (do_search): %.2fms", $search_time));
 
@@ -99,7 +99,7 @@ sub handle_api {
 
     $sortorder = ( $sortorder && $sortorder eq 'desc' ) ? 1 : 0;
 
-    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::Search::do_search(
         $filter, $category, $start, $sortkey, $sortorder,
         $newfilter eq "true",
         $untaggedf eq "true",
@@ -141,7 +141,7 @@ sub get_random_archives {
     my $random_count = $req->param('count')         || 5;
 
     # Use the search engine to get IDs matching the filter/category selection, with start=-1 to get all data
-    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::Search::do_search(
         $filter, $category, -1, "title", 0,
         $newfilter eq "true",
         $untaggedf eq "true",

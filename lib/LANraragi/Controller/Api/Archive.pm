@@ -13,22 +13,22 @@ use File::Basename;
 
 use LANraragi::Utils::Generic  qw(render_api_response is_archive get_bytelength exec_with_lock);
 use LANraragi::Utils::Database qw();
-use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive_json set_isnew);
+use LANraragi::Utils::PsilabsDev::DatabaseUtils qw(get_archive_json set_isnew);
 use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Redis    qw(redis_encode);
 use LANraragi::Utils::Path     qw(compat_path get_archive_path move_path);
-use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
-use LANraragi::Utils::PsilabsDev::PgPath;
+use LANraragi::Utils::PsilabsDev::Database qw(get_handle close_handle);
+use LANraragi::Utils::PsilabsDev::PathUtils;
 
 use LANraragi::Utils::Login qw(is_logged_in_api);
 
 use LANraragi::Model::Archive;
 use LANraragi::Model::Config;
 use LANraragi::Model::Reader;
-use LANraragi::Model::PsilabsDev::PgArchive;
-use LANraragi::Model::PsilabsDev::PgCategory;
-use LANraragi::Model::PsilabsDev::PgReader;
-use LANraragi::Model::PsilabsDev::PgUpload;
+use LANraragi::Model::PsilabsDev::Archive;
+use LANraragi::Model::PsilabsDev::Category;
+use LANraragi::Model::PsilabsDev::Reader;
+use LANraragi::Model::PsilabsDev::Upload;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -37,23 +37,23 @@ use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
 sub serve_archivelist {
     my $self   = shift->openapi->valid_input or return;
-    my @idlist = LANraragi::Model::PsilabsDev::PgArchive::generate_archive_list();
+    my @idlist = LANraragi::Model::PsilabsDev::Archive::generate_archive_list();
     $self->render( openapi => \@idlist );
 }
 
 sub serve_untagged_archivelist {
     my $self = shift->openapi->valid_input or return;
-    my @untagged = LANraragi::Model::PsilabsDev::PgArchive::get_untagged_archives();
+    my @untagged = LANraragi::Model::PsilabsDev::Archive::get_untagged_archives();
     $self->render( openapi => \@untagged );
 }
 
 sub serve_metadata {
     my $self  = shift->openapi->valid_input or return;
     my $id    = $self->stash('id');
-    my $dbh   = get_dbh();
+    my $handle = get_handle();
 
-    my $arcdata = get_archive_json( $dbh, $id );
-    $dbh->disconnect();
+    my $arcdata = get_archive_json( $handle, $id );
+    close_handle($handle);
 
     if ($arcdata) {
         $self->render( openapi => $arcdata );
@@ -75,7 +75,7 @@ sub get_categories {
     my $self = shift->openapi->valid_input or return;
     my $id   = $self->stash('id');
 
-    my @categories = LANraragi::Model::PsilabsDev::PgCategory::get_categories_containing_archive($id);
+    my @categories = LANraragi::Model::PsilabsDev::Category::get_categories_containing_archive($id);
 
     $self->render(
         openapi => {
@@ -95,13 +95,13 @@ sub serve_thumbnail {
 sub update_thumbnail {
     my $self = shift->openapi->valid_input or return;
     my $id   = $self->stash('id');
-    LANraragi::Model::PsilabsDev::PgArchive::update_thumbnail( $self, $id );
+    LANraragi::Model::PsilabsDev::Archive::update_thumbnail( $self, $id );
 }
 
 sub generate_page_thumbnails {
     my $self = shift->openapi->valid_input or return;
     my $id   = $self->stash('id');
-    LANraragi::Model::PsilabsDev::PgArchive::generate_page_thumbnails( $self, $id );
+    LANraragi::Model::PsilabsDev::Archive::generate_page_thumbnails( $self, $id );
 }
 
 # Use RenderFile to get the file of the provided id to the client.
@@ -109,10 +109,10 @@ sub serve_file {
 
     my $self  = shift->openapi->valid_input or return;
     my $id    = $self->stash('id');
-    my $dbh = get_dbh();
+    my $handle = get_handle();
 
-    my $file = LANraragi::Utils::PsilabsDev::PgPath::get_archive_path( $dbh, $id );
-    $dbh->disconnect();
+    my $file = LANraragi::Utils::PsilabsDev::PathUtils::get_archive_path( $handle, $id );
+    close_handle($handle);
     $self->render_file( filepath => compat_path( $file ), filename => basename( $file ) );
 }
 
@@ -229,7 +229,7 @@ sub create_archive {
             }
 
             my ( $status_code, $id, $response_title, $message ) =
-              LANraragi::Model::PsilabsDev::PgUpload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
+              LANraragi::Model::PsilabsDev::Upload::handle_incoming_file( $tempfile, $catid, $tags, $title, $summary );
 
             unless ( $status_code == 200 ) {
                 return $self->render(
@@ -261,7 +261,7 @@ sub serve_page {
     my $id   = $self->stash('id');
     my $path = $self->req->param('path')                 || "404.xyz";
 
-    LANraragi::Model::PsilabsDev::PgArchive::serve_page( $self, $id, $path );
+    LANraragi::Model::PsilabsDev::Archive::serve_page( $self, $id, $path );
 }
 
 sub get_file_list {
@@ -271,7 +271,7 @@ sub get_file_list {
     my $force = $self->req->param('force') eq "true" || "0";
     my $reader_json;
 
-    eval { $reader_json = LANraragi::Model::PsilabsDev::PgReader::build_reader_JSON( $self, $id, $force ); };
+    eval { $reader_json = LANraragi::Model::PsilabsDev::Reader::build_reader_JSON( $self, $id, $force ); };
     my $err = $@;
 
     if ($err) {
@@ -330,7 +330,7 @@ sub delete_archive {
         "delete_archive",
         $id,
         sub {
-            my $delStatus = LANraragi::Model::PsilabsDev::PgArchive::delete_archive($id);
+            my $delStatus = LANraragi::Model::PsilabsDev::Archive::delete_archive($id);
 
             $self->render(
                 openapi => {
@@ -353,7 +353,7 @@ sub update_metadata {
     my $summary = $self->req->param('summary');
 
     # Check if archive exists before acquiring lock
-    unless ( LANraragi::Model::PsilabsDev::PgArchive::archive_exists($id) ) {
+    unless ( LANraragi::Model::PsilabsDev::Archive::archive_exists($id) ) {
         $self->render(
             json => {
                 operation => "update_metadata",
@@ -371,10 +371,10 @@ sub update_metadata {
         "update_metadata",
         $id,
         sub {
-            my $err = LANraragi::Model::PsilabsDev::PgArchive::update_metadata( $id, $title, $tags, $summary );
+            my $err = LANraragi::Model::PsilabsDev::Archive::update_metadata( $id, $title, $tags, $summary );
 
             if ( $err eq "" ) {
-                my $title          = LANraragi::Model::PsilabsDev::PgArchive::get_title($id);
+                my $title          = LANraragi::Model::PsilabsDev::Archive::get_title($id);
                 my $successMessage = "Updated metadata for \"$title\"!";
 
                 render_api_response( $self, "update_metadata", undef, $successMessage );
@@ -402,7 +402,7 @@ sub add_toc {
         "add_toc",
         $id,
         sub {
-            my $res = LANraragi::Model::PsilabsDev::PgArchive::add_toc_entry( $id, $page, $title );
+            my $res = LANraragi::Model::PsilabsDev::Archive::add_toc_entry( $id, $page, $title );
 
             if ( $res eq "" ) {
                 render_api_response( $self, "add_toc", undef, "Added ToC entry for page $page." );
@@ -430,7 +430,7 @@ sub remove_toc {
         "remove_toc",
         $id,
         sub {
-            my $res = LANraragi::Model::PsilabsDev::PgArchive::remove_toc_entry( $id, $page );
+            my $res = LANraragi::Model::PsilabsDev::Archive::remove_toc_entry( $id, $page );
 
             if ( $res eq "" ) {
                 render_api_response( $self, "remove_toc", undef, "Removed ToC entry for page $page." );
@@ -478,7 +478,7 @@ sub update_progress {
             my $result;
 
             eval {
-                $result = LANraragi::Model::PsilabsDev::PgArchive::update_progress( $id, $page, $force );
+                $result = LANraragi::Model::PsilabsDev::Archive::update_progress( $id, $page, $force );
             };
 
             if ( my $error = $@ ) {

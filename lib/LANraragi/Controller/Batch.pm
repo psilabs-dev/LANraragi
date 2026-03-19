@@ -7,13 +7,13 @@ use Mojo::JSON qw(decode_json);
 use LANraragi::Utils::Generic  qw(generate_themes_header);
 use LANraragi::Utils::Tags     qw(rewrite_tags build_tag_replace_hash split_tags_to_array restore_CRLF);
 use LANraragi::Utils::Database qw(get_computed_tagrules);
-use LANraragi::Utils::PsilabsDev::PgDatabase qw(set_tags set_title set_summary set_tags_with_dbh set_title_with_dbh set_summary_with_dbh set_isnew invalidate_cache get_tags_string_with_dbh);
+use LANraragi::Utils::PsilabsDev::DatabaseUtils qw(set_tags set_title set_summary set_tags_with_dbh set_title_with_dbh set_summary_with_dbh set_isnew invalidate_cache get_tags_string_with_dbh);
 use LANraragi::Utils::Plugins  qw(get_plugins get_plugin get_plugin_parameters);
 use LANraragi::Utils::Logging  qw(get_logger);
-use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
-use LANraragi::Model::PsilabsDev::PgCategory;
-use LANraragi::Utils::PsilabsDev::PgArchive qw(delete_archive);
-use LANraragi::Model::PsilabsDev::PgPlugins qw(exec_metadata_plugin);
+use LANraragi::Utils::PsilabsDev::Database qw(get_handle close_handle begin_transaction commit_transaction rollback_transaction);
+use LANraragi::Model::PsilabsDev::Category;
+use LANraragi::Utils::PsilabsDev::ArchiveUtils qw(delete_archive);
+use LANraragi::Model::PsilabsDev::Plugins qw(exec_metadata_plugin);
 
 # This action will render a template
 sub index {
@@ -36,7 +36,7 @@ sub index {
     }
 
     # Get static category list
-    my @categories = LANraragi::Model::PsilabsDev::PgCategory::get_static_category_list();
+    my @categories = LANraragi::Model::PsilabsDev::Category::get_static_category_list();
 
     $self->render(
         template   => "batch",
@@ -68,7 +68,7 @@ sub socket {
     my ( $rules, $hash_replace_rules ) = build_tag_replace_hash( \@rules );
 
     # Open database connection at WebSocket connection time (customs border)
-    my $dbh = get_dbh();
+    my $handle = get_handle();
 
     $self->on(
         message => sub {
@@ -140,7 +140,7 @@ sub socket {
 
             if ( $operation eq "addcat" ) {
                 my $catid = $command->{"category"};
-                my ( $catsucc, $caterr ) = LANraragi::Model::PsilabsDev::PgCategory::add_to_category( $catid, $id );
+                my ( $catsucc, $caterr ) = LANraragi::Model::PsilabsDev::Category::add_to_category( $catid, $id );
 
                 $client->send(
                     {   json => {
@@ -160,9 +160,9 @@ sub socket {
 
                 # Use WebSocket-level connection with explicit transaction
                 eval {
-                    $dbh->begin_work;
+                    begin_transaction($handle);
 
-                    my $tags = get_tags_string_with_dbh($dbh, $id);
+                    my $tags = get_tags_string_with_dbh($handle, $id);
 
                     my @tagarray = split_tags_to_array($tags);
                     @tagarray = rewrite_tags( \@tagarray, $rules, $hash_replace_rules );
@@ -172,9 +172,9 @@ sub socket {
                     $logger->debug("New tags: $newtags");
 
                     # Use _with_dbh variant to share connection
-                    set_tags_with_dbh( $dbh, $id, $newtags, 0 );
+                    set_tags_with_dbh( $handle, $id, $newtags, 0 );
 
-                    $dbh->commit;
+                    commit_transaction($handle);
 
                     $client->send(
                         {   json => {
@@ -189,7 +189,7 @@ sub socket {
                 };
 
                 if ( my $error = $@ ) {
-                    eval { $dbh->rollback };
+                    rollback_transaction($handle);
                     $logger->error("Failed to apply tag rules to $id: $error");
                     $client->send(
                         {   json => {
@@ -241,7 +241,7 @@ sub socket {
             $cancelled = 1;
 
             # Clean up on WebSocket close
-            $dbh->disconnect if $dbh;
+            close_handle($handle) if $handle;
         }
     );
 
@@ -256,33 +256,33 @@ sub batch_plugin {
     # If the plugin exec returned tags, add them
     unless ( exists $plugin_result{error} ) {
         # Wrap all metadata updates in a single transaction for atomicity
-        my $dbh = get_dbh();
-        $dbh->begin_work;
+        my $handle = get_handle();
+        begin_transaction($handle);
 
         eval {
             # All metadata updates from this plugin in one transaction
             if ( $plugin_result{new_tags} ) {
-                set_tags_with_dbh( $dbh, $id, $plugin_result{new_tags}, 1 );
+                set_tags_with_dbh( $handle, $id, $plugin_result{new_tags}, 1 );
             }
 
             if ( exists $plugin_result{title} ) {
-                set_title_with_dbh( $dbh, $id, $plugin_result{title} );
+                set_title_with_dbh( $handle, $id, $plugin_result{title} );
             }
 
             if ( exists $plugin_result{summary} ) {
-                set_summary_with_dbh( $dbh, $id, $plugin_result{summary} );
+                set_summary_with_dbh( $handle, $id, $plugin_result{summary} );
             }
 
-            $dbh->commit;
+            commit_transaction($handle);
         };
 
         if ( my $error = $@ ) {
-            eval { $dbh->rollback };
-            $dbh->disconnect;
+            rollback_transaction($handle);
+            close_handle($handle);
             die $error;
         }
 
-        $dbh->disconnect;
+        close_handle($handle);
     }
 
     return {

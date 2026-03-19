@@ -8,7 +8,7 @@ use Mojo::Util qw(xml_escape);
 
 use LANraragi::Utils::Generic qw(generate_themes_header);
 use LANraragi::Utils::Plugins qw(get_plugins);
-use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive);
+use LANraragi::Utils::PsilabsDev::DatabaseUtils qw(get_archive);
 
 sub index {
     my $self = shift;

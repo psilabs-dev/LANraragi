@@ -733,4 +733,67 @@ sub remove_toc_entry ( $id, $page ) {
     return "";
 }
 
+# Handle-accepting variants for callers (Shinobu, Minion)
+# that manage their own database connections.
+
+sub get_stored_filename_with_handle ( $dbh, $id ) {
+    my $sth = $dbh->prepare('SELECT filename FROM lrr_archive WHERE arcid = ?');
+    $sth->execute($id);
+    my $row = $sth->fetchrow_hashref;
+    $sth->finish;
+    return $row ? $row->{filename} : undef;
+}
+
+sub update_stored_filename_with_handle ( $dbh, $id, $file, $name ) {
+    $dbh->begin_work;
+    eval {
+        my $sth = $dbh->prepare('UPDATE lrr_archive SET filename = ?, title = ? WHERE arcid = ?');
+        $sth->execute( $file, $name, $id );
+        $sth->finish;
+        $dbh->commit;
+    };
+    if ( my $error = $@ ) {
+        eval { $dbh->rollback };
+        die $error;
+    }
+}
+
+sub get_arcsize_with_handle ( $dbh, $id ) {
+    my $sth = $dbh->prepare('SELECT arcsize FROM lrr_archive WHERE arcid = ?');
+    $sth->execute($id);
+    my $row = $sth->fetchrow_hashref;
+    $sth->finish;
+    return $row ? $row->{arcsize} : undef;
+}
+
+sub get_pagecount_with_handle ( $dbh, $id ) {
+    my $sth = $dbh->prepare('SELECT pagecount FROM lrr_archive WHERE arcid = ?');
+    $sth->execute($id);
+    my $row = $sth->fetchrow_hashref;
+    $sth->finish;
+    return $row ? $row->{pagecount} : undef;
+}
+
+sub get_all_archive_ids_with_handle ($dbh) {
+    my $sth = $dbh->prepare('SELECT arcid FROM lrr_archive');
+    $sth->execute();
+    my @ids;
+    while ( my $row = $sth->fetchrow_hashref ) {
+        push @ids, $row->{arcid};
+    }
+    $sth->finish;
+    return @ids;
+}
+
+sub get_all_thumbhashes_with_handle ($dbh) {
+    my $sth = $dbh->prepare('SELECT arcid, thumbhash FROM lrr_archive WHERE thumbhash IS NOT NULL');
+    $sth->execute();
+    my %hashes;
+    while ( my $row = $sth->fetchrow_hashref ) {
+        $hashes{ $row->{arcid} } = $row->{thumbhash};
+    }
+    $sth->finish;
+    return %hashes;
+}
+
 1;

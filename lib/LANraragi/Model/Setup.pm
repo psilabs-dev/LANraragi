@@ -5,7 +5,7 @@ use utf8;
 
 use LANraragi::Model::Config qw(get_redis_config);
 use LANraragi::Utils::Logging qw(get_logger);
-use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Model::PsilabsDev::Category;
 
 use Exporter 'import';
 our @EXPORT_OK = qw(first_install_actions);
@@ -22,8 +22,8 @@ sub first_install_actions {
         $redis->hset('LRR_CONFIG', 'htmltitle', 'LANraragi');
 
         $logger->debug("Creating first category...");
-        my $default_category_id = LANraragi::Model::PsilabsDev::PgCategory::create_category("🔖 Favorites", "", 0, "");
-        LANraragi::Model::PsilabsDev::PgCategory::update_bookmark_link($default_category_id);
+        my $default_category_id = LANraragi::Model::PsilabsDev::Category::create_category("🔖 Favorites", "", 0, "");
+        LANraragi::Model::PsilabsDev::Category::update_bookmark_link($default_category_id);
         $logger->info("Created default Favorites category.");
         $redis->quit();
         return 1;

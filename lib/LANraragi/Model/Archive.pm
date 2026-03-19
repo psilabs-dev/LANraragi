@@ -75,7 +75,7 @@ sub update_thumbnail {
     # Get the required thumbnail we want to make the main one
     no warnings 'experimental::try';
     try {
-        $newthumb = LANraragi::Utils::PsilabsDev::PgArchive::extract_thumbnail( $thumbdir, $id, $page, 1, 1 )
+        $newthumb = extract_thumbnail( $thumbdir, $id, $page, 1, 1 )
     } catch ($e) {
         render_api_response( $self, "update_thumbnail", $e );
         return;

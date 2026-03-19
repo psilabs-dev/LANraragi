@@ -7,7 +7,7 @@ use Encode;
 use Mojo::Util qw(xml_escape);
 
 use LANraragi::Utils::Generic qw(generate_themes_header);
-use LANraragi::Model::PsilabsDev::PgArchive;
+use LANraragi::Model::PsilabsDev::Archive;
 
 # Go through the archives in the content directory and build the template at the end.
 sub index {
@@ -16,7 +16,7 @@ sub index {
 
     my $userlogged = $self->LRR_CONF->enable_pass == 0 || $self->session('is_logged');
 
-    my @idlist = LANraragi::Model::PsilabsDev::PgArchive::generate_archive_list();
+    my @idlist = LANraragi::Model::PsilabsDev::Archive::generate_archive_list();
     #Parse the archive list and build <li> elements accordingly.
     my $arclist = "";
 

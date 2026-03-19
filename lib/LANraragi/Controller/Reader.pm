@@ -5,7 +5,7 @@ use Mojo::URL;
 use Encode;
 
 use LANraragi::Utils::Generic qw(generate_themes_header);
-use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Model::PsilabsDev::Category;
 
 # This action will render a template
 sub index {
@@ -20,8 +20,8 @@ sub index {
         }
 
         # Allow adding to static categories
-        my @categories     = LANraragi::Model::PsilabsDev::PgCategory::get_static_category_list();
-        my @arc_categories = LANraragi::Model::PsilabsDev::PgCategory::get_categories_containing_archive( $self->req->param('id') );
+        my @categories     = LANraragi::Model::PsilabsDev::Category::get_static_category_list();
+        my @arc_categories = LANraragi::Model::PsilabsDev::Category::get_categories_containing_archive( $self->req->param('id') );
 
         # Get query string from referrer URL, if there's one
         my $referrer = $self->req->headers->referrer;

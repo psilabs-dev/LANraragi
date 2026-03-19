@@ -28,7 +28,7 @@ use File::ChangeNotify;
 use File::Basename;
 use Encode;
 
-use LANraragi::Utils::PsilabsDev::PgArchive qw(extract_thumbnail);
+use LANraragi::Utils::PsilabsDev::ArchiveUtils qw(extract_thumbnail);
 use LANraragi::Utils::Database   qw(invalidate_cache compute_id);
 use LANraragi::Utils::Logging    qw(get_logger);
 use LANraragi::Utils::Generic    qw(is_archive);
@@ -36,12 +36,12 @@ use LANraragi::Utils::Path       qw(create_path open_path find_path);
 
 use LANraragi::Model::Config;
 
-# Postgres-specific imports
-use LANraragi::Model::PsilabsDev::PgUpload qw(add_timestamp_tag add_pagecount add_arcsize add_timestamp_tag_with_dbh add_pagecount_with_dbh add_arcsize_with_dbh add_archive_to_postgres);
-use LANraragi::Model::PsilabsDev::PgPlugins;
-use LANraragi::Utils::PsilabsDev::PgDatabase qw(change_archive_id);
-use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
-use LANraragi::Utils::PsilabsDev::PgPath qw(get_archive_path);
+# Backend-selected imports
+use LANraragi::Model::PsilabsDev::Archive;
+use LANraragi::Model::PsilabsDev::Upload qw(add_timestamp_tag add_pagecount add_arcsize add_timestamp_tag_with_dbh add_pagecount_with_dbh add_arcsize_with_dbh add_archive_to_db);
+use LANraragi::Model::PsilabsDev::Plugins;
+use LANraragi::Utils::PsilabsDev::DatabaseUtils qw(change_archive_id);
+use LANraragi::Utils::PsilabsDev::Database qw(get_handle close_handle);
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -171,9 +171,9 @@ sub update_filemap {
 
 sub add_to_filemap ( $redis_cfg, $file ) {
 
-    my $dbh = get_dbh();
-    unless ($dbh) {
-        $logger->error("Failed to connect to PostgreSQL database");
+    my $handle = get_handle();
+    unless ($handle) {
+        $logger->error("Failed to connect to database");
         return;
     }
 
@@ -206,7 +206,7 @@ sub add_to_filemap ( $redis_cfg, $file ) {
         if ( my $error = $@ ) {
             $logger->error("Couldn't open $file for ID computation: $error");
             $logger->error("Giving up on adding it to the filemap.");
-            $dbh->disconnect();
+            close_handle($handle);
             return;
         }
 
@@ -233,83 +233,52 @@ sub add_to_filemap ( $redis_cfg, $file ) {
                 invalidate_cache();
             }
 
-            $dbh->disconnect();
+            close_handle($handle);
             return;
 
         } else {
             $redis_cfg->hset( "LRR_FILEMAP", $file, $id );    # raw FS path so no encoding/decoding whatsoever
         }
 
-        # Filename sanity check - check if archive exists in Postgres
-        my $check_sth = $dbh->prepare('SELECT arcid, filename FROM lrr_archive WHERE arcid = ?');
-        $check_sth->execute($id);
-        my $existing = $check_sth->fetchrow_hashref;
-        $check_sth->finish;
+        # Filename sanity check - check if archive exists in database
+        my $filecheck = LANraragi::Model::PsilabsDev::Archive::get_stored_filename_with_handle( $handle, $id );
 
-        if ( $existing ) {
+        if ( defined $filecheck ) {
 
-            my $filecheck = $existing->{filename};
-
-            #Update the real file path and title if they differ from the saved one
-            #This is meant to always track the current filename for the OS.
             unless ( $file eq $filecheck ) {
                 $logger->debug("File name discrepancy detected between DB and filesystem!");
                 $logger->debug("Filesystem: $file");
                 $logger->debug("Database: $filecheck");
                 my ( $name, $path, $suffix ) = fileparse( $file, qr/\.[^.]*/ );
 
-                # Wrap multi-statement update in transaction
                 eval {
-                    $dbh->begin_work;
-
-                    # Update filename and title in Postgres
-                    my $update_sth = $dbh->prepare('UPDATE lrr_archive SET filename = ?, title = ? WHERE arcid = ?');
-                    $update_sth->execute($file, $name, $id);
-                    $update_sth->finish;
-
-                    $dbh->commit;
-
+                    LANraragi::Model::PsilabsDev::Archive::update_stored_filename_with_handle( $handle, $id, $file, $name );
                     invalidate_cache();
                 };
 
                 if ( my $error = $@ ) {
                     $logger->error("Error updating filename/title for $id: $error");
-                    eval { $dbh->rollback };
                 }
             }
 
-            # Check and set arcsize if not already set
-            my $arcsize_check_sth = $dbh->prepare('SELECT arcsize FROM lrr_archive WHERE arcid = ?');
-            $arcsize_check_sth->execute($id);
-            my $arcsize_row = $arcsize_check_sth->fetchrow_hashref;
-            $arcsize_check_sth->finish;
-
-            unless ( $arcsize_row && $arcsize_row->{arcsize} ) {
+            unless ( LANraragi::Model::PsilabsDev::Archive::get_arcsize_with_handle( $handle, $id ) ) {
                 $logger->debug("arcsize is not set for $id, storing now!");
-                add_arcsize_with_dbh( $dbh, $id );
+                add_arcsize_with_dbh( $handle, $id );
             }
 
-            # Set pagecount in case it's not already there
-            my $pagecount_check_sth = $dbh->prepare('SELECT pagecount FROM lrr_archive WHERE arcid = ?');
-            $pagecount_check_sth->execute($id);
-            my $pagecount_row = $pagecount_check_sth->fetchrow_hashref;
-            $pagecount_check_sth->finish;
-
-            unless ( $pagecount_row && $pagecount_row->{pagecount} ) {
+            unless ( LANraragi::Model::PsilabsDev::Archive::get_pagecount_with_handle( $handle, $id ) ) {
                 $logger->debug("Pagecount not calculated for $id, doing it now!");
-                add_pagecount_with_dbh( $dbh, $id );
+                add_pagecount_with_dbh( $handle, $id );
             }
 
         } else {
-
-            # Add to Postgres if not present beforehand
             add_new_file( $id, $file );
             invalidate_cache();
         }
     } else {
         $logger->debug("$file not recognized as archive, skipping.");
     }
-    $dbh->disconnect();
+    close_handle($handle);
 }
 
 # Only handle new files. As per the ChangeNotify doc, it
@@ -367,39 +336,33 @@ sub add_new_files (@files) {
 
 sub add_new_file ( $id, $file ) {
 
-    my $dbh = get_dbh();
-    unless ($dbh) {
-        $logger->error("Failed to connect to PostgreSQL database");
+    my $handle = get_handle();
+    unless ($handle) {
+        $logger->error("Failed to connect to database");
         return;
     }
 
     $logger->info("Adding new file $file with ID $id");
 
     eval {
-        # Add archive to Postgres (equivalent to add_archive_to_redis)
-        add_archive_to_postgres( $id, $file, $dbh );
+        add_archive_to_db( $id, $file, $handle );
 
-        # Add timestamp tag (reuse $dbh)
-        add_timestamp_tag_with_dbh( $dbh, $id );
-
-        # Add pagecount (reuse $dbh)
-        add_pagecount_with_dbh( $dbh, $id );
-
-        # Add arcsize (reuse $dbh)
-        add_arcsize_with_dbh( $dbh, $id );
+        add_timestamp_tag_with_dbh( $handle, $id );
+        add_pagecount_with_dbh( $handle, $id );
+        add_arcsize_with_dbh( $handle, $id );
 
         # Generate thumbnail
         my $thumbdir = LANraragi::Model::Config->get_thumbdir;
         extract_thumbnail( $thumbdir, $id, 1, 1, 1 );
 
         # AutoTagging using enabled plugins goes here!
-        LANraragi::Model::PsilabsDev::PgPlugins::exec_enabled_plugins_on_file($id);
+        LANraragi::Model::PsilabsDev::Plugins::exec_enabled_plugins_on_file($id);
     };
 
     if ( my $error = $@ ) {
         $logger->error("Error while adding file: $error");
     }
-    $dbh->disconnect();
+    close_handle($handle);
 }
 
 __PACKAGE__->initialize_from_new_process unless caller;
