@@ -7,10 +7,10 @@ use Mojo::JSON qw(decode_json);
 use LANraragi::Utils::Generic  qw(generate_themes_header exec_with_lock_pure);
 use LANraragi::Utils::Tags     qw(rewrite_tags build_tag_replace_hash split_tags_to_array restore_CRLF);
 use LANraragi::Utils::Database qw(get_computed_tagrules);
-use LANraragi::Utils::PsilabsDev::PgDatabase qw(set_tags set_title set_summary set_tags_with_dbh set_title_with_dbh set_summary_with_dbh set_isnew invalidate_cache);
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(set_tags set_title set_summary set_tags_with_dbh set_title_with_dbh set_summary_with_dbh set_isnew invalidate_cache get_tags_string_with_dbh);
 use LANraragi::Utils::Plugins  qw(get_plugins get_plugin get_plugin_parameters);
 use LANraragi::Utils::Logging  qw(get_logger);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Model::PsilabsDev::PgCategory;
 use LANraragi::Utils::PsilabsDev::PgArchive qw(delete_archive);
 use LANraragi::Model::PsilabsDev::PgPlugins qw(exec_metadata_plugin);
@@ -67,20 +67,8 @@ sub socket {
     my @rules = get_computed_tagrules();
     my ( $rules, $hash_replace_rules ) = build_tag_replace_hash( \@rules );
 
-    # Prepare database connection and statement ONCE at WebSocket connection time
-    my $dbh = get_postgresql_dbh();
-    my $tag_fetch_sth = $dbh->prepare(q{
-        SELECT string_agg(
-            CASE
-                WHEN t.namespace = '' THEN t.value
-                ELSE t.namespace || ':' || t.value
-            END,
-            ', '
-        ) as tags
-        FROM lrr_archive_to_tag_map atm
-        JOIN lrr_tag t ON atm.tagid = t.tagid
-        WHERE atm.arcid = ?
-    });
+    # Open database connection at WebSocket connection time (customs border)
+    my $dbh = get_dbh();
 
     $self->on(
         message => sub {
@@ -174,10 +162,7 @@ sub socket {
                 eval {
                     $dbh->begin_work;
 
-                    # REUSE prepared statement instead of creating new connection per message
-                    $tag_fetch_sth->execute($id);
-                    my $row = $tag_fetch_sth->fetchrow_hashref;
-                    my $tags = $row ? $row->{tags} : "";
+                    my $tags = get_tags_string_with_dbh($dbh, $id);
 
                     my @tagarray = split_tags_to_array($tags);
                     @tagarray = rewrite_tags( \@tagarray, $rules, $hash_replace_rules );
@@ -256,7 +241,6 @@ sub socket {
             $cancelled = 1;
 
             # Clean up on WebSocket close
-            $tag_fetch_sth->finish if $tag_fetch_sth;
             $dbh->disconnect if $dbh;
         }
     );
@@ -272,7 +256,7 @@ sub batch_plugin {
     # If the plugin exec returned tags, add them
     unless ( exists $plugin_result{error} ) {
         # Wrap all metadata updates in a single transaction for atomicity
-        my $dbh = get_postgresql_dbh();
+        my $dbh = get_dbh();
         $dbh->begin_work;
 
         eval {

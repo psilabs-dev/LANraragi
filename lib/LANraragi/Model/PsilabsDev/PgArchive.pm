@@ -10,7 +10,7 @@ use utf8;
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Utils::Generic qw(render_api_response);
 use LANraragi::Utils::String qw(trim trim_CRLF);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::PsilabsDev::PgDatabase;
 use LANraragi::Utils::Path qw(create_path unlink_path);
 use LANraragi::Utils::Archive qw(extract_single_file);
@@ -27,7 +27,7 @@ use File::Path qw(remove_tree);
 sub generate_archive_list {
 
     my $logger = get_logger( "PgArchive", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     my @archives;
 
@@ -116,7 +116,7 @@ sub generate_archive_list {
 sub get_untagged_archives {
 
     my $logger = get_logger( "PgArchive", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     my @untagged;
 
@@ -163,7 +163,7 @@ sub get_untagged_archives {
 sub get_random_archive {
 
     my $logger = get_logger( "PgArchive", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     my $arcid;
 
@@ -220,7 +220,7 @@ sub generate_page_thumbnails {
     my $format   = $use_jxl ? 'jxl' : 'jpg';
 
     # Get the number of pages in the archive from Postgres
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $pages;
 
     eval {
@@ -322,7 +322,7 @@ sub update_progress {
     my ($id, $page, $force) = @_;
 
     my $logger = get_logger("PgArchive", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     my $time = time();
     my $pagecount;
@@ -375,7 +375,7 @@ sub get_page_data ($id, $path) {
     my $content = fetch($cachekey);
     if ( !defined($content) ) {
         # Extract the file from the parent archive if it doesn't exist
-        my $dbh = get_postgresql_dbh();
+        my $dbh = get_dbh();
         my $archive = LANraragi::Utils::PsilabsDev::PgPath::get_archive_path( $dbh, $id );
         $dbh->disconnect();
         $content = extract_single_file($archive, $path);
@@ -438,7 +438,7 @@ sub archive_exists ($id) {
         return 0;
     }
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $exists = 0;
 
     eval {
@@ -472,7 +472,7 @@ sub get_title ($id) {
         return ();
     }
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $title;
 
     eval {
@@ -550,7 +550,7 @@ sub update_metadata {
     ( $_ = LANraragi::Utils::String::trim_CRLF($_) ) for ( $title, $tags );
 
     # Use a transaction to ensure all metadata updates are atomic
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     eval {
         $dbh->begin_work;
@@ -589,7 +589,7 @@ sub update_metadata {
 sub delete_archive ($id) {
 
     my $logger = get_logger( "PgArchive", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $filename;
 
     eval {
@@ -690,7 +690,7 @@ sub delete_archive ($id) {
 # replaces LANraragi::Model::Archive::add_toc_entry
 sub add_toc_entry ( $id, $page, $title ) {
     my $logger = get_logger( "PgArchive", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     eval {
         my $sth = $dbh->prepare(q{
@@ -715,7 +715,7 @@ sub add_toc_entry ( $id, $page, $title ) {
 # replaces LANraragi::Model::Archive::remove_toc_entry
 sub remove_toc_entry ( $id, $page ) {
     my $logger = get_logger( "PgArchive", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     eval {
         my $sth = $dbh->prepare('DELETE FROM lrr_toc WHERE arcid = ? AND page = ?');

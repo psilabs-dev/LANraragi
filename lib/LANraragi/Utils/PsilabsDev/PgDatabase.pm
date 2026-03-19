@@ -17,7 +17,7 @@ use LANraragi::Utils::Tags qw(split_tags_to_array join_tags_to_string);
 use LANraragi::Utils::String qw(trim trim_CRLF);
 use List::MoreUtils qw(uniq);
 use List::Util qw(max);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::Path;
 use LANraragi::Utils::PsilabsDev::PgPath qw(get_archive_path);
 use LANraragi::Utils::PsilabsDev::PgArchive;
@@ -28,7 +28,7 @@ use LANraragi::Model::PsilabsDev::PgTankoubon;
 # Functions for interacting with Postgres.
 use Exporter 'import';
 our @EXPORT_OK = qw(
-  get_archive get_archive_json get_archive_json_multi set_tags set_tags_with_dbh set_title set_title_with_dbh set_summary set_summary_with_dbh set_isnew clear_new_all invalidate_cache clean_database clean_categories_and_tanks change_archive_id change_archive_id_with_dbh drop_database
+  get_archive get_archive_json get_archive_json_multi get_tags_string_with_dbh get_archive_summary_with_dbh set_tags set_tags_with_dbh set_title set_title_with_dbh set_summary set_summary_with_dbh set_isnew clear_new_all invalidate_cache clean_database clean_categories_and_tanks change_archive_id change_archive_id_with_dbh drop_database
 );
 
 # replaces LANraragi::Utils::Database::get_archive
@@ -36,7 +36,7 @@ our @EXPORT_OK = qw(
 # similar to the Redis hgetall structure for compatibility
 sub get_archive ($id) {
     my $logger = get_logger( "PgDatabase", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     eval {
         # Get archive data
@@ -95,6 +95,56 @@ sub get_archive ($id) {
         $dbh->disconnect();
         return ();
     }
+}
+
+# Returns the comma-separated tag string for the given archive ID.
+# Accepts an existing $dbh from the caller (customs border pattern).
+sub get_tags_string_with_dbh ( $dbh, $id ) {
+    my $sth = $dbh->prepare(q{
+        SELECT COALESCE(string_agg(
+            CASE
+                WHEN t.namespace = '' THEN t.value
+                ELSE t.namespace || ':' || t.value
+            END,
+            ', '
+        ), '') as tags
+        FROM lrr_archive_to_tag_map atm
+        JOIN lrr_tag t ON atm.tagid = t.tagid
+        WHERE atm.arcid = ?
+    });
+    $sth->execute($id);
+    my $row = $sth->fetchrow_hashref;
+    my $tags = $row->{tags} // "";
+    $sth->finish;
+    return $tags;
+}
+
+# Returns { arcid, filename, title, tags } for the given archive ID,
+# suitable for display/summary purposes (e.g. duplicates page).
+# Accepts an existing $dbh from the caller (customs border pattern).
+sub get_archive_summary_with_dbh ( $dbh, $id ) {
+    my $sth = $dbh->prepare(q{
+        SELECT arcid, filename, title,
+            COALESCE(
+                (SELECT string_agg(
+                    CASE
+                        WHEN t.namespace = '' THEN t.value
+                        ELSE t.namespace || ':' || t.value
+                    END,
+                    ', '
+                )
+                FROM lrr_archive_to_tag_map atm
+                JOIN lrr_tag t ON atm.tagid = t.tagid
+                WHERE atm.arcid = ?),
+                ''
+            ) as tags
+        FROM lrr_archive
+        WHERE arcid = ?
+    });
+    $sth->execute($id, $id);
+    my $row = $sth->fetchrow_hashref;
+    $sth->finish;
+    return $row;
 }
 
 # Internal function for building an archive JSON from Postgres data.
@@ -286,7 +336,7 @@ sub build_tank_json_pg ($id) {
 # Builds JSON objects for multiple archives and returns them as an array.
 sub get_archive_json_multi (@ids) {
     my $logger = get_logger( "PgDatabase", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     my @archives;
 
@@ -408,7 +458,7 @@ sub get_archive_json_multi (@ids) {
 
 # replaces LANraragi::Utils::Database::set_title
 sub set_title ( $id, $newtitle ) {
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     $dbh->begin_work;
 
     eval {
@@ -448,7 +498,7 @@ sub set_title_with_dbh ( $dbh, $id, $newtitle ) {
 # Set $tags for the archive with id $id.
 # Set $append to 1 if you want to append the tags instead of replacing them.
 sub set_tags ( $id, $newtags, $append = 0 ) {
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     $dbh->begin_work;
 
     eval {
@@ -573,7 +623,7 @@ sub set_tags_with_dbh ( $dbh, $id, $newtags, $append = 0 ) {
 
 # replaces LANraragi::Utils::Database::set_summary
 sub set_summary ( $id, $summary ) {
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     $dbh->begin_work;
 
     eval {
@@ -616,7 +666,7 @@ sub set_isnew ( $id, $isnew ) {
     # Convert "false" to false boolean, everything else to true
     my $newval = $isnew ne "false" ? 1 : 0;
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     eval {
         my $sth = $dbh->prepare('UPDATE lrr_archive SET isnew = ? WHERE arcid = ?');
@@ -639,7 +689,7 @@ sub set_isnew ( $id, $isnew ) {
 # Clear the new flag in all archives.
 sub clear_new_all {
     my $logger = get_logger( "PgDatabase", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     eval {
         # Set isnew to false for all archives
@@ -672,7 +722,7 @@ sub invalidate_cache ( $rebuild_indexes = 0 ) {
 # Also updates the filemap in Redis (still used by Shinobu for file tracking).
 sub change_archive_id ( $old_id, $new_id ) {
     my $logger = get_logger( "PgDatabase", "lanraragi" );
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     $logger->debug("Changing ID $old_id to $new_id");
 
@@ -747,7 +797,7 @@ sub change_archive_id ( $old_id, $new_id ) {
 # Note: Archives themselves are NOT deleted - only their metadata relationships.
 sub clean_categories_and_tanks {
     my $logger = get_logger("PgDatabase", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     $logger->info("Cleaning categories and tankoubons before restore...");
 
@@ -869,7 +919,7 @@ sub clean_database {
     my @filemapids = $redis_config->exists("LRR_FILEMAP") ? $redis_config->hvals("LRR_FILEMAP") : ();
     my %filemap    = map { $_ => 1 } @filemapids;
 
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $deleted_arcs  = 0;
     my $unlinked_arcs = 0;
 
@@ -981,7 +1031,7 @@ sub clean_database {
 # This is extremely dangerous and cannot be undone.
 sub drop_database {
     my $logger = get_logger("PgDatabase", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     $logger->warn("Dropping entire database - all Postgres and Redis data will be lost!");
 

@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use utf8;
 
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Model::Config;
 
@@ -15,7 +15,7 @@ sub get_tankoubon_list {
     my $page = shift // 0;
 
     my $logger = get_logger("PgTankoubon", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Get all tankoubons
     my $tank_sql = <<'SQL';
@@ -100,7 +100,7 @@ SQL
 sub create_tankoubon {
     my ( $name, $tank_id ) = @_;
     my $logger = get_logger("PgTankoubon", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Set all fields of the tank object
     unless ( length($tank_id) ) {
@@ -162,7 +162,7 @@ sub get_tankoubon {
     $page //= 0;
 
     my $logger = get_logger("PgTankoubon", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     if ( $tank_id eq "" ) {
         $logger->debug("No Tankoubon ID provided.");
@@ -330,7 +330,7 @@ sub update_metadata {
     }
 
     my $logger = get_logger("PgTankoubon", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $err = "";
     my $name    = $data->{"metadata"}->{"name"}    || undef;
     my $summary = exists $data->{"metadata"}->{"summary"} ? $data->{"metadata"}->{"summary"} : undef;
@@ -394,7 +394,7 @@ sub update_archive_list {
     }
 
     my $logger = get_logger("PgTankoubon", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $err = "";
     my @tank_archives = @{ $data->{"archives"} };
 
@@ -489,7 +489,7 @@ sub get_tankoubons_containing_archive {
     my ($arcid) = @_;
 
     my $logger = get_logger("PgTankoubon", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     # Check if archive exists
     my $arc_check_sth = $dbh->prepare('SELECT arcid FROM lrr_archive WHERE arcid = ?');
@@ -533,7 +533,7 @@ sub delete_tankoubon {
     my ($tank_id) = @_;
 
     my $logger = get_logger("PgTankoubon", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
 
     if ( length($tank_id) != 15 ) {
         # Probably not a Tankoubon ID
@@ -592,7 +592,7 @@ sub add_to_tankoubon {
     my ( $tank_id, $arc_id ) = @_;
 
     my $logger = get_logger("PgTankoubon", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $err = "";
 
     # Check if tank exists
@@ -676,7 +676,7 @@ sub remove_from_tankoubon {
     my ( $tank_id, $arcid ) = @_;
 
     my $logger = get_logger("PgTankoubon", "lanraragi");
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $err = "";
 
     # Check if tank exists

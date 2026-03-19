@@ -18,7 +18,7 @@ use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Tags     qw(rewrite_tags split_tags_to_array);
 use LANraragi::Utils::Plugins  qw(get_plugin_parameters get_plugin);
 use LANraragi::Utils::Path     qw(create_path);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 
 use Exporter 'import';
 our @EXPORT_OK = qw(exec_metadata_plugin exec_enabled_plugins_on_file);
@@ -36,7 +36,7 @@ sub exec_metadata_plugin ( $plugin, $id, %args ) {
     }
 
     # Get archive metadata from Postgres instead of Redis
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $sth = $dbh->prepare(q{
         SELECT
             filename,
@@ -218,7 +218,7 @@ sub exec_enabled_plugins_on_file ($id) {
         $successes++;
 
         # Create shared database handle for this plugin's atomic updates
-        my $dbh = get_postgresql_dbh();
+        my $dbh = get_dbh();
         $dbh->begin_work;
 
         eval {

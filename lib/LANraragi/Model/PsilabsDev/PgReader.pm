@@ -16,7 +16,7 @@ use LANraragi::Utils::Generic qw(is_image);
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Utils::Archive qw(get_filelist);
 use LANraragi::Utils::Redis   qw(redis_decode);
-use LANraragi::Utils::PsilabsDev::Postgres qw(get_postgresql_dbh);
+use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::PsilabsDev::PgPath;
 
 # replaces LANraragi::Model::Reader::build_reader_JSON
@@ -26,7 +26,7 @@ sub build_reader_JSON ( $self, $id, $force ) {
 
     # Get the path from Postgres.
     # Filenames are stored as they are on the OS, so no decoding!
-    my $dbh = get_postgresql_dbh();
+    my $dbh = get_dbh();
     my $archive = LANraragi::Utils::PsilabsDev::PgPath::get_archive_path( $dbh, $id );
 
     # Parse archive to get its list of images
