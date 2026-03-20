@@ -23,6 +23,7 @@ use LANraragi::Utils::PsilabsDev::PgPath qw(get_archive_path);
 use LANraragi::Utils::PsilabsDev::PgArchive;
 use LANraragi::Model::PsilabsDev::PgBackup;
 use LANraragi::Model::PsilabsDev::PgCategory;
+use LANraragi::Model::PsilabsDev::PgStats;
 use LANraragi::Model::PsilabsDev::PgTankoubon;
 
 # Functions for interacting with Postgres.
@@ -711,9 +712,9 @@ sub clear_new_all {
 }
 
 # replaces LANraragi::Utils::Database::invalidate_cache
-# In Postgres, there's no separate search cache to invalidate.
+# Invalidates cached tag statistics so the next call recomputes from Postgres.
 sub invalidate_cache ( $rebuild_indexes = 0 ) {
-    return;
+    LANraragi::Model::PsilabsDev::PgStats::invalidate_tag_stats_cache();
 }
 
 # replaces LANraragi::Utils::Database::change_archive_id
