@@ -4,8 +4,11 @@ use strict;
 use warnings;
 use utf8;
 
+use Mojo::JSON qw(encode_json decode_json);
+
 use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::Logging qw(get_logger);
+use LANraragi::Utils::Redis    qw(redis_decode);
 use LANraragi::Model::Config;
 
 # replaces: LANraragi::Model::Stats::get_archive_count
@@ -142,61 +145,101 @@ SQL
 }
 
 # replaces: LANraragi::Model::Stats::build_tag_stats
-# build_tag_stats($minscore)
+# build_tag_stats($minscore, $excluded)
 #   Builds tag statistics for display in the tag cloud.
-#   In Redis, this queries the LRR_STATS sorted set.
-#   In Postgres, this counts tag occurrences across all archives.
-#   Returns a reference to an array of tag objects with text, namespace, and weight fields.
+#   Results are cached as raw JSON in Redis (search DB) under LRR_TAG_STATS:*
+#   keyed by query parameters. Cache is invalidated by invalidate_tag_stats_cache(),
+#   called from PgDatabase::invalidate_cache.
+#
+#   Returns ($json_string, 1) on cache hit — caller renders the raw JSON directly.
+#   Returns ($arrayref, 0) on cache miss — caller renders via openapi.
 sub build_tag_stats {
     my ( $minscore, $excluded ) = @_;
     my $logger = get_logger("PgStats", "lanraragi");
 
     $logger->debug("Serving tag statistics with a minimum weight of $minscore");
 
+    # Build a cache key from parameters
+    my $excl_key = join( ',', sort map { lc($_) } @$excluded );
+    my $cache_key = "LRR_TAG_STATS:${minscore}:${excl_key}";
+
+    # Check Redis cache — return raw JSON string on hit to avoid decode+re-encode
+    my $redis = LANraragi::Model::Config->get_redis_search;
+    my $cached = $redis->get($cache_key);
+    $redis->quit();
+
+    if ($cached) {
+        $logger->debug("Tag stats cache hit for $cache_key");
+        return ( redis_decode($cached), 1 );
+    }
+
+    # Cache miss — compute from Postgres
     my $dbh = get_dbh();
 
-    # Count tag occurrences across all archives, filtering by minimum score
-    # Join lrr_tag with lrr_archive_to_tag_map to count how many times each tag appears
-    # Lowercase tags during grouping to match Redis behavior (e.g., "Artist:John" and "artist:john" counted together)
-    my $sql = <<'SQL';
-        SELECT LOWER(t.namespace) as namespace, LOWER(t.value) as value, COUNT(*) as weight
-        FROM lrr_tag t
-        INNER JOIN lrr_archive_to_tag_map atm ON t.tagid = atm.tagid
-        GROUP BY LOWER(t.namespace), LOWER(t.value)
+    my @params;
+
+    my $exclude_clause = "";
+    if ( @$excluded ) {
+        my @placeholders = map { '?' } @$excluded;
+        $exclude_clause = "WHERE LOWER(atm.namespace) NOT IN (" . join( ', ', @placeholders ) . ")";
+        push @params, map { lc($_) } @$excluded;
+    }
+
+    # HAVING ? comes after WHERE ? in bind order
+    push @params, $minscore;
+
+    my $sql = <<SQL;
+        SELECT LOWER(atm.namespace) as namespace, LOWER(atm.value) as value, COUNT(*) as weight
+        FROM lrr_archive_to_tag_map atm
+        $exclude_clause
+        GROUP BY LOWER(atm.namespace), LOWER(atm.value)
         HAVING COUNT(*) >= ?
         ORDER BY weight DESC
 SQL
 
     my $sth = $dbh->prepare($sql);
-    $sth->execute($minscore);
+    $sth->execute(@params);
 
-    # Build the array of tag objects
     my @tags;
     while (my $row = $sth->fetchrow_hashref) {
-        my $namespace = $row->{namespace} || "";
         my $value = $row->{value} || "";
-        my $weight = $row->{weight} || 0;
-
-        # Skip empty values
         next if $value eq "";
 
-        # Skip excluded namespaces if provided
-        next if @$excluded && grep { lc($_) eq $namespace } @$excluded;
-
-        my $j = {
-            text => $value,
-            namespace => $namespace,
-            weight => $weight + 0  # Ensure it's treated as a number
+        push @tags, {
+            text      => $value,
+            namespace => $row->{namespace} || "",
+            weight    => $row->{weight} + 0
         };
-        push(@tags, $j);
     }
 
     $sth->finish;
     $dbh->disconnect();
 
-    $logger->debug("Returning " . scalar(@tags) . " tags with minimum weight $minscore");
+    # Store rendered JSON in Redis cache
+    my $json = encode_json( \@tags );
+    $redis = LANraragi::Model::Config->get_redis_search;
+    $redis->set( $cache_key, $json );
+    $redis->quit();
 
-    return \@tags;
+    $logger->debug("Returning " . scalar(@tags) . " tags (cached under $cache_key)");
+
+    return ( \@tags, 0 );
+}
+
+# invalidate_tag_stats_cache()
+#   Deletes all LRR_TAG_STATS:* keys from the Redis search DB.
+#   Called by PgDatabase::invalidate_cache on tag writes.
+sub invalidate_tag_stats_cache {
+    my $redis = LANraragi::Model::Config->get_redis_search;
+    my @keys = $redis->keys("LRR_TAG_STATS:*");
+
+    if (@keys) {
+        $redis->del(@keys);
+        my $logger = get_logger("PgStats", "lanraragi");
+        $logger->debug("Invalidated " . scalar(@keys) . " tag stats cache entries");
+    }
+
+    $redis->quit();
 }
 
 # replaces: LANraragi::Model::Stats::build_stat_hashes
