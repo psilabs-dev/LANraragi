@@ -4,12 +4,8 @@ use strict;
 use warnings;
 use utf8;
 
-use Mojo::JSON qw(encode_json decode_json);
-
 use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::Logging qw(get_logger);
-use LANraragi::Utils::Redis    qw(redis_decode);
-use LANraragi::Model::Config;
 
 # replaces: LANraragi::Model::Stats::get_archive_count
 # get_archive_count()
@@ -147,33 +143,13 @@ SQL
 # replaces: LANraragi::Model::Stats::build_tag_stats
 # build_tag_stats($minscore, $excluded)
 #   Builds tag statistics for display in the tag cloud.
-#   Results are cached as raw JSON in Redis (search DB) under LRR_TAG_STATS:*
-#   keyed by query parameters. Cache is invalidated by invalidate_tag_stats_cache(),
-#   called from PgDatabase::invalidate_cache.
-#
-#   Returns ($json_string, 1) on cache hit — caller renders the raw JSON directly.
-#   Returns ($arrayref, 0) on cache miss — caller renders via openapi.
+#   Always queries Postgres directly — no caching layer.
 sub build_tag_stats {
     my ( $minscore, $excluded ) = @_;
     my $logger = get_logger("PgStats", "lanraragi");
 
     $logger->debug("Serving tag statistics with a minimum weight of $minscore");
 
-    # Build a cache key from parameters
-    my $excl_key = join( ',', sort map { lc($_) } @$excluded );
-    my $cache_key = "LRR_TAG_STATS:${minscore}:${excl_key}";
-
-    # Check Redis cache — return raw JSON string on hit to avoid decode+re-encode
-    my $redis = LANraragi::Model::Config->get_redis_search;
-    my $cached = $redis->get($cache_key);
-    $redis->quit();
-
-    if ($cached) {
-        $logger->debug("Tag stats cache hit for $cache_key");
-        return ( redis_decode($cached), 1 );
-    }
-
-    # Cache miss — compute from Postgres
     my $dbh = get_dbh();
 
     my @params;
@@ -215,31 +191,9 @@ SQL
     $sth->finish;
     $dbh->disconnect();
 
-    # Store rendered JSON in Redis cache
-    my $json = encode_json( \@tags );
-    $redis = LANraragi::Model::Config->get_redis_search;
-    $redis->set( $cache_key, $json );
-    $redis->quit();
+    $logger->debug("Returning " . scalar(@tags) . " tags");
 
-    $logger->debug("Returning " . scalar(@tags) . " tags (cached under $cache_key)");
-
-    return ( \@tags, 0 );
-}
-
-# invalidate_tag_stats_cache()
-#   Deletes all LRR_TAG_STATS:* keys from the Redis search DB.
-#   Called by PgDatabase::invalidate_cache on tag writes.
-sub invalidate_tag_stats_cache {
-    my $redis = LANraragi::Model::Config->get_redis_search;
-    my @keys = $redis->keys("LRR_TAG_STATS:*");
-
-    if (@keys) {
-        $redis->del(@keys);
-        my $logger = get_logger("PgStats", "lanraragi");
-        $logger->debug("Invalidated " . scalar(@keys) . " tag stats cache entries");
-    }
-
-    $redis->quit();
+    return \@tags;
 }
 
 # replaces: LANraragi::Model::Stats::build_stat_hashes
