@@ -162,14 +162,8 @@ sub serve_tag_stats {
         @excluded = split( /\s*,\s*/, $self->LRR_CONF->get_excludednamespaces );
     }
 
-    my ( $result, $is_cached ) = LANraragi::Model::PsilabsDev::PgStats::build_tag_stats( $minscore, \@excluded );
-
-    if ($is_cached) {
-        # Raw JSON from Redis — render directly without Perl decode+re-encode
-        $self->render( data => $result, format => 'json' );
-    } else {
-        $self->render( openapi => $result );
-    }
+    my $result = LANraragi::Model::PsilabsDev::PgStats::build_tag_stats( $minscore, \@excluded );
+    $self->render( openapi => $result );
 }
 
 sub clean_database {

@@ -712,9 +712,8 @@ sub clear_new_all {
 }
 
 # replaces LANraragi::Utils::Database::invalidate_cache
-# Invalidates cached tag statistics so the next call recomputes from Postgres.
+# No-op for Postgres — no search caching layer to invalidate.
 sub invalidate_cache ( $rebuild_indexes = 0 ) {
-    LANraragi::Model::PsilabsDev::PgStats::invalidate_tag_stats_cache();
 }
 
 # replaces LANraragi::Utils::Database::change_archive_id

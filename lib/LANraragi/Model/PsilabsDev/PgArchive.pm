@@ -580,6 +580,9 @@ sub update_metadata {
 
     $dbh->disconnect;
 
+    # Bust cache
+    LANraragi::Utils::PsilabsDev::PgDatabase::invalidate_cache();
+
     # No errors.
     return "";
 }
