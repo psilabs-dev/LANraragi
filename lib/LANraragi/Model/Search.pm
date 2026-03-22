@@ -124,9 +124,10 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
 #   $start      - pagination offset (-1 for all results)
 #   $sortkey    - sort field: "title", "lastread", or a tag namespace
 #   $sortorder  - 0 = ascending, 1 = descending
+#   $total      - total universe size (caller-provided, since grouptanks resolution happens at the caller)
 #
 # Returns: ($total, $filtered_count, @page_of_ids)
-sub do_composite_search ( $clauses, $start, $sortkey, $sortorder ) {
+sub do_composite_search ( $clauses, $start, $sortkey, $sortorder, $total ) {
 
     my $redis    = LANraragi::Model::Config->get_redis_search;
     my $redis_db = LANraragi::Model::Config->get_redis;
@@ -136,8 +137,6 @@ sub do_composite_search ( $clauses, $start, $sortkey, $sortorder ) {
         $logger->error("Search engine is not initialized yet. Please wait a few seconds.");
         return ( -1, -1, () );
     }
-
-    my $total = $redis->zcard("LRR_TITLES");
 
     my ( $keyed_count, @filtered ) = do_composite_search_inner( $redis, $redis_db, $clauses, $sortkey, $sortorder );
 
