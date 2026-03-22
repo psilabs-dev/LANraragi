@@ -74,6 +74,35 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
     return ( $total, $#filtered + 1, @filtered[ $start .. $end ] );
 }
 
+# do_composite_search (clauses, start, sortkey, sortorder)
+# Performs a composite search: each clause is an independent AND conjunction resolved by the caller
+# into (candidate_ids, tokens, newonly, untaggedonly). Multiple clauses are OR-unioned.
+# Should be *superset* of do_search.
+#
+# Sort and pagination are global, applied after the OR union across all clauses.
+# Caching is per-composite-query, not per-clause.
+#
+# Parameters:
+#   $clauses    - arrayref of clause hashrefs, each containing:
+#                   candidate_ids => arrayref of IDs to search within
+#                   tokens        => arrayref of token hashrefs { tag, isneg, isexact }
+#                   newonly       => 0|1
+#                   untaggedonly  => 0|1
+#   $start      - pagination offset (-1 for all results)
+#   $sortkey    - sort field: "title", "lastread", or a tag namespace
+#   $sortorder  - 0 = ascending, 1 = descending
+#
+# Returns: ($total, $filtered_count, @page_of_ids)
+sub do_composite_search ( $clauses, $start, $sortkey, $sortorder ) {
+
+    # TODO: implement
+    # For each clause: search_core(clause->{candidate_ids}, clause->{tokens}, ...)
+    # Union results across clauses (deduplicate, preserve first occurrence)
+    # Sort the union
+    # Paginate and return
+    ...
+}
+
 sub check_cache ( $cachekey, $cachekey_inv ) {
 
     my $redis  = LANraragi::Model::Config->get_redis_search;
@@ -327,20 +356,20 @@ sub search_uncached ( $category_id, $filter, $sortkey, $sortorder, $newonly, $un
 
 # search_core (candidate_ids, filter, sortkey, sortorder, newonly, untaggedonly)
 # Core search function operating on a pre-resolved candidate set.
-# No category or grouptanks awareness — the caller resolves those into candidate_ids and filter tokens.
+# No category or grouptanks awareness — the caller resolves those into candidate_ids and tokens.
 #
 # Parameters:
-#   $candidate_ids      - arrayref of IDs to search within (archive and/or tank IDs)
-#   $filters            - search filter strings
-#   $sortkey            - sort field: "title", "lastread", or a tag namespace
-#   $sortorder          - 0 = ascending, 1 = descending
-#   $newonly            - if true, restrict to IDs in LRR_NEW
-#   $untaggedonly       - if true, restrict to IDs in LRR_UNTAGGED
+#   $candidate_ids - arrayref of IDs to search within (archive and/or tank IDs)
+#   $tokens        - arrayref of token hashrefs from compute_search_filter, each { tag, isneg, isexact }
+#   $sortkey       - sort field: "title", "lastread", or a tag namespace
+#   $sortorder     - 0 = ascending, 1 = descending
+#   $newonly        - if true, restrict to IDs in LRR_NEW
+#   $untaggedonly   - if true, restrict to IDs in LRR_UNTAGGED
 #
 # Returns: ($keyed_count, @sorted_ids)
 #   $keyed_count  - number of IDs possessing the sort key (-1 for title sort)
 #   @sorted_ids   - filtered and sorted ID list
-sub search_core ( $candidate_ids, $filters, $sortkey, $sortorder, $newonly, $untaggedonly ) {
+sub search_core ( $candidate_ids, $tokens, $sortkey, $sortorder, $newonly, $untaggedonly ) {
 
     # TODO: extract from search_uncached
     ...
