@@ -55,16 +55,8 @@
 	[% IF userlogged %]
 	<p id="nb">
 		<i class="fa fa-caret-right"></i>
-		<a href="[% c.url_for("/upload") %]">[% c.lh("Add Archives") %]</a>
-		<span style="margin-left:5px"></span>
-		<i class="fa fa-caret-right"></i>
-		<a href="[% c.url_for("/batch") %]">[% c.lh("Batch Operations") %]</a>
-		<span style="margin-left:5px"></span>
-		<i class="fa fa-caret-right"></i>
 		<a href="[% c.url_for("/config") %]">[% c.lh("Settings") %]</a>
 		<span style="margin-left:5px"></span>
-		<i class="fa fa-caret-right"></i>
-		<a href="[% c.url_for("/config/categories") %]">[% c.lh("Modify Categories") %]</a>
 		<span style="margin-left:5px"></span>
 		<i class="fa fa-caret-right"></i>
 		<a href="[% c.url_for("/stats") %]">[% c.lh("Statistics") %]</a>
