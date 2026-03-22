@@ -325,6 +325,27 @@ sub search_uncached ( $category_id, $filter, $sortkey, $sortorder, $newonly, $un
     return ( -1, @filtered );
 }
 
+# search_core (candidate_ids, filter, sortkey, sortorder, newonly, untaggedonly)
+# Core search function operating on a pre-resolved candidate set.
+# No category or grouptanks awareness — the caller resolves those into candidate_ids and filter tokens.
+#
+# Parameters:
+#   $candidate_ids      - arrayref of IDs to search within (archive and/or tank IDs)
+#   $filters            - search filter strings
+#   $sortkey            - sort field: "title", "lastread", or a tag namespace
+#   $sortorder          - 0 = ascending, 1 = descending
+#   $newonly            - if true, restrict to IDs in LRR_NEW
+#   $untaggedonly       - if true, restrict to IDs in LRR_UNTAGGED
+#
+# Returns: ($keyed_count, @sorted_ids)
+#   $keyed_count  - number of IDs possessing the sort key (-1 for title sort)
+#   @sorted_ids   - filtered and sorted ID list
+sub search_core ( $candidate_ids, $filters, $sortkey, $sortorder, $newonly, $untaggedonly ) {
+
+    # TODO: extract from search_uncached
+    ...
+}
+
 # Transform the search engine syntax into a list of tokens.
 # A token object contains the tag, whether it must be an exact match, and whether it must be absent.
 sub compute_search_filter ($filter) {
