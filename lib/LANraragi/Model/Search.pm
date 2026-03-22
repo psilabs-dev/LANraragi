@@ -34,6 +34,7 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
         $logger->error("Search engine is not initialized yet. Please wait a few seconds.");
 
         # TODO - This is the only case where the API returns -1, but it's not really handled well clientside at the moment.
+        $redis->quit();
         $redis_db->quit();
         return ( -1, -1, () );
     }
@@ -136,6 +137,8 @@ sub do_composite_search ( $clauses, $start, $sortkey, $sortorder, $total ) {
 
     unless ( $redis->exists("LAST_JOB_TIME") ) {
         $logger->error("Search engine is not initialized yet. Please wait a few seconds.");
+        $redis->quit();
+        $redis_db->quit();
         return ( -1, -1, () );
     }
 
@@ -557,6 +560,7 @@ sub sort_results ( $sortkey, $sortorder, @filtered ) {
 
     # Should there be no IDs requiring sorting, return an empty array directly
     if (scalar @filtered == 0) {
+        $redis->quit();
         return ( 0, @sorted );
     }
 
@@ -668,6 +672,7 @@ LUA
 
         my $total_time = time() - $start_time;
         $logger->debug("[PERF] sort_results completed in ${total_time}s");
+        $redis->quit();
         return ( scalar @keyed_ids, @sorted );
     }
 
@@ -678,6 +683,7 @@ LUA
     $logger->debug("[PERF] sort_results completed in ${total_time}s");
 
     # lastread: all returned archives are keyed (nil timestamps filtered out)
+    $redis->quit();
     return ( -1, @sorted );
 }
 
