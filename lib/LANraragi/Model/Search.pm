@@ -26,8 +26,9 @@ use LANraragi::Model::Category;
 # Performs a search on the database.
 sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks ) {
 
-    my $redis  = LANraragi::Model::Config->get_redis_search;
-    my $logger = get_logger( "Search Engine", "lanraragi" );
+    my $redis    = LANraragi::Model::Config->get_redis_search;
+    my $redis_db = LANraragi::Model::Config->get_redis;
+    my $logger   = get_logger( "Search Engine", "lanraragi" );
 
     unless ( $redis->exists("LAST_JOB_TIME") && ( $redis->exists("LRR_TANKGROUPED") || !$grouptanks ) ) {
         $logger->error("Search engine is not initialized yet. Please wait a few seconds.");
@@ -39,7 +40,7 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
     my $tankcount = $redis->scard("LRR_TANKGROUPED") + 0;
 
     # Get tank ids count
-    my $tankidscount = scalar( LANraragi::Model::Config->get_redis->keys('TANK_??????????') );
+    my $tankidscount = scalar( $redis_db->keys('TANK_??????????') );
 
     # Total number of archives (as int)
     my $total = $grouptanks ? $tankcount : $redis->zcard("LRR_TITLES") - $tankidscount;
@@ -53,13 +54,45 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
     # Don't use cache for history searches since setting lastreadtime doesn't (and shouldn't) cachebust
     unless ( $cachehit && $sortkey ne "lastread" ) {
         $logger->debug("No cache available (or history-sorted search), doing a full DB parse.");
+
+        # Resolve candidate set based on grouptanks mode
+        my @candidates;
+        if ($grouptanks) {
+            @candidates = $redis->smembers("LRR_TANKGROUPED");
+        } else {
+            @candidates = $redis_db->keys('????????????????????????????????????????');
+        }
+
+        # Resolve category into candidates/tokens
+        my @tokens = compute_search_filter($filter);
+        my %category = LANraragi::Model::Category::get_category($category_id);
+
+        if (%category) {
+            if ( $category{search} ne "" ) {
+                my @cat_tokens = compute_search_filter( $category{search} );
+                push @tokens, @cat_tokens;
+            } else {
+                @candidates = intersect_arrays( $category{archives}, \@candidates, 0 );
+            }
+        }
+
+        # Build single clause and delegate to composite inner
+        my $clause = {
+            candidate_ids => \@candidates,
+            tokens        => \@tokens,
+            newonly        => $newonly,
+            untaggedonly   => $untaggedonly,
+        };
+
         my $keyed_count;
-        ( $keyed_count, @filtered ) = search_uncached( $category_id, $filter, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks );
+        ( $keyed_count, @filtered ) = do_composite_search_inner( $redis, $redis_db, [$clause], $sortkey, $sortorder );
 
         # Cache this query in the search database, prepending the keyed count for partition-aware cache inversion
         eval { $redis->hset( "LRR_SEARCHCACHE", $cachekey, nfreeze [ $keyed_count, @filtered ] ); };
     }
+
     $redis->quit();
+    $redis_db->quit();
 
     # If start is negative, return all possible data.
     if ( $start == -1 ) {
@@ -77,10 +110,10 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
 # do_composite_search (clauses, start, sortkey, sortorder)
 # Performs a composite search: each clause is an independent AND conjunction resolved by the caller
 # into (candidate_ids, tokens, newonly, untaggedonly). Multiple clauses are OR-unioned.
-# Should be *superset* of do_search.
+# Superset of do_search.
 #
 # Sort and pagination are global, applied after the OR union across all clauses.
-# Caching is per-composite-query, not per-clause.
+# No caching for composite queries.
 #
 # Parameters:
 #   $clauses    - arrayref of clause hashrefs, each containing:
@@ -95,12 +128,102 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
 # Returns: ($total, $filtered_count, @page_of_ids)
 sub do_composite_search ( $clauses, $start, $sortkey, $sortorder ) {
 
-    # TODO: implement
-    # For each clause: search_core(clause->{candidate_ids}, clause->{tokens}, ...)
-    # Union results across clauses (deduplicate, preserve first occurrence)
-    # Sort the union
-    # Paginate and return
-    ...
+    my $redis    = LANraragi::Model::Config->get_redis_search;
+    my $redis_db = LANraragi::Model::Config->get_redis;
+    my $logger   = get_logger( "Search Engine", "lanraragi" );
+
+    unless ( $redis->exists("LAST_JOB_TIME") ) {
+        $logger->error("Search engine is not initialized yet. Please wait a few seconds.");
+        return ( -1, -1, () );
+    }
+
+    my $total = $redis->zcard("LRR_TITLES");
+
+    my ( $keyed_count, @filtered ) = do_composite_search_inner( $redis, $redis_db, $clauses, $sortkey, $sortorder );
+
+    $redis->quit();
+    $redis_db->quit();
+
+    # If start is negative, return all possible data.
+    if ( $start == -1 ) {
+        return ( $total, $#filtered + 1, @filtered );
+    }
+
+    # Only get the first X keys
+    my $keysperpage = LANraragi::Model::Config->get_pagesize;
+
+    my $end = min( $start + $keysperpage - 1, $#filtered );
+    return ( $total, $#filtered + 1, @filtered[ $start .. $end ] );
+}
+
+# do_composite_search_inner (redis, redis_db, clauses, sortkey, sortorder)
+# Core composite search logic. Runs search_core per clause, unions results, sorts globally.
+# Accepts Redis connections from the caller.
+#
+# For a single clause, delegates directly to search_core (no overhead).
+# For multiple clauses, runs search_core per clause, deduplicates the union, and re-sorts globally.
+#
+# Parameters:
+#   $redis      - Redis connection for search database
+#   $redis_db   - Redis connection for main database
+#   $clauses    - arrayref of clause hashrefs (see do_composite_search)
+#   $sortkey    - sort field
+#   $sortorder  - 0 = ascending, 1 = descending
+#
+# Returns: ($keyed_count, @sorted_ids)
+sub do_composite_search_inner ( $redis, $redis_db, $clauses, $sortkey, $sortorder ) {
+
+    # Single clause: delegate directly to search_core
+    if ( scalar @$clauses == 1 ) {
+        my $clause = $clauses->[0];
+        return search_core(
+            $redis, $redis_db,
+            $clause->{candidate_ids}, $clause->{tokens},
+            $sortkey, $sortorder,
+            $clause->{newonly}, $clause->{untaggedonly}
+        );
+    }
+
+    # Multi-clause: run search_core per clause, union, re-sort globally
+    my %seen;
+    my @union;
+
+    foreach my $clause (@$clauses) {
+        my ( $kc, @results ) = search_core(
+            $redis, $redis_db,
+            $clause->{candidate_ids}, $clause->{tokens},
+            $sortkey, $sortorder,
+            $clause->{newonly}, $clause->{untaggedonly}
+        );
+
+        # Deduplicate: preserve first occurrence across clauses
+        foreach my $id (@results) {
+            unless ( $seen{$id}++ ) {
+                push @union, $id;
+            }
+        }
+    }
+
+    # Re-sort the union globally
+    if ( scalar @union > 0 ) {
+        if ( !$sortkey ) {
+            $sortkey = "title";
+        }
+
+        if ( $sortkey eq "title" ) {
+            my @ordered = nsort( $redis->zrangebylex( "LRR_TITLES", "-", "+" ) );
+            if ($sortorder) {
+                @ordered = reverse(@ordered);
+            }
+            @ordered = map { substr( $_, index( $_, "\x00" ) + 1 ) } @ordered;
+            @union = intersect_arrays( \@union, \@ordered, 0 );
+            return ( -1, @union );
+        } else {
+            return sort_results( $sortkey, $sortorder, @union );
+        }
+    }
+
+    return ( -1, @union );
 }
 
 sub check_cache ( $cachekey, $cachekey_inv ) {
@@ -141,43 +264,28 @@ sub check_cache ( $cachekey, $cachekey_inv ) {
     return ( $cachehit, @filtered );
 }
 
-# Grab all our IDs, then filter them down according to the following filters and tokens' ID groups.
-sub search_uncached ( $category_id, $filter, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks ) {
+# search_core (redis, redis_db, candidate_ids, tokens, sortkey, sortorder, newonly, untaggedonly)
+# Core search function operating on a pre-resolved candidate set.
+# No category or grouptanks awareness — the caller resolves those into candidate_ids and tokens.
+#
+# Parameters:
+#   $redis         - Redis connection for search database (indexes, titles, cache)
+#   $redis_db      - Redis connection for main database (archive data)
+#   $candidate_ids - arrayref of IDs to search within (archive and/or tank IDs)
+#   $tokens        - arrayref of token hashrefs from compute_search_filter, each { tag, isneg, isexact }
+#   $sortkey       - sort field: "title", "lastread", or a tag namespace
+#   $sortorder     - 0 = ascending, 1 = descending
+#   $newonly        - if true, restrict to IDs in LRR_NEW
+#   $untaggedonly   - if true, restrict to IDs in LRR_UNTAGGED
+#
+# Returns: ($keyed_count, @sorted_ids)
+#   $keyed_count  - number of IDs possessing the sort key (-1 for title sort)
+#   @sorted_ids   - filtered and sorted ID list
+sub search_core ( $redis, $redis_db, $candidate_ids, $tokens, $sortkey, $sortorder, $newonly, $untaggedonly ) {
 
-    my $redis    = LANraragi::Model::Config->get_redis_search;
-    my $redis_db = LANraragi::Model::Config->get_redis;
-    my $logger   = get_logger( "Search Core", "lanraragi" );
+    my $logger = get_logger( "Search Core", "lanraragi" );
 
-    # Compute search filters
-    my @tokens = compute_search_filter($filter);
-
-    # Prepare array: For each token, we'll have a list of matching archive IDs.
-    # We intersect those lists as we proceed to get the final result.
-    my @filtered;
-    if ($grouptanks) {
-
-        # Start with our tank IDs, and all other archive IDs that aren't in tanks
-        @filtered = $redis->smembers("LRR_TANKGROUPED");
-    } else {
-
-        # Start with all our archive IDs. Tank IDs won't be present in this search.
-        @filtered = $redis_db->keys('????????????????????????????????????????');
-    }
-
-    # If we're using a category, we'll need to get its source data first.
-    my %category = LANraragi::Model::Category::get_category($category_id);
-
-    if (%category) {
-
-        # If the category is dynamic, get its search predicate and add it to the tokens.
-        # If it's static however, we can use its ID list as the base for our result array.
-        if ( $category{search} ne "" ) {
-            my @cat_tokens = compute_search_filter( $category{search} );
-            push @tokens, @cat_tokens;
-        } else {
-            @filtered = intersect_arrays( $category{archives}, \@filtered, 0 );
-        }
-    }
+    my @filtered = @$candidate_ids;
 
     # If the untagged filter is enabled, call the untagged files API
     if ($untaggedonly) {
@@ -192,8 +300,8 @@ sub search_uncached ( $category_id, $filter, $sortkey, $sortorder, $newonly, $un
     }
 
     # Iterate through each token and intersect the results with the previous ones.
-    unless ( scalar @tokens == 0 || scalar @filtered == 0 ) {
-        foreach my $token (@tokens) {
+    unless ( scalar @$tokens == 0 || scalar @filtered == 0 ) {
+        foreach my $token (@$tokens) {
 
             my $tag     = $token->{tag};
             my $isneg   = $token->{isneg};
@@ -341,38 +449,12 @@ sub search_uncached ( $category_id, $filter, $sortkey, $sortorder, $newonly, $un
             my $keyed_count;
             ( $keyed_count, @filtered ) = sort_results( $sortkey, $sortorder, @filtered );
 
-            $redis->quit();
-            $redis_db->quit();
             return ( $keyed_count, @filtered );
         }
     }
 
-    $redis->quit();
-    $redis_db->quit();
-
     # Title sort and unfiltered results: all archives are keyed
     return ( -1, @filtered );
-}
-
-# search_core (candidate_ids, filter, sortkey, sortorder, newonly, untaggedonly)
-# Core search function operating on a pre-resolved candidate set.
-# No category or grouptanks awareness — the caller resolves those into candidate_ids and tokens.
-#
-# Parameters:
-#   $candidate_ids - arrayref of IDs to search within (archive and/or tank IDs)
-#   $tokens        - arrayref of token hashrefs from compute_search_filter, each { tag, isneg, isexact }
-#   $sortkey       - sort field: "title", "lastread", or a tag namespace
-#   $sortorder     - 0 = ascending, 1 = descending
-#   $newonly        - if true, restrict to IDs in LRR_NEW
-#   $untaggedonly   - if true, restrict to IDs in LRR_UNTAGGED
-#
-# Returns: ($keyed_count, @sorted_ids)
-#   $keyed_count  - number of IDs possessing the sort key (-1 for title sort)
-#   @sorted_ids   - filtered and sorted ID list
-sub search_core ( $candidate_ids, $tokens, $sortkey, $sortorder, $newonly, $untaggedonly ) {
-
-    # TODO: extract from search_uncached
-    ...
 }
 
 # Transform the search engine syntax into a list of tokens.
