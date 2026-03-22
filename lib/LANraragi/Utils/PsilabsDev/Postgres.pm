@@ -14,12 +14,9 @@ use LANraragi::Utils::Logging  qw(get_logger);
 # Get the PostgreSQL database connection.
 sub get_postgresql_dbh {
 
-    # required variables.
-    # TODO: this needs to be populated but for now we can just go with this.
     my $dbname = $ENV{LRR_POSTGRES_DB}          // 'postgres';
     my $host = $ENV{LRR_POSTGRES_HOST}          // 'postgres';
     my $port = $ENV{LRR_POSTGRES_PORT}          // 5432;
-    # my $options = ''; # TODO: figure out if options is needed.
     my $username = $ENV{LRR_POSTGRES_USER}      // 'postgres';
     my $password = $ENV{LRR_POSTGRES_PASSWORD}  // 'postgres';
 
