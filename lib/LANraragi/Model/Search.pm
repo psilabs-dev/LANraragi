@@ -65,26 +65,13 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
             @candidates = $redis_db->keys('????????????????????????????????????????');
         }
 
-        # Resolve category into candidates/tokens
-        my @tokens = compute_search_filter($filter);
-        my %category = LANraragi::Model::Category::get_category($category_id);
-
-        if (%category) {
-            if ( $category{search} ne "" ) {
-                my @cat_tokens = compute_search_filter( $category{search} );
-                push @tokens, @cat_tokens;
-            } else {
-                @candidates = intersect_arrays( $category{archives}, \@candidates, 0 );
-            }
+        # Convert single category_id to structured format for resolve_search_clause
+        my @categories = ();
+        if ( $category_id && $category_id ne "" ) {
+            push @categories, { id => $category_id, mode => "include" };
         }
 
-        # Build single clause and delegate to composite inner
-        my $clause = {
-            candidate_ids => \@candidates,
-            tokens        => \@tokens,
-            newonly        => $newonly,
-            untaggedonly   => $untaggedonly,
-        };
+        my $clause = resolve_search_clause( $redis, $redis_db, $filter, \@categories, \@candidates, $newonly, $untaggedonly );
 
         my $keyed_count;
         ( $keyed_count, @filtered ) = do_composite_search_inner( $redis, $redis_db, [$clause], $sortkey, $sortorder );
@@ -109,40 +96,64 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
     return ( $total, $#filtered + 1, @filtered[ $start .. $end ] );
 }
 
-# do_composite_search (clauses, start, sortkey, sortorder)
-# Performs a composite search: each clause is an independent AND conjunction resolved by the caller
-# into (candidate_ids, tokens, newonly, untaggedonly). Multiple clauses are OR-unioned.
-# Superset of do_search.
+# do_composite_search (clause_descriptors, start, sortkey, sortorder, grouptanks)
+# Performs a composite search: each clause descriptor is resolved into an AND conjunction,
+# then multiple clauses are OR-unioned. Superset of do_search.
 #
 # Sort and pagination are global, applied after the OR union across all clauses.
 # No caching for composite queries.
 #
 # Parameters:
-#   $clauses    - arrayref of clause hashrefs, each containing:
-#                   candidate_ids => arrayref of IDs to search within
-#                   tokens        => arrayref of token hashrefs { tag, isneg, isexact }
-#                   newonly       => 0|1
-#                   untaggedonly  => 0|1
+#   $clause_descriptors - arrayref of descriptor hashrefs, each containing:
+#                           filter       => search filter string
+#                           categories   => arrayref of { id, mode } hashrefs
+#                           newonly      => 0|1
+#                           untaggedonly => 0|1
 #   $start      - pagination offset (-1 for all results)
 #   $sortkey    - sort field: "title", "lastread", or a tag namespace
 #   $sortorder  - 0 = ascending, 1 = descending
-#   $total      - total universe size (caller-provided, since grouptanks resolution happens at the caller)
+#   $grouptanks - 0|1, determines candidate pool
 #
 # Returns: ($total, $filtered_count, @page_of_ids)
-sub do_composite_search ( $clauses, $start, $sortkey, $sortorder, $total ) {
+sub do_composite_search ( $clause_descriptors, $start, $sortkey, $sortorder, $grouptanks ) {
 
     my $redis    = LANraragi::Model::Config->get_redis_search;
     my $redis_db = LANraragi::Model::Config->get_redis;
     my $logger   = get_logger( "Search Engine", "lanraragi" );
 
-    unless ( $redis->exists("LAST_JOB_TIME") ) {
+    unless ( $redis->exists("LAST_JOB_TIME") && ( $redis->exists("LRR_TANKGROUPED") || !$grouptanks ) ) {
         $logger->error("Search engine is not initialized yet. Please wait a few seconds.");
         $redis->quit();
         $redis_db->quit();
         return ( -1, -1, () );
     }
 
-    my ( $keyed_count, @filtered ) = do_composite_search_inner( $redis, $redis_db, $clauses, $sortkey, $sortorder );
+    my $tankcount    = $redis->scard("LRR_TANKGROUPED") + 0;
+    my $tankidscount = scalar( $redis_db->keys('TANK_??????????') );
+    my $total        = $grouptanks ? $tankcount : $redis->zcard("LRR_TITLES") - $tankidscount;
+
+    # Resolve base candidates from grouptanks mode
+    my @base_candidates;
+    if ($grouptanks) {
+        @base_candidates = $redis->smembers("LRR_TANKGROUPED");
+    } else {
+        @base_candidates = $redis_db->keys('????????????????????????????????????????');
+    }
+
+    # Resolve each descriptor into a clause
+    my @clauses;
+    foreach my $desc (@$clause_descriptors) {
+        push @clauses, resolve_search_clause(
+            $redis, $redis_db,
+            $desc->{filter},
+            $desc->{categories} // [],
+            \@base_candidates,
+            $desc->{newonly}      ? 1 : 0,
+            $desc->{untaggedonly} ? 1 : 0,
+        );
+    }
+
+    my ( $keyed_count, @filtered ) = do_composite_search_inner( $redis, $redis_db, \@clauses, $sortkey, $sortorder );
 
     $redis->quit();
     $redis_db->quit();
@@ -227,6 +238,57 @@ sub do_composite_search_inner ( $redis, $redis_db, $clauses, $sortkey, $sortorde
     }
 
     return ( -1, @union );
+}
+
+# resolve_search_clause (redis, redis_db, filter, categories, base_candidates, newonly, untaggedonly)
+# Resolves a search clause descriptor into a clause hashref for do_composite_search_inner.
+#
+# Parameters:
+#   $redis           - Redis connection for search database
+#   $redis_db        - Redis connection for main database
+#   $filter          - search filter string
+#   $categories      - arrayref of { id, mode } hashrefs (mode: "include" or "exclude")
+#   $base_candidates - arrayref of base candidate IDs (from grouptanks resolution)
+#   $newonly          - 0|1
+#   $untaggedonly     - 0|1
+#
+# Returns: hashref { candidate_ids, tokens, newonly, untaggedonly }
+sub resolve_search_clause ( $redis, $redis_db, $filter, $categories, $base_candidates, $newonly, $untaggedonly ) {
+
+    my @candidates = @$base_candidates;
+    my @tokens     = compute_search_filter( $filter // "" );
+
+    foreach my $cat_entry (@$categories) {
+        my $cat_id = $cat_entry->{id};
+        my $mode   = $cat_entry->{mode} // "include";
+
+        my %category = LANraragi::Model::Category::get_category($cat_id);
+        next unless %category;
+
+        if ( $category{search} ne "" ) {
+
+            # Dynamic category: add search predicate tokens
+            my @cat_tokens = compute_search_filter( $category{search} );
+            if ( $mode eq "exclude" ) {
+                foreach my $token (@cat_tokens) {
+                    $token->{isneg} = $token->{isneg} ? 0 : 1;
+                }
+            }
+            push @tokens, @cat_tokens;
+        } else {
+
+            # Static category: intersect or subtract candidate set
+            my $isneg = ( $mode eq "exclude" ) ? 1 : 0;
+            @candidates = intersect_arrays( $category{archives}, \@candidates, $isneg );
+        }
+    }
+
+    return {
+        candidate_ids => \@candidates,
+        tokens        => \@tokens,
+        newonly       => $newonly,
+        untaggedonly  => $untaggedonly,
+    };
 }
 
 sub check_cache ( $cachekey, $cachekey_inv ) {
