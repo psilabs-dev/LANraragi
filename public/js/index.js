@@ -4,7 +4,8 @@
  * @global
  */
 const Index = {};
-Index.selectedCategory = "";
+Index.selectedCategories = [];
+Index.filterClauses = [];
 Index.awesomplete = {};
 Index.carouselInitialized = false;
 Index.swiper = {};
@@ -300,22 +301,64 @@ Index.toggleOrder = function (e) {
 
 /**
  * Toggles a category filter.
- * Sets the internal selectedCategory variable and changes the button's class.
+ * Adds or removes the category from the selectedCategories array.
  * @param {*} button Button matching the category.
  */
 Index.toggleCategory = function (button) {
-    // Add/remove class to button depending on the state
     const categoryId = button.id;
-    if (Index.selectedCategory === categoryId) {
+    const idx = Index.selectedCategories.indexOf(categoryId);
+    if (idx !== -1) {
         button.classList.remove("toggled");
-        Index.selectedCategory = "";
+        Index.selectedCategories.splice(idx, 1);
     } else {
-        Index.selectedCategory = categoryId;
+        Index.selectedCategories.push(categoryId);
         button.classList.add("toggled");
     }
 
     // Trigger search
     IndexTable.doSearch();
+};
+
+/**
+ * Adds the current search input text as a filter clause block.
+ * No-op if empty or exact duplicate of an existing clause.
+ */
+Index.addFilterClause = function () {
+    const input = $("#search-input").val().trim();
+    if (!input) return;
+
+    const normalized = input.toLowerCase();
+    for (let i = 0; i < Index.filterClauses.length; i++) {
+        if (Index.filterClauses[i].toLowerCase() === normalized) return;
+    }
+
+    Index.filterClauses.push(input);
+    $("#search-input").val("");
+    Index.renderFilterClauses();
+};
+
+/**
+ * Removes a filter clause by index.
+ * @param {number} idx Index of the clause to remove.
+ */
+Index.removeFilterClause = function (idx) {
+    Index.filterClauses.splice(idx, 1);
+    Index.renderFilterClauses();
+    IndexTable.doSearch();
+};
+
+/**
+ * Renders the filter clause blocks in the clause container.
+ */
+Index.renderFilterClauses = function () {
+    let html = "";
+    for (let i = 0; i < Index.filterClauses.length; i++) {
+        html += `<span class="filter-clause-block">
+                    ${LRR.encodeHTML(Index.filterClauses[i])}
+                    <a href="#" class="close" onclick="Index.removeFilterClause(${i}); return false;">\u00D7</a>
+                 </span>`;
+    }
+    $("#filter-clause-container").html(html);
 };
 
 /**
@@ -425,63 +468,80 @@ Index.updateCarousel = function (e) {
 
     $("#reload-carousel").addClass("fa-spin");
 
-    // Hit a different API endpoint depending on the requested localStorage carousel type
-    let endpoint;
+    // Build carousel request using the composite search API
+    let carouselBody = IndexTable.buildCompositeBody(-1);
+
     switch (localStorage.carouselType) {
         case "random":
             $("#carousel-icon")[0].classList = "fas fa-random";
             $("#carousel-title").text(I18N.CarouselRandom);
-            endpoint = `/api/search/random?filter=${IndexTable.currentSearch}&category=${Index.selectedCategory}&count=15`;
-
-            // Special categories that imply additional query params
-            if (Index.selectedCategory === "NEW_ONLY") {
-                endpoint += "&newonly=true";
-            } else if (Index.selectedCategory === "UNTAGGED_ONLY") {
-                endpoint += "&untaggedonly=true";
-            }
-
             break;
         case "inbox":
             $("#carousel-icon")[0].classList = "fas fa-envelope-open-text";
             $("#carousel-title").text(I18N.NewArchives);
-            endpoint = `/api/search?filter=${IndexTable.currentSearch}&category=${Index.selectedCategory}&newonly=true&sortby=date_added&order=desc&start=-1`;
+            carouselBody.clauses.forEach(c => { c.newonly = true; });
+            carouselBody.sortby = "date_added";
+            carouselBody.order = "desc";
             break;
         case "untagged":
             $("#carousel-icon")[0].classList = "fas fa-edit";
             $("#carousel-title").text(I18N.UntaggedArchives);
-            endpoint = `/api/search?filter=${IndexTable.currentSearch}&category=${Index.selectedCategory}&untaggedonly=true&sortby=date_added&order=desc&start=-1`;
+            carouselBody.clauses.forEach(c => { c.untaggedonly = true; });
+            carouselBody.sortby = "date_added";
+            carouselBody.order = "desc";
             break;
         case "ondeck":
             $("#carousel-icon")[0].classList = "fas fa-book-reader";
             $("#carousel-title").text(I18N.CarouselOnDeck);
-            endpoint = `/api/search?filter=${IndexTable.currentSearch}&sortby=lastread`;
+            carouselBody.sortby = "lastread";
             break;
         default:
             $("#carousel-icon")[0].classList = "fas fa-pastafarianism";
             $("#carousel-title").text("What???");
-            endpoint = `/api/search?filter=${IndexTable.currentSearch}&category=${Index.selectedCategory}`;
             break;
     }
 
+    const isRandom = localStorage.carouselType === "random";
+
     if (Index.carouselInitialized) {
-        Server.callAPI(endpoint, "GET", null, I18N.CarouselError,
-            (results) => {
-                Index.swiper.virtual.removeAllSlides();
-                const slides = results.data
-                    .map((archive) => LRR.buildThumbnailDiv(archive));
-                Index.swiper.virtual.appendSlide(slides);
-                Index.swiper.virtual.update();
-
-                if (results.data.length === 0) {
-                    $("#carousel-empty").show();
+        fetch(new LRR.apiURL("/api/search/composite"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(carouselBody),
+        })
+            .then((response) => {
+                if (response.status === 204) return { data: [] };
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then((results) => {
+                if (isRandom && results.data.length > 0) {
+                    for (let i = results.data.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [results.data[i], results.data[j]] = [results.data[j], results.data[i]];
+                    }
+                    results.data = results.data.slice(0, 15);
                 }
-
-                $("#carousel-loading").hide();
-                $(".swiper-wrapper").show();
-                $("#reload-carousel").removeClass("fa-spin");
-            },
-        );
+                Index._updateCarouselSlides(results);
+            })
+            .catch(() => LRR.showErrorToast(I18N.CarouselError));
     }
+};
+
+Index._updateCarouselSlides = function (results) {
+    Index.swiper.virtual.removeAllSlides();
+    const slides = results.data
+        .map((archive) => LRR.buildThumbnailDiv(archive));
+    Index.swiper.virtual.appendSlide(slides);
+    Index.swiper.virtual.update();
+
+    if (results.data.length === 0) {
+        $("#carousel-empty").show();
+    }
+
+    $("#carousel-loading").hide();
+    $(".swiper-wrapper").show();
+    $("#reload-carousel").removeClass("fa-spin");
 };
 
 Index.handleColumnNum = function () {
@@ -849,12 +909,12 @@ Index.loadCategories = function () {
             data.sort((a, b) => b.pinned - a.pinned);
             // Queue some hardcoded categories at the beginning - those are special-cased in the DataTables variant of the search endpoint. 
             let html = `<div style='display:inline-block'>
-                            <input class='favtag-btn ${(("NEW_ONLY" === Index.selectedCategory) ? "toggled" : "")}' 
-                            type='button' id='NEW_ONLY' value='🆕 ${I18N.NewArchives}' 
+                            <input class='favtag-btn ${(Index.selectedCategories.includes("NEW_ONLY") ? "toggled" : "")}'
+                            type='button' id='NEW_ONLY' value='🆕 ${I18N.NewArchives}'
                             onclick='Index.toggleCategory(this)' title='${I18N.NewArchiveDesc}'/>
                         </div><div style='display:inline-block'>
-                            <input class='favtag-btn ${(("UNTAGGED_ONLY" === Index.selectedCategory) ? "toggled" : "")}' 
-                            type='button' id='UNTAGGED_ONLY' value='🏷️ ${I18N.UntaggedArchives}' 
+                            <input class='favtag-btn ${(Index.selectedCategories.includes("UNTAGGED_ONLY") ? "toggled" : "")}'
+                            type='button' id='UNTAGGED_ONLY' value='🏷️ ${I18N.UntaggedArchives}'
                             onclick='Index.toggleCategory(this)' title='${I18N.UntaggedArcDesc}'/>
                         </div>`;
 
@@ -868,8 +928,8 @@ Index.loadCategories = function () {
                 catName = LRR.encodeHTML(catName);
 
                 const div = `<div style='display:inline-block'>
-                    <input class='favtag-btn ${((category.id === Index.selectedCategory) ? "toggled" : "")}' 
-                            type='button' id='${category.id}' value='${catName}' 
+                    <input class='favtag-btn ${(Index.selectedCategories.includes(category.id) ? "toggled" : "")}'
+                            type='button' id='${category.id}' value='${catName}'
                             onclick='Index.toggleCategory(this)' title='${I18N.CategoryDesc}'/>
                 </div>`;
 

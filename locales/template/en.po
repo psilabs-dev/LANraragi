@@ -685,6 +685,9 @@ msgstr "Admin Login"
 msgid "Search Title, Artist, Series, Language or Tags"
 msgstr "Search Title, Artist, Series, Language or Tags"
 
+msgid "Add Filter"
+msgstr "Add Filter"
+
 msgid "Apply Filter"
 msgstr "Apply Filter"
 
