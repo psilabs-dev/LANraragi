@@ -2157,11 +2157,15 @@ paths:
                                 - include
                                 - exclude
                       newonly:
-                        type: boolean
-                        description: Limit this clause to new archives only.
+                        type: integer
+                        enum: [-1, 0, 1]
+                        description: >-
+                          New archive filter. 1 = only new, -1 = exclude new, 0 = off.
                       untaggedonly:
-                        type: boolean
-                        description: Limit this clause to untagged archives only.
+                        type: integer
+                        enum: [-1, 0, 1]
+                        description: >-
+                          Untagged archive filter. 1 = only untagged, -1 = exclude untagged, 0 = off.
                 start:
                   type: integer
                   description: >-

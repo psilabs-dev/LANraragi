@@ -75,6 +75,10 @@ span.tags {
   margin-bottom: 4px;
 }
 
+.toggled-exclude {
+  opacity: 0.5;
+}
+
 div.id1 {
   width: 228px;
 }

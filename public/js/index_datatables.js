@@ -136,16 +136,18 @@ IndexTable.clearSearch = function () {
  * @returns {object} Composite search request body
  */
 IndexTable.buildCompositeBody = function (start) {
-    // Build categories array from selected categories
+    // Build categories array from selected categories map
     const categories = [];
-    for (let i = 0; i < Index.selectedCategories.length; i++) {
-        const catId = Index.selectedCategories[i];
+    const modeToInt = { "include": 1, "exclude": -1 };
+
+    for (const catId of Object.keys(Index.selectedCategories)) {
+        const mode = Index.selectedCategories[catId];
         if (catId === "NEW_ONLY" || catId === "UNTAGGED_ONLY") continue;
-        categories.push({ id: catId, mode: "include" });
+        categories.push({ id: catId, mode });
     }
 
-    const newonly = Index.selectedCategories.includes("NEW_ONLY");
-    const untaggedonly = Index.selectedCategories.includes("UNTAGGED_ONLY");
+    const newonly = modeToInt[Index.selectedCategories["NEW_ONLY"]] || 0;
+    const untaggedonly = modeToInt[Index.selectedCategories["UNTAGGED_ONLY"]] || 0;
 
     // Build clauses from stashed filter blocks + current search input
     const filters = Index.filterClauses.slice();
@@ -414,9 +416,10 @@ IndexTable.buildURLParameters = function () {
         params += `fc=${encodeURIComponent(Index.filterClauses[i])}&`;
     }
 
-    // Categories (multi-valued)
-    for (let i = 0; i < Index.selectedCategories.length; i++) {
-        params += `c=${encodeURIComponent(Index.selectedCategories[i])}&`;
+    // Categories (id:mode pairs)
+    for (const catId of Object.keys(Index.selectedCategories)) {
+        const mode = Index.selectedCategories[catId];
+        params += `c=${encodeURIComponent(catId)}:${mode}&`;
     }
 
     return params;
@@ -425,8 +428,18 @@ IndexTable.buildURLParameters = function () {
 IndexTable.consumeURLParameters = function () {
     const params = new URLSearchParams(window.location.search);
 
-    // Multi-valued categories
-    Index.selectedCategories = params.getAll("c");
+    // Categories (id:mode pairs)
+    Index.selectedCategories = {};
+    for (const entry of params.getAll("c")) {
+        const lastColon = entry.lastIndexOf(":");
+        if (lastColon !== -1) {
+            const catId = entry.substring(0, lastColon);
+            const mode = entry.substring(lastColon + 1);
+            if (mode === "include" || mode === "exclude") {
+                Index.selectedCategories[catId] = mode;
+            }
+        }
+    }
 
     // Filter clauses
     Index.filterClauses = params.getAll("fc");

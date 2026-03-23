@@ -402,4 +402,137 @@ note('testing composite search: empty clause does not poison union...');
     is( scalar @union_ids, 2, 'Empty clause should not affect non-empty clause results' );
 }
 
+note('testing tri-state newonly: exclude new archives...');
+{
+    my $clause = {
+        candidate_ids => \@all_archive_ids,
+        tokens        => [],
+        newonly        => -1,
+        untaggedonly   => 0,
+    };
+
+    my ( $kc, @result_ids ) =
+        LANraragi::Model::Search::do_composite_search_inner( $redis_search, $redis_db, [$clause], 0, 0 );
+
+    is( scalar @result_ids, 8, 'Exclude new should return 8 non-new archives' );
+    ok( !grep( { $_ eq "e4c422fd10943dc169e3489a38cdbf57101a5f7e" } @result_ids ),
+        'Exclude new should not contain Rohan (isnew=true)' );
+}
+
+note('testing tri-state untaggedonly: exclude untagged archives...');
+{
+    my $clause = {
+        candidate_ids => \@all_archive_ids,
+        tokens        => [],
+        newonly        => 0,
+        untaggedonly   => -1,
+    };
+
+    my ( $kc, @result_ids ) =
+        LANraragi::Model::Search::do_composite_search_inner( $redis_search, $redis_db, [$clause], 0, 0 );
+
+    is( scalar @result_ids, 7, 'Exclude untagged should return 7 tagged archives' );
+    ok( !grep( { $_ eq "4857fd2e7c00db8b0af0337b94055d8445118630" } @result_ids ),
+        'Exclude untagged should not contain Ghost in the Shell' );
+    ok( !grep( { $_ eq "e4c422fd10943dc169e3489a38cdbf57101a5f7e" } @result_ids ),
+        'Exclude untagged should not contain Rohan' );
+}
+
+note('testing tri-state combined: tagged AND non-new...');
+{
+    my $clause = {
+        candidate_ids => \@all_archive_ids,
+        tokens        => [],
+        newonly        => -1,
+        untaggedonly   => -1,
+    };
+
+    my ( $kc, @result_ids ) =
+        LANraragi::Model::Search::do_composite_search_inner( $redis_search, $redis_db, [$clause], 0, 0 );
+
+    is( scalar @result_ids, 7, 'Tagged AND non-new should return 7 archives' );
+    ok( !grep( { $_ eq "e4c422fd10943dc169e3489a38cdbf57101a5f7e" } @result_ids ),
+        'Tagged AND non-new should not contain Rohan' );
+    ok( !grep( { $_ eq "4857fd2e7c00db8b0af0337b94055d8445118630" } @result_ids ),
+        'Tagged AND non-new should not contain Ghost in the Shell' );
+}
+
+note('testing composite search: tagged OR in-category...');
+{
+    # Clause A: tagged archives (untaggedonly=-1)
+    # Clause B: archives in static category "Segata Sanshiro" (ebf, ebg)
+    # Union should be: all 7 tagged + ebf + ebg (but ebf/ebg are already tagged, so still 7)
+    my $clause_a = {
+        candidate_ids => \@all_archive_ids,
+        tokens        => [],
+        newonly        => 0,
+        untaggedonly   => -1,
+    };
+
+    my @static_ids = (
+        "e69e43e1355267f7d32a4f9b7f2fe108d2401ebf",
+        "e69e43e1355267f7d32a4f9b7f2fe108d2401ebg",
+    );
+    my $clause_b = {
+        candidate_ids => \@static_ids,
+        tokens        => [],
+        newonly        => 0,
+        untaggedonly   => 0,
+    };
+
+    my ( $kc, @union_ids ) =
+        LANraragi::Model::Search::do_composite_search_inner( $redis_search, $redis_db, [$clause_a, $clause_b], 0, 0 );
+
+    is( scalar @union_ids, 7, 'Tagged OR in-category should return 7 (category archives already tagged)' );
+    ok( grep( { $_ eq "e69e43e1355267f7d32a4f9b7f2fe108d2401ebf" } @union_ids ),
+        'Union contains Saturn JP (in category and tagged)' );
+    ok( grep( { $_ eq "e69e43e1355267f7d32a4f9b7f2fe108d2401ebg" } @union_ids ),
+        'Union contains Saturn US (in category and tagged)' );
+}
+
+note('testing composite search: NOT category...');
+{
+    # Exclude static "Segata Sanshiro" archives (ebf, ebg) from all archives
+    my %excluded = map { $_ => 1 } (
+        "e69e43e1355267f7d32a4f9b7f2fe108d2401ebf",
+        "e69e43e1355267f7d32a4f9b7f2fe108d2401ebg",
+    );
+    my @candidates = grep { !$excluded{$_} } @all_archive_ids;
+
+    my $clause = {
+        candidate_ids => \@candidates,
+        tokens        => [],
+        newonly        => 0,
+        untaggedonly   => 0,
+    };
+
+    my ( $kc, @result_ids ) =
+        LANraragi::Model::Search::do_composite_search_inner( $redis_search, $redis_db, [$clause], 0, 0 );
+
+    is( scalar @result_ids, 7, 'NOT category should return 7 archives' );
+    ok( !grep( { $_ eq "e69e43e1355267f7d32a4f9b7f2fe108d2401ebf" } @result_ids ),
+        'NOT category should exclude Saturn JP' );
+    ok( !grep( { $_ eq "e69e43e1355267f7d32a4f9b7f2fe108d2401ebg" } @result_ids ),
+        'NOT category should exclude Saturn US' );
+}
+
+note('testing resolve_search_clause: category exclude...');
+{
+    # Test resolve_search_clause with mode=exclude on static category "Segata Sanshiro"
+    my $clause = LANraragi::Model::Search::resolve_search_clause(
+        $redis_search, $redis_db, "",
+        [{ id => "SET_1589141306", mode => "exclude" }],
+        \@all_archive_ids, 0, 0
+    );
+
+    my ( $kc, @result_ids ) =
+        LANraragi::Model::Search::do_composite_search_inner( $redis_search, $redis_db, [$clause], 0, 0 );
+
+    is( scalar @result_ids, 7, 'resolve_search_clause exclude should return 7 archives' );
+    ok( !grep( { $_ eq "e69e43e1355267f7d32a4f9b7f2fe108d2401ebf" } @result_ids ),
+        'resolve_search_clause exclude should not contain Saturn JP' );
+    ok( !grep( { $_ eq "e69e43e1355267f7d32a4f9b7f2fe108d2401ebg" } @result_ids ),
+        'resolve_search_clause exclude should not contain Saturn US' );
+}
+
 done_testing();

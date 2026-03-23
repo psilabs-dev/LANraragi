@@ -4,7 +4,7 @@
  * @global
  */
 const Index = {};
-Index.selectedCategories = [];
+Index.selectedCategories = {};
 Index.filterClauses = [];
 Index.awesomplete = {};
 Index.carouselInitialized = false;
@@ -300,19 +300,23 @@ Index.toggleOrder = function (e) {
 };
 
 /**
- * Toggles a category filter.
- * Adds or removes the category from the selectedCategories array.
+ * Toggles a category filter through three states: off -> include -> exclude -> off.
  * @param {*} button Button matching the category.
  */
 Index.toggleCategory = function (button) {
     const categoryId = button.id;
-    const idx = Index.selectedCategories.indexOf(categoryId);
-    if (idx !== -1) {
-        button.classList.remove("toggled");
-        Index.selectedCategories.splice(idx, 1);
-    } else {
-        Index.selectedCategories.push(categoryId);
+    const current = Index.selectedCategories[categoryId];
+
+    button.classList.remove("toggled", "toggled-exclude");
+
+    if (!current) {
+        Index.selectedCategories[categoryId] = "include";
         button.classList.add("toggled");
+    } else if (current === "include") {
+        Index.selectedCategories[categoryId] = "exclude";
+        button.classList.add("toggled-exclude");
+    } else {
+        delete Index.selectedCategories[categoryId];
     }
 
     // Trigger search
@@ -479,14 +483,14 @@ Index.updateCarousel = function (e) {
         case "inbox":
             $("#carousel-icon")[0].classList = "fas fa-envelope-open-text";
             $("#carousel-title").text(I18N.NewArchives);
-            carouselBody.clauses.forEach(c => { c.newonly = true; });
+            carouselBody.clauses.forEach(c => { c.newonly = 1; });
             carouselBody.sortby = "date_added";
             carouselBody.order = "desc";
             break;
         case "untagged":
             $("#carousel-icon")[0].classList = "fas fa-edit";
             $("#carousel-title").text(I18N.UntaggedArchives);
-            carouselBody.clauses.forEach(c => { c.untaggedonly = true; });
+            carouselBody.clauses.forEach(c => { c.untaggedonly = 1; });
             carouselBody.sortby = "date_added";
             carouselBody.order = "desc";
             break;
@@ -907,13 +911,15 @@ Index.loadCategories = function () {
             // Pinned categories are shown at the beginning
             data.sort((b, a) => b.name.localeCompare(a.name));
             data.sort((a, b) => b.pinned - a.pinned);
-            // Queue some hardcoded categories at the beginning - those are special-cased in the DataTables variant of the search endpoint. 
+            const catClass = (id) => Index.selectedCategories[id] === "include" ? "toggled"
+                                   : Index.selectedCategories[id] === "exclude" ? "toggled-exclude" : "";
+
             let html = `<div style='display:inline-block'>
-                            <input class='favtag-btn ${(Index.selectedCategories.includes("NEW_ONLY") ? "toggled" : "")}'
+                            <input class='favtag-btn ${catClass("NEW_ONLY")}'
                             type='button' id='NEW_ONLY' value='🆕 ${I18N.NewArchives}'
                             onclick='Index.toggleCategory(this)' title='${I18N.NewArchiveDesc}'/>
                         </div><div style='display:inline-block'>
-                            <input class='favtag-btn ${(Index.selectedCategories.includes("UNTAGGED_ONLY") ? "toggled" : "")}'
+                            <input class='favtag-btn ${catClass("UNTAGGED_ONLY")}'
                             type='button' id='UNTAGGED_ONLY' value='🏷️ ${I18N.UntaggedArchives}'
                             onclick='Index.toggleCategory(this)' title='${I18N.UntaggedArcDesc}'/>
                         </div>`;
@@ -928,7 +934,7 @@ Index.loadCategories = function () {
                 catName = LRR.encodeHTML(catName);
 
                 const div = `<div style='display:inline-block'>
-                    <input class='favtag-btn ${(Index.selectedCategories.includes(category.id) ? "toggled" : "")}'
+                    <input class='favtag-btn ${catClass(category.id)}'
                             type='button' id='${category.id}' value='${catName}'
                             onclick='Index.toggleCategory(this)' title='${I18N.CategoryDesc}'/>
                 </div>`;

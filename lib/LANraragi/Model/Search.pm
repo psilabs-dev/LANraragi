@@ -148,8 +148,8 @@ sub do_composite_search ( $clause_descriptors, $start, $sortkey, $sortorder, $gr
             $desc->{filter},
             $desc->{categories} // [],
             \@base_candidates,
-            $desc->{newonly}      ? 1 : 0,
-            $desc->{untaggedonly} ? 1 : 0,
+            $desc->{newonly}      // 0,
+            $desc->{untaggedonly} // 0,
         );
     }
 
@@ -340,8 +340,8 @@ sub check_cache ( $cachekey, $cachekey_inv ) {
 #   $tokens        - arrayref of token hashrefs from compute_search_filter, each { tag, isneg, isexact }
 #   $sortkey       - sort field: "title", "lastread", or a tag namespace
 #   $sortorder     - 0 = ascending, 1 = descending
-#   $newonly        - if true, restrict to IDs in LRR_NEW
-#   $untaggedonly   - if true, restrict to IDs in LRR_UNTAGGED
+#   $newonly        - tri-state: 1 = only new, -1 = exclude new, 0 = off
+#   $untaggedonly   - tri-state: 1 = only untagged, -1 = exclude untagged, 0 = off
 #
 # Returns: ($keyed_count, @sorted_ids)
 #   $keyed_count  - number of IDs possessing the sort key (-1 for title sort)
@@ -352,16 +352,18 @@ sub search_core ( $redis, $redis_db, $candidate_ids, $tokens, $sortkey, $sortord
 
     my @filtered = @$candidate_ids;
 
-    # If the untagged filter is enabled, call the untagged files API
+    # Untagged filter: 1 = only untagged, -1 = only tagged
     if ($untaggedonly) {
         my @untagged = $redis->smembers("LRR_UNTAGGED");
-        @filtered = intersect_arrays( \@untagged, \@filtered, 0 );
+        my $isneg = ( $untaggedonly == -1 ) ? 1 : 0;
+        @filtered = intersect_arrays( \@untagged, \@filtered, $isneg );
     }
 
-    # Check new filter
+    # New filter: 1 = only new, -1 = only non-new
     if ($newonly) {
         my @new = $redis->smembers("LRR_NEW");
-        @filtered = intersect_arrays( \@new, \@filtered, 0 );
+        my $isneg = ( $newonly == -1 ) ? 1 : 0;
+        @filtered = intersect_arrays( \@new, \@filtered, $isneg );
     }
 
     # Iterate through each token and intersect the results with the previous ones.
