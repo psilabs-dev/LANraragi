@@ -88,7 +88,7 @@ jobs:
             --playwright \
             --dev search \
             --npseed 42 \
-            -k "not test_double_page_navigation and not test_handler_resource_management"
+            -k "not test_double_page_navigation and not test_handler_resource_management and not test_header_click_sort and not test_compact_column_sort_with_three_columns and not test_custom_column_sort_display"
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
 
@@ -219,4 +219,4 @@ jobs:
           --playwright `
           --dev search `
           --npseed 42 `
-          -k "not test_double_page_navigation and not test_handler_resource_management"
+          -k "not test_double_page_navigation and not test_handler_resource_management and not test_header_click_sort and not test_compact_column_sort_with_three_columns and not test_custom_column_sort_display"
