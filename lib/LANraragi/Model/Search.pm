@@ -15,7 +15,7 @@ use Cpanel::JSON::XS qw(decode_json);
 use Time::HiRes qw(time);
 
 use LANraragi::Utils::Generic  qw(intersect_arrays);
-use LANraragi::Utils::String   qw(trim);
+use LANraragi::Utils::Search   qw(normalize_clauses reduce_clauses compute_search_filter);
 use LANraragi::Utils::Redis    qw(redis_decode redis_encode);
 use LANraragi::Utils::Logging  qw(get_logger);
 
@@ -71,7 +71,8 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
             push @categories, { id => $category_id, mode => "include" };
         }
 
-        my $clause = resolve_search_clause( $redis, $redis_db, $filter, \@categories, \@candidates, $newonly, $untaggedonly );
+        my @tokens = compute_search_filter( $filter // "" );
+        my $clause = resolve_search_clause( $redis, $redis_db, \@tokens, \@categories, \@candidates, $newonly, $untaggedonly );
 
         my $keyed_count;
         ( $keyed_count, @filtered ) = do_composite_search_inner( $redis, $redis_db, [$clause], $sortkey, $sortorder );
@@ -107,8 +108,8 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
 #   $clause_descriptors - arrayref of descriptor hashrefs, each containing:
 #                           filter       => search filter string
 #                           categories   => arrayref of { id, mode } hashrefs
-#                           newonly      => 0|1
-#                           untaggedonly => 0|1
+#                           newonly      => 1 = only, -1 = exclude, 0 = off
+#                           untaggedonly => 1 = only, -1 = exclude, 0 = off
 #   $start      - pagination offset (-1 for all results)
 #   $sortkey    - sort field: "title", "lastread", or a tag namespace
 #   $sortorder  - 0 = ascending, 1 = descending
@@ -128,6 +129,10 @@ sub do_composite_search ( $clause_descriptors, $start, $sortkey, $sortorder, $gr
         return ( -1, -1, () );
     }
 
+    # Normalize once, reduce via DNF absorption, then resolve.
+    my $normed = normalize_clauses($clause_descriptors);
+    $normed = reduce_clauses($normed);
+
     my $tankcount    = $redis->scard("LRR_TANKGROUPED") + 0;
     my $tankidscount = scalar( $redis_db->keys('TANK_??????????') );
     my $total        = $grouptanks ? $tankcount : $redis->zcard("LRR_TITLES") - $tankidscount;
@@ -140,16 +145,16 @@ sub do_composite_search ( $clause_descriptors, $start, $sortkey, $sortorder, $gr
         @base_candidates = $redis_db->keys('????????????????????????????????????????');
     }
 
-    # Resolve each descriptor into a clause
+    # Resolve each normalized clause
     my @clauses;
-    foreach my $desc (@$clause_descriptors) {
+    foreach my $n (@$normed) {
         push @clauses, resolve_search_clause(
             $redis, $redis_db,
-            $desc->{filter},
-            $desc->{categories} // [],
+            $n->{raw_tokens},
+            $n->{raw_categories},
             \@base_candidates,
-            $desc->{newonly}      // 0,
-            $desc->{untaggedonly} // 0,
+            $n->{newonly},
+            $n->{untaggedonly},
         );
     }
 
@@ -240,23 +245,23 @@ sub do_composite_search_inner ( $redis, $redis_db, $clauses, $sortkey, $sortorde
     return ( -1, @union );
 }
 
-# resolve_search_clause (redis, redis_db, filter, categories, base_candidates, newonly, untaggedonly)
-# Resolves a search clause descriptor into a clause hashref for do_composite_search_inner.
+# resolve_search_clause (redis, redis_db, tokens, categories, base_candidates, newonly, untaggedonly)
+# Resolves a search clause into a clause hashref for do_composite_search_inner.
 #
 # Parameters:
 #   $redis           - Redis connection for search database
 #   $redis_db        - Redis connection for main database
-#   $filter          - search filter string
+#   $tokens          - arrayref of pre-parsed token hashrefs from compute_search_filter
 #   $categories      - arrayref of { id, mode } hashrefs (mode: "include" or "exclude")
 #   $base_candidates - arrayref of base candidate IDs (from grouptanks resolution)
-#   $newonly          - 0|1
-#   $untaggedonly     - 0|1
+#   $newonly          - 1 = only, -1 = exclude, 0 = off
+#   $untaggedonly     - 1 = only, -1 = exclude, 0 = off
 #
 # Returns: hashref { candidate_ids, tokens, newonly, untaggedonly }
-sub resolve_search_clause ( $redis, $redis_db, $filter, $categories, $base_candidates, $newonly, $untaggedonly ) {
+sub resolve_search_clause ( $redis, $redis_db, $tokens, $categories, $base_candidates, $newonly, $untaggedonly ) {
 
     my @candidates = @$base_candidates;
-    my @tokens     = compute_search_filter( $filter // "" );
+    my @tokens     = @$tokens;
 
     foreach my $cat_entry (@$categories) {
         my $cat_id = $cat_entry->{id};
@@ -522,96 +527,6 @@ sub search_core ( $redis, $redis_db, $candidate_ids, $tokens, $sortkey, $sortord
 
     # Title sort and unfiltered results: all archives are keyed
     return ( -1, @filtered );
-}
-
-# Transform the search engine syntax into a list of tokens.
-# A token object contains the tag, whether it must be an exact match, and whether it must be absent.
-sub compute_search_filter ($filter) {
-
-    my $logger = get_logger( "Search Core", "lanraragi" );
-    my @tokens = ();
-    if ( !$filter ) { $filter = ""; }
-
-    # Special characters:
-    # "" for exact search (or $, but is that one really useful now?)
-    # ?/_ for any character
-    # * % for multiple characters
-    # - to exclude the next tag
-
-    $b = reverse($filter);
-    while ( $b ne "" ) {
-
-        my $char  = chop $b;
-        my $isneg = 0;
-
-        # Skip spaces
-        while ( $char eq " " && $b ne "" ) {
-            $char = chop $b;
-        }
-
-        if ( $char eq "-" ) {
-            $isneg = 1;
-            $char  = chop $b;
-        }
-
-        # Get characters until the next comma, or the next " if the following char is "
-        my $delimiter = ',';
-        if ( $char eq '"' ) {
-            $delimiter = '"';
-            $char      = chop $b;
-        }
-
-        my $tag     = "";
-        my $isexact = 0;
-      TAGBUILD: while (1) {
-            if ( $char eq $delimiter || $char eq "" ) { last TAGBUILD; }
-            $tag  = $tag . $char;    # Add characters in reverse order since we used reverse earlier on
-            $char = chop $b;
-        }
-
-        #If last char is $ or delimiter was ", enable isexact
-        if ( $delimiter eq '"' ) {
-            $isexact = 1;
-
-            # Quotes then $ is an accepted syntax, even though it does nothing
-            $char = chop $b;
-            unless ( $char eq "\$" ) {
-                $b = $b . $char;
-            }
-        } else {
-            $char = chop $tag;
-            if ( $char eq "\$" ) {
-                $isexact = 1;
-            } else {
-                $tag = $tag . $char;
-            }
-        }
-
-        # Escape already present regex characters
-        $logger->debug("Pre-escaped tag: $tag");
-
-        $tag = trim($tag);
-
-        # Escape characters according to redis zscan rules
-        $tag =~ s/([\[\]\^\\])/\\$1/g;
-
-        # Replace placeholders with glob-style patterns,
-        # ? or _ => ?
-        $tag =~ s/\_/\?/g;
-
-        # * or % => *
-        $tag =~ s/\%/\*/g;
-
-        if ( $tag ne "" ) {    # Blank tokens shouldn't be added as theyll slow down search
-            push @tokens,
-              { tag     => lc($tag),
-                isneg   => $isneg,
-                isexact => $isexact
-              };
-        }
-
-    }
-    return @tokens;
 }
 
 sub sort_results ( $sortkey, $sortorder, @filtered ) {

@@ -209,7 +209,7 @@ my @all_archive_ids = $redis_db->keys('????????????????????????????????????????'
 note('testing composite search: single-clause equivalence...');
 {
     # Single clause matching do_search("artist:wada rco", "", 0, 0, 0, 0, 0, 0)
-    my @tokens = LANraragi::Model::Search::compute_search_filter("artist:wada rco");
+    my @tokens = LANraragi::Utils::Search::compute_search_filter("artist:wada rco");
     my $clause = {
         candidate_ids => \@all_archive_ids,
         tokens        => \@tokens,
@@ -231,8 +231,8 @@ note('testing composite search: single-clause equivalence...');
 
 note('testing composite search: OR union of disjoint sets...');
 {
-    my @tokens_a = LANraragi::Model::Search::compute_search_filter("artist:wada rco");
-    my @tokens_b = LANraragi::Model::Search::compute_search_filter("artist:shirow masamune");
+    my @tokens_a = LANraragi::Utils::Search::compute_search_filter("artist:wada rco");
+    my @tokens_b = LANraragi::Utils::Search::compute_search_filter("artist:shirow masamune");
 
     my $clause_a = {
         candidate_ids => \@all_archive_ids,
@@ -264,8 +264,8 @@ note('testing composite search: OR union with deduplication...');
     # character:segata (fuzzy) matches ...ebf, ...ebg (+ title hits)
     # male:very cool (fuzzy) matches ...ebf, ...22fd (+ title hits)
     # ...ebf overlaps
-    my @tokens_a = LANraragi::Model::Search::compute_search_filter("character:segata");
-    my @tokens_b = LANraragi::Model::Search::compute_search_filter("male:very cool");
+    my @tokens_a = LANraragi::Utils::Search::compute_search_filter("character:segata");
+    my @tokens_b = LANraragi::Utils::Search::compute_search_filter("male:very cool");
 
     my $clause_a = {
         candidate_ids => \@all_archive_ids,
@@ -303,7 +303,7 @@ note('testing composite search: multi-category AND simulation...');
         "e69e43e1355267f7d32a4f9b7f2fe108d2401ebf",
         "e69e43e1355267f7d32a4f9b7f2fe108d2401ebg",
     );
-    my @tokens = LANraragi::Model::Search::compute_search_filter("American");
+    my @tokens = LANraragi::Utils::Search::compute_search_filter("American");
 
     my $clause = {
         candidate_ids => \@static_ids,
@@ -380,8 +380,8 @@ note('testing composite search: empty clause does not poison union...');
 {
     # Clause A: nonexistent tag → 0 results
     # Clause B: artist:wada rco → 2 results
-    my @tokens_a = LANraragi::Model::Search::compute_search_filter("nonexistent_tag_xyz_12345");
-    my @tokens_b = LANraragi::Model::Search::compute_search_filter("artist:wada rco");
+    my @tokens_a = LANraragi::Utils::Search::compute_search_filter("nonexistent_tag_xyz_12345");
+    my @tokens_b = LANraragi::Utils::Search::compute_search_filter("artist:wada rco");
 
     my $clause_a = {
         candidate_ids => \@all_archive_ids,
@@ -519,8 +519,9 @@ note('testing composite search: NOT category...');
 note('testing resolve_search_clause: category exclude...');
 {
     # Test resolve_search_clause with mode=exclude on static category "Segata Sanshiro"
+    my @tokens = LANraragi::Utils::Search::compute_search_filter("");
     my $clause = LANraragi::Model::Search::resolve_search_clause(
-        $redis_search, $redis_db, "",
+        $redis_search, $redis_db, \@tokens,
         [{ id => "SET_1589141306", mode => "exclude" }],
         \@all_archive_ids, 0, 0
     );
