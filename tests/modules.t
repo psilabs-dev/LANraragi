@@ -32,21 +32,7 @@ my @modules = (
     "LANraragi::Model::Reader",                  "LANraragi::Model::Search",
     "LANraragi::Model::Stats",                   "LANraragi::Model::Category",
     "LANraragi::Model::Upload",                  "LANraragi::Model::Opds",
-    "LANraragi::Plugin::Metadata::Chaika",       "LANraragi::Plugin::Metadata::CopyTags",
-    "LANraragi::Plugin::Metadata::DateAdded",    "LANraragi::Plugin::Metadata::EHentai",
-    "LANraragi::Plugin::Metadata::Eze",          "LANraragi::Plugin::Metadata::HDoujin",
-    "LANraragi::Plugin::Metadata::Koromo",       "LANraragi::Plugin::Metadata::MEMS",
-    "LANraragi::Plugin::Metadata::nHentai",      "LANraragi::Plugin::Metadata::RegexParse",
-    "LANraragi::Plugin::Metadata::Fakku",        "LANraragi::Plugin::Login::EHentai",
-    "LANraragi::Plugin::Login::Fakku",           "LANraragi::Plugin::Scripts::SourceFinder",
-    "LANraragi::Plugin::Scripts::FolderToCat",   "LANraragi::Plugin::Download::EHentai",
-    "LANraragi::Plugin::Download::Chaika",       "LANraragi::Plugin::Scripts::nHentaiSourceConverter",
-    "LANraragi::Plugin::Metadata::Hitomi",       "LANraragi::Plugin::Metadata::Hentag",
-    "LANraragi::Plugin::Metadata::HentagOnline", "LANraragi::Plugin::Metadata::ComicInfo",
-    "LANraragi::Plugin::Metadata::ChaikaFile",   "LANraragi::Plugin::Metadata::Ksk",
-    "LANraragi::Plugin::Metadata::HatH",         "LANraragi::Plugin::Metadata::CopyArchiveTags",
-    "LANraragi::Plugin::Login::Pixiv",           "LANraragi::Plugin::Metadata::Pixiv",
-    "LANraragi::Plugin::Metadata::EHDLInfo",
+    "LANraragi::Model::Registry",                "LANraragi::Controller::Api::Registry",
 );
 
 # Test all modules load properly
