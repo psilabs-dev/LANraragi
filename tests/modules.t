@@ -32,7 +32,8 @@ my @modules = (
     "LANraragi::Model::Reader",                  "LANraragi::Model::Search",
     "LANraragi::Model::Stats",                   "LANraragi::Model::Category",
     "LANraragi::Model::Upload",                  "LANraragi::Model::Opds",
-    "LANraragi::Model::Registry",                "LANraragi::Controller::Api::Registry",
+    "LANraragi::Model::Registry",                "LANraragi::Utils::Registry",
+    "LANraragi::Controller::Api::Registry",
 );
 
 # Test all modules load properly
