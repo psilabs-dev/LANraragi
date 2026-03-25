@@ -24,6 +24,7 @@ use LANraragi::Utils::I18NInitializer;
 
 use LANraragi::Model::Search;
 use LANraragi::Model::Config;
+use LANraragi::Model::Registry;
 use LANraragi::Model::Setup      qw(first_install_actions);
 use LANraragi::Model::Metrics;
 
@@ -149,6 +150,11 @@ sub startup {
         my $name = $pluginfo->{name};
         $self->LRR_LOGGER->info( "Downloader Detected: " . $name );
     }
+
+    # Reconcile discovered plugins with Redis state
+    my $redis_config = $self->LRR_CONF->get_redis_config;
+    LANraragi::Model::Registry::scan_plugins($redis_config);
+    $redis_config->quit();
 
     # Enable Minion capabilities in the app
     if ( IS_UNIX ) {
