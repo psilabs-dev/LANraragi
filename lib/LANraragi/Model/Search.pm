@@ -371,7 +371,7 @@ sub search_core ( $redis, $redis_db, $candidate_ids, $tokens, $sortkey, $sortord
     }
 
     # New filter: 1 = only new, -1 = only non-new
-    if ($newonly) {
+    if ( $newonly && scalar @filtered > 0 ) {
         my @new = $redis->smembers("LRR_NEW");
         my $isneg = ( $newonly == -1 ) ? 1 : 0;
         @filtered = intersect_arrays( \@new, \@filtered, $isneg );
