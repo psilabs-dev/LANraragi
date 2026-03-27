@@ -285,6 +285,7 @@ sub resolve_search_clause ( $redis, $redis_db, $tokens, $categories, $base_candi
             # Static category: intersect or subtract candidate set
             my $isneg = ( $mode eq "exclude" ) ? 1 : 0;
             @candidates = intersect_arrays( $category{archives}, \@candidates, $isneg );
+            last if scalar @candidates == 0;
         }
     }
 
@@ -356,6 +357,11 @@ sub search_core ( $redis, $redis_db, $candidate_ids, $tokens, $sortkey, $sortord
     my $logger = get_logger( "Search Core", "lanraragi" );
 
     my @filtered = @$candidate_ids;
+
+    # Empty candidate set: no results possible
+    if ( scalar @filtered == 0 ) {
+        return ( -1, () );
+    }
 
     # Untagged filter: 1 = only untagged, -1 = only tagged
     if ($untaggedonly) {
