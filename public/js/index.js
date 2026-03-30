@@ -5,7 +5,6 @@
  */
 const Index = {};
 Index.selectedCategories = {};
-Index.filterClauses = [];
 Index.awesomplete = {};
 Index.carouselInitialized = false;
 Index.swiper = {};
@@ -321,48 +320,6 @@ Index.toggleCategory = function (button) {
 
     // Trigger search
     IndexTable.doSearch();
-};
-
-/**
- * Adds the current search input text as a filter clause block.
- * No-op if empty or exact duplicate of an existing clause.
- */
-Index.addFilterClause = function () {
-    const input = $("#search-input").val().trim();
-    if (!input) return;
-
-    const normalized = input.toLowerCase();
-    for (let i = 0; i < Index.filterClauses.length; i++) {
-        if (Index.filterClauses[i].toLowerCase() === normalized) return;
-    }
-
-    Index.filterClauses.push(input);
-    $("#search-input").val("");
-    Index.renderFilterClauses();
-};
-
-/**
- * Removes a filter clause by index.
- * @param {number} idx Index of the clause to remove.
- */
-Index.removeFilterClause = function (idx) {
-    Index.filterClauses.splice(idx, 1);
-    Index.renderFilterClauses();
-    IndexTable.doSearch();
-};
-
-/**
- * Renders the filter clause blocks in the clause container.
- */
-Index.renderFilterClauses = function () {
-    let html = "";
-    for (let i = 0; i < Index.filterClauses.length; i++) {
-        html += `<span class="filter-clause-block">
-                    ${LRR.encodeHTML(Index.filterClauses[i])}
-                    <a href="#" class="close" onclick="Index.removeFilterClause(${i}); return false;">\u00D7</a>
-                 </span>`;
-    }
-    $("#filter-clause-container").html(html);
 };
 
 /**

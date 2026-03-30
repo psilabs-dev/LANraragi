@@ -88,10 +88,8 @@
 				<div id="category-container">
 					<!-- Categories go here -->
 				</div>
-				<div id="filter-clause-container"></div>
 				<input type='text' id='search-input' class='search stdinput' size='90' style='width:95%'
 					placeholder='[% c.lh("Search Title, Artist, Series, Language or Tags") %]' />
-				<input id='add-filter' class='searchbtn stdbtn' type='button' value='[% c.lh("Add Filter") %]' />
 				<input id='apply-search' class='searchbtn stdbtn' type='button' value='[% c.lh("Apply Filter") %]' />
 				<input id='clear-search' class='searchbtn stdbtn' type='button' value='[% c.lh("Clear Filter") %]' />
 			</div>

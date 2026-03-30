@@ -15,7 +15,6 @@ IndexTable.currentSearch = "";
 IndexTable.initializeAll = function () {
     // Bind events to DOM
     $(document).on("click.apply-search", "#apply-search", () => { IndexTable.currentSearch = $("#search-input").val(); IndexTable.doSearch(); });
-    $(document).on("click.add-filter", "#add-filter", () => { Index.addFilterClause(); });
     $(document).on("click.clear-search", "#clear-search", IndexTable.clearSearch);
     $(document).on("keyup.search-input", "#search-input", (e) => {
         if (e.defaultPrevented) {
@@ -125,8 +124,6 @@ IndexTable.doSearch = function (page) {
  */
 IndexTable.clearSearch = function () {
     IndexTable.currentSearch = "";
-    Index.filterClauses = [];
-    Index.renderFilterClauses();
     IndexTable.doSearch();
 };
 
@@ -149,23 +146,7 @@ IndexTable.buildCompositeBody = function (start) {
     const newonly = modeToInt[Index.selectedCategories["NEW_ONLY"]] || 0;
     const untaggedonly = modeToInt[Index.selectedCategories["UNTAGGED_ONLY"]] || 0;
 
-    // Build clauses from stashed filter blocks + current search input
-    const filters = Index.filterClauses.slice();
-    if (IndexTable.currentSearch.trim()) {
-        filters.push(IndexTable.currentSearch.trim());
-    }
-
-    let clauses;
-    if (filters.length === 0) {
-        // No filters at all — single empty clause
-        clauses = [{ filter: "", categories, newonly, untaggedonly }];
-    } else {
-        // Each filter string becomes a clause, all sharing the same categories
-        clauses = [];
-        for (let i = 0; i < filters.length; i++) {
-            clauses.push({ filter: filters[i], categories, newonly, untaggedonly });
-        }
-    }
+    const clauses = [{ filter: IndexTable.currentSearch.trim(), categories, newonly, untaggedonly }];
 
     return {
         clauses,
@@ -411,11 +392,6 @@ IndexTable.buildURLParameters = function () {
     // Current search input
     if (IndexTable.currentSearch) params += `q=${encodeURIComponent(IndexTable.currentSearch)}&`;
 
-    // Filter clauses
-    for (let i = 0; i < Index.filterClauses.length; i++) {
-        params += `fc=${encodeURIComponent(Index.filterClauses[i])}&`;
-    }
-
     // Categories (id:mode pairs)
     for (const catId of Object.keys(Index.selectedCategories)) {
         const mode = Index.selectedCategories[catId];
@@ -440,10 +416,6 @@ IndexTable.consumeURLParameters = function () {
             }
         }
     }
-
-    // Filter clauses
-    Index.filterClauses = params.getAll("fc");
-    Index.renderFilterClauses();
 
     if (params.has("q")) { IndexTable.currentSearch = decodeURIComponent(params.get("q")); }
 
