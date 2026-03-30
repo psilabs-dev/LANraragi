@@ -498,6 +498,7 @@ Index.updateCarousel = function (e) {
             $("#carousel-icon")[0].classList = "fas fa-book-reader";
             $("#carousel-title").text(I18N.CarouselOnDeck);
             carouselBody.sortby = "lastread";
+            carouselBody.clauses.forEach(c => { c.hidecompleted = 1; });
             break;
         default:
             $("#carousel-icon")[0].classList = "fas fa-pastafarianism";
