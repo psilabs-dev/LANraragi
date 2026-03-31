@@ -31,11 +31,19 @@ Config.initializeAll = function () {
 
     $(document).on("click.theme-switch", ".theme-switch", Config.switchStyle);
 
+    // Registry events
+    $(document).on("click.registry-edit", "#registry-edit-btn", Config.registryShowForm);
+    $(document).on("click.registry-remove", "#registry-remove-btn", Config.registryRemove);
+    $(document).on("click.registry-save", "#registry-save-btn", Config.registrySave);
+    $(document).on("click.registry-cancel", "#registry-cancel-btn", Config.registryLoad);
+    $(document).on("change.reg-type", "#reg-type", Config.registryToggleTypeFields);
+
     Config.enable_pass();
     Config.enable_resize();
     Config.enable_timemodified();
     Config.shinobuStatus();
     setInterval(Config.shinobuStatus, 5000);
+    Config.registryLoad();
 };
 
 Config.rebootShinobu = function () {
@@ -113,6 +121,136 @@ Config.enable_resize = function () {
 Config.enable_timemodified = function () {
     if ($("#usedateadded").prop("checked")) $(".datemodified").show();
     else $(".datemodified").hide();
+};
+
+// Currently loaded registry ID (null if none)
+Config.registryId = null;
+
+Config.registryToggleTypeFields = function () {
+    const type = $("#reg-type").val();
+    if (type === "git") {
+        $(".reg-git-fields").show();
+        $(".reg-local-fields").hide();
+    } else {
+        $(".reg-git-fields").hide();
+        $(".reg-local-fields").show();
+    }
+};
+
+Config.registryLoad = function () {
+    Server.callAPI("/api/registries", "GET", null, "Failed to load registries",
+        (data) => {
+            const registries = data.registries;
+
+            if (registries.length === 0) {
+                Config.registryId = null;
+                $("#registry-view").hide();
+                $(".registry-form").hide();
+                $("#registry-none").show();
+                // Show form for adding
+                Config.registryShowForm();
+            } else {
+                const reg = registries[0];
+                Config.registryId = reg.id;
+
+                $("#registry-name").text(reg.name);
+
+                let details = reg.type;
+                if (reg.type === "git") {
+                    details += " (" + reg.provider + ") — " + reg.url;
+                    if (reg.ref) details += " @ " + reg.ref;
+                } else {
+                    details += " — " + reg.path;
+                }
+                $("#registry-details").text(details);
+
+                $("#registry-none").hide();
+                $(".registry-form").hide();
+                $("#registry-view").show();
+            }
+        },
+    );
+};
+
+Config.registryShowForm = function () {
+    $("#registry-none").hide();
+    $("#registry-view").hide();
+
+    // If editing, pre-populate
+    if (Config.registryId) {
+        Server.callAPI(`/api/registries/${Config.registryId}`, "GET", null, "Failed to load registry",
+            (data) => {
+                const reg = data.registry;
+                $("#reg-name").val(reg.name);
+                $("#reg-type").val(reg.type);
+                if (reg.type === "git") {
+                    $("#reg-provider").val(reg.provider);
+                    $("#reg-url").val(reg.url);
+                    $("#reg-ref").val(reg.ref || "main");
+                } else {
+                    $("#reg-path").val(reg.path);
+                }
+                Config.registryToggleTypeFields();
+                $(".registry-form").show();
+            },
+        );
+    } else {
+        // Reset form for new registry
+        $("#reg-name").val("");
+        $("#reg-type").val("git");
+        $("#reg-provider").val("github");
+        $("#reg-url").val("");
+        $("#reg-ref").val("main");
+        $("#reg-path").val("");
+        Config.registryToggleTypeFields();
+        $(".registry-form").show();
+    }
+};
+
+Config.registrySave = function () {
+    const type = $("#reg-type").val();
+    const body = { name: $("#reg-name").val(), type };
+
+    if (type === "git") {
+        body.provider = $("#reg-provider").val();
+        body.url = $("#reg-url").val();
+        body.ref = $("#reg-ref").val();
+    } else {
+        body.path = $("#reg-path").val();
+    }
+
+    if (Config.registryId) {
+        // Update existing
+        Server.callAPIJSON(`/api/registries/${Config.registryId}`, "PUT", body,
+            "Registry updated.", "Failed to update registry",
+            () => Config.registryLoad(),
+        );
+    } else {
+        // Create new
+        Server.callAPIJSON("/api/registries", "POST", body,
+            "Registry added.", "Failed to add registry",
+            () => Config.registryLoad(),
+        );
+    }
+};
+
+Config.registryRemove = function () {
+    LRR.showPopUp({
+        title: "Remove this registry?",
+        text: "Installed plugins will not be removed.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Remove",
+        reverseButtons: true,
+        confirmButtonColor: "#d33",
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Server.callAPI(`/api/registries/${Config.registryId}`, "DELETE",
+                "Registry removed.", "Failed to remove registry",
+                () => Config.registryLoad(),
+            );
+        }
+    });
 };
 
 jQuery(() => {
