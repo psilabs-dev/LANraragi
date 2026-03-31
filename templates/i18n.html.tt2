@@ -123,6 +123,13 @@ I18N.PluginUninstallError = "[% c.lh("Error uninstalling plugin") %]";
 I18N.PluginUninstallConfirm = (ns) => `[% c.lh("Uninstall \${ns}?") %]`;
 I18N.PluginUninstallDesc = "[% c.lh("The plugin file will be removed.") %]";
 I18N.PluginUninstallBtn = "[% c.lh("Uninstall") %]";
+I18N.RegistryNone = "[% c.lh("No registry configured.") %]";
+I18N.RegistryAddSettings = "[% c.lh("Add one in Settings.") %]";
+I18N.RegistryLabel = "[% c.lh("Registry:") %]";
+I18N.RegistryRefreshBtn = "[% c.lh("Refresh Index") %]";
+I18N.RegistryRefreshed = "[% c.lh("Registry index refreshed.") %]";
+I18N.RegistryRefreshError = "[% c.lh("Error refreshing registry") %]";
+I18N.RegistryLoadError = "[% c.lh("Error loading registries") %]";
 I18N.PoolEmptyEnabled = "[% c.lh("Drag plugins here to enable auto-processing.") %]";
 I18N.PoolEmptyDisabled = "[% c.lh("All metadata plugins are enabled.") %]";
 

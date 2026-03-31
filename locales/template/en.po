@@ -607,6 +607,46 @@ msgstr "Click on a theme to preview it before saving!"
 
 # ------End of Config_Theme.html.tt2------
 
+# ------Start of Config_Registry.html.tt2------
+
+msgid "Plugin Registry"
+msgstr "Plugin Registry"
+
+msgid "No plugin registry configured."
+msgstr "No plugin registry configured."
+
+msgid "Edit"
+msgstr "Edit"
+
+msgid "Remove Registry"
+msgstr "Remove Registry"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Type"
+msgstr "Type"
+
+msgid "Provider"
+msgstr "Provider"
+
+msgid "Repository URL"
+msgstr "Repository URL"
+
+msgid "Git Ref"
+msgstr "Git Ref"
+
+msgid "Branch, tag, or commit hash. Defaults to 'main'."
+msgstr "Branch, tag, or commit hash. Defaults to 'main'."
+
+msgid "Path"
+msgstr "Path"
+
+msgid "Save"
+msgstr "Save"
+
+# ------End of Config_Registry.html.tt2------
+
 # ------Start of Edit.html.tt2------
 
 msgid "Editing %1 by %2"
