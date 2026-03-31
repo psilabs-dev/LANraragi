@@ -89,7 +89,7 @@
 
 							<div class="plugin-pool pool-enabled">
 								<div class="pool-header pool-header--enabled">
-									<i class="fa fa-play-circle"></i> [% c.lh("Enabled — Run Order") %]
+									<i class="fa fa-play-circle"></i> [% c.lh("Enabled - Run Order") %]
 								</div>
 								<div id="metadata-enabled">
 									[% IF meta_enabled.size == 0 %]

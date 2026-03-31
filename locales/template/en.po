@@ -962,6 +962,18 @@ msgstr "Run Automatically"
 msgid "Plugin Settings"
 msgstr "Plugin Settings"
 
+msgid "All metadata plugins are enabled."
+msgstr "All metadata plugins are enabled."
+
+msgid "Enabled - Run Order"
+msgstr "Enabled - Run Order"
+
+msgid "Drag plugins here to enable auto-processing."
+msgstr "Drag plugins here to enable auto-processing."
+
+msgid "Depends on"
+msgstr "Depends on"
+
 # ------End of Plugins.html.tt2------
 
 # ------Start of Reader.html.tt2------
