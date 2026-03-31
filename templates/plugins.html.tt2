@@ -32,11 +32,13 @@
 	<script src="[% c.url_for("/js/vendor/jquery.fileupload.js") %]" type="text/JAVASCRIPT"></script>
 	<script src="[% c.url_for("/js/vendor/allcollapsible.min.js") %]" type="text/JAVASCRIPT"></script>
 	<script src="[% c.url_for("/js/vendor/sweetalert2.min.js") %]" type="text/JAVASCRIPT"></script>
+	<script src="[% c.url_for("/js/vendor/Sortable.min.js") %]" type="text/JAVASCRIPT"></script>
 
 	<script src="[% c.url_for("/js/i18n.js?$version") %]" type="text/JAVASCRIPT"></script>
 	<script src="[% c.url_for("/js/common.js?$version") %]" type="text/JAVASCRIPT"></script>
 	<script src="[% c.url_for("/js/server.js?$version") %]" type="text/JAVASCRIPT"></script>
 	<script src="[% c.url_for("/js/plugins.js?$version") %]" type="text/JAVASCRIPT"></script>
+
 
 </head>
 
@@ -44,66 +46,101 @@
 
 	<div class="ido" style="text-align:center;">
 		<h1 class="ih" style="text-align:center">[% c.lh("Plugin Configuration") %]</h1>
-		<br /> [% c.lh("Enable/Disable Auto-Plugin on metadata plugins by checking the toggles.") %]
-		<br /> [% c.lh("Plugins will be automatically used on new archives if they're toggled here.") %]
-		<br /> [% c.lh("If they have configuration variables, you can set them here as well.") %]
-		<br /> [% c.lh("You can also trigger Scripts here. Triggering a script will save your Plugin settings beforehand.") %]
 		<br />
+
+		<div id="registry-bar" style="display:none; margin-bottom:12px;">
+			<span id="registry-status-text"></span>
+		</div>
 
 		<form name="editPluginForm" id="editPluginForm" enctype="multipart/form-data" method="post">
 
-			<div class="left-column" style="width:49%">
-				<ul class="collapsible extensible with-right-caret">
-					<li class="option-flyout">
-						<div class="collapsible-title caret-right">
-							<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("Login Plugins") %]
-						</div>
-						<div class="collapsible-body">
-							[% INCLUDE pluginlist plugins = logins %]
-						</div>
-					</li>
-					<li class="option-flyout">
-						<div class="collapsible-title caret-right">
-							<i class="fas fa-cloud-download-alt" aria-hidden="true"></i> [% c.lh("Downloaders") %]
-						</div>
-						<div class="collapsible-body">
-							[% INCLUDE pluginlist plugins = downloaders %]
-						</div>
-					</li>
-					<li class="option-flyout">
-						<div class="collapsible-title caret-right">
-							<i class="fa fa-scroll" aria-hidden="true"></i> [% c.lh("Scripts") %]
-						</div>
-						<div class="collapsible-body">
-							[% INCLUDE pluginlist plugins = scripts %]
-						</div>
-					</li>
-				</ul>
-			</div>
+			<ul class="collapsible extensible with-right-caret">
 
-			<div class="right-column" style="width:50%">
-				<ul class="collapsible extensible with-right-caret">
-					<li class="option-flyout">
-						<div class="collapsible-title caret-right">
-							<i class="fa fa-digital-tachograph" aria-hidden="true"></i> [% c.lh("Metadata Plugins") %]
-						</div>
-						<div class="collapsible-body">
+				[%# ===== Metadata Plugins ===== %]
+				<li class="option-flyout">
+					<div class="collapsible-title caret-right">
+						<i class="fa fa-digital-tachograph" aria-hidden="true"></i> [% c.lh("Metadata Plugins") %]
+					</div>
+					<div class="collapsible-body">
 
-							<h1 class="ih" style="display:inline">[% c.lh("Allow Plugins to replace archive titles:") %] </h1>
-							[% IF replacetitles %]
-							<input id="replacetitles" name="replacetitles" class="fa" type="checkbox" checked> [% ELSE
-							%]
-							<input id="replacetitles" name="replacetitles" class="fa" type="checkbox"> [% END %]
-							<label for="replacetitles">
-								<br> [% c.lh("If enabled, metadata plugins will be able to change the title of your archives alongside adding tags to them.") %]
-							</label>
-							<br />
-							<br />
-							[% INCLUDE pluginlist plugins = metadata %]
+						<h1 class="ih" style="display:inline">[% c.lh("Allow Plugins to replace archive titles:") %] </h1>
+						[% IF replacetitles %]
+						<input id="replacetitles" name="replacetitles" class="fa" type="checkbox" checked> [% ELSE %]
+						<input id="replacetitles" name="replacetitles" class="fa" type="checkbox"> [% END %]
+						<label for="replacetitles">
+							<br> [% c.lh("If enabled, metadata plugins will be able to change the title of your archives alongside adding tags to them.") %]
+						</label>
+						<br /><br />
+
+						<div class="pool-container">
+							<div class="plugin-pool pool-disabled">
+								<div class="pool-header pool-header--disabled">
+									<i class="fa fa-pause-circle"></i> [% c.lh("Disabled") %]
+								</div>
+								<div id="metadata-disabled">
+									[% IF meta_disabled.size == 0 %]
+									<div class="pool-empty-msg">[% c.lh("All metadata plugins are enabled.") %]</div>
+									[% END %]
+									[% FOREACH plugin IN meta_disabled %]
+									[% INCLUDE metadata_card plugin=plugin show_order=0 %]
+									[% END %]
+								</div>
+							</div>
+
+							<div class="plugin-pool pool-enabled">
+								<div class="pool-header pool-header--enabled">
+									<i class="fa fa-play-circle"></i> [% c.lh("Enabled — Run Order") %]
+								</div>
+								<div id="metadata-enabled">
+									[% IF meta_enabled.size == 0 %]
+									<div class="pool-empty-msg">[% c.lh("Drag plugins here to enable auto-processing.") %]</div>
+									[% END %]
+									[% SET idx = 1 %]
+									[% FOREACH plugin IN meta_enabled %]
+									[% INCLUDE metadata_card plugin=plugin show_order=1 order_idx=idx %]
+									[% SET idx = idx + 1 %]
+									[% END %]
+								</div>
+							</div>
 						</div>
-					</li>
+
+					</div>
+				</li>
+
+				[%# ===== Login Plugins ===== %]
+				<li class="option-flyout" id="section-login" [% IF logins.size == 0 %]style="display:none"[% END %]>
+					<div class="collapsible-title caret-right">
+						<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("Login Plugins") %]
+					</div>
+					<div class="collapsible-body">
+						[% INCLUDE pluginlist plugins = logins %]
+						<div id="registry-login"></div>
+					</div>
+				</li>
+
+				[%# ===== Downloaders ===== %]
+				<li class="option-flyout" id="section-download" [% IF downloaders.size == 0 %]style="display:none"[% END %]>
+					<div class="collapsible-title caret-right">
+						<i class="fas fa-cloud-download-alt" aria-hidden="true"></i> [% c.lh("Downloaders") %]
+					</div>
+					<div class="collapsible-body">
+						[% INCLUDE pluginlist plugins = downloaders %]
+						<div id="registry-download"></div>
+					</div>
+				</li>
+
+				[%# ===== Scripts ===== %]
+				<li class="option-flyout" id="section-script" [% IF scripts.size == 0 %]style="display:none"[% END %]>
+					<div class="collapsible-title caret-right">
+						<i class="fa fa-scroll" aria-hidden="true"></i> [% c.lh("Scripts") %]
+					</div>
+					<div class="collapsible-body">
+						[% INCLUDE pluginlist plugins = scripts %]
+						<div id="registry-script"></div>
+					</div>
+				</li>
+
 				</ul>
-			</div>
 
 			<br />
 			<h1 style="text-align:center">
@@ -126,35 +163,99 @@
 </html>
 
 
+[%# ===== Metadata plugin card (used in both pools) ===== %]
+[% BLOCK metadata_card %]
+<div class="plugin-card" data-namespace="[% plugin.namespace %]">
+	[% IF show_order %]
+	<span class="plugin-order-badge">[% order_idx %]</span>
+	[% END %]
+	<div class="drag-handle"><i class="fa fa-grip-vertical"></i></div>
+	<div style="flex:1; min-width:0;">
+		<div style="display:flex; align-items:center;">
+			<div style="flex:1;">
+				[% IF plugin.icon %]
+				<img height=20 width=20 src="[% plugin.icon %]" />
+				[% ELSE %]
+				<i class="fa fa-puzzle-piece" style="font-size:20px"></i>
+				[% END %]
+				<h2 class="ih" style="display:inline"> [% plugin.name %] v.[% plugin.version %]</h2>
+				<h1 class="ih" style="display:inline"> by [% plugin.author %] </h1>
+				<span class="plugin-badge plugin-badge--[% plugin.source %]">[% plugin.source %]</span>
+			</div>
+			[% IF plugin.source == "managed" %]
+			<input class="stdbtn plugin-uninstall-btn" type="button" data-namespace="[% plugin.namespace %]"
+				value="[% c.lh("Uninstall") %]" style="flex-shrink:0; margin-left:8px;" />
+			[% END %]
+		</div>
+
+		[% IF plugin.login_from %]
+		<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("Depends on") %] "[% plugin.login_from %]"
+		<br />
+		[% END %]
+
+		[% plugin.description %]
+
+		[% IF plugin.parameters && plugin.parameters.size %]
+		<div class="collapsible-title" style="padding: 5px 0 0 5px">
+			<a>
+				<i class="fas fa-sliders-h fa-2x" style="margin-right: 4px" aria-hidden="true"></i>
+				<b style="vertical-align: super;">[% c.lh("Plugin Settings") %]</b>
+			</a>
+		</div>
+		<div class="collapsible-body" style="padding:5px 0 0 0">
+			<table>
+				<tbody>
+					[% FOREACH param IN plugin.parameters %]
+					<tr>
+						<td style="vertical-align:middle">
+							<b> [% param.desc %] : </b>
+						</td>
+						<td>
+							<input style="max-width:200px" size="20" name="[% plugin.namespace %]_CFG_[% IF param.exists('name') %][% param.name %][% ELSE %][% loop.count %][% END %]"
+								type=[% SWITCH param.type %] [% CASE 'string' %] "text"
+								value="[% param.value %]" class="stdinput" [% CASE 'bool' %] "checkbox" value="1" class="fa"
+								[% IF param.value %] checked [% END %] [% CASE 'int' %] "number" value="[% param.value %]"
+								class="stdinput" [% CASE %] "color" [% END %] />
+							<br />
+						</td>
+					</tr>
+					[% END %]
+				</tbody>
+			</table>
+		</div>
+		[% END %]
+	</div>
+</div>
+[% END %]
+
+
+[%# ===== Standard plugin list block (login, download, script) ===== %]
 [% BLOCK pluginlist %]
 
 [% FOREACH plugin IN plugins %]
 <span style="display:inline-block; text-align: left; width:80%; border-bottom-width: 1px;border-bottom-style: solid">
-	[% IF plugin.icon %]
-	[%# the plugin.icon attr is always a data: URI, so we don't need to worry about the base URL %]
-	<img height=20 width=20 src="[% plugin.icon %]" />
-	[% ELSE %]
-	<i class="fa fa-puzzle-piece" style="font-size:20px"></i>
-	[% END %]
-	<h2 class="ih" style="display:inline"> [% plugin.name %] v.[% plugin.version %]</h2>
-	<h1 class="ih" style="display:inline"> by [% plugin.author %] </h1>
 
-	<div style="float:right; text-align: right;">
-
-		[% IF plugin.type == "metadata" %]
-		<h1 class="ih" style="display:inline"> [% c.lh("Run Automatically") %]: </h1>
-		<input id="[% plugin.namespace %]" name="[% plugin.namespace %]" class="fa" type="checkbox" [% IF plugin.enabled
-			%] checked [% END %]>
-		<br />
+	<div style="display:flex; align-items:center;">
+		<div style="flex:1;">
+			[% IF plugin.icon %]
+			<img height=20 width=20 src="[% plugin.icon %]" />
+			[% ELSE %]
+			<i class="fa fa-puzzle-piece" style="font-size:20px"></i>
+			[% END %]
+			<h2 class="ih" style="display:inline"> [% plugin.name %] v.[% plugin.version %]</h2>
+			<h1 class="ih" style="display:inline"> by [% plugin.author %] </h1>
+			<span class="plugin-badge plugin-badge--[% plugin.source %]">[% plugin.source %]</span>
+		</div>
+		[% IF plugin.source == "managed" %]
+		<input class="stdbtn plugin-uninstall-btn" type="button" data-namespace="[% plugin.namespace %]"
+			value="[% c.lh("Uninstall") %]" style="flex-shrink:0; margin-left:8px;" />
 		[% END %]
-
-		[% IF plugin.login_from %]
-		<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("This plugin depends on the login plugin") %] "[% plugin.login_from %]".
-		[% END %]
-
 	</div>
 
+	[% IF plugin.login_from %]
+	<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("This plugin depends on the login plugin") %] "[% plugin.login_from %]".
 	<br />
+	[% END %]
 
 	[% IF plugin.type == "download" %]
 	<pre title="[% c.lh("This plugin will trigger on URLs matching this regex!") %]">	[% plugin.url_regex %]</pre>
@@ -203,10 +304,10 @@
 					</td>
 					<td>
 						<input style="max-width:200px" size="20" name="[% plugin.namespace %]_CFG_[% IF param.exists('name') %][% param.name %][% ELSE %][% loop.count %][% END %]"
-							type=[% SWITCH param.type %] # time for some real-ass typage [% CASE 'string' %] "text"
+							type=[% SWITCH param.type %] [% CASE 'string' %] "text"
 							value="[% param.value %]" class="stdinput" [% CASE 'bool' %] "checkbox" value="1" class="fa"
 							[% IF param.value %] checked [% END %] [% CASE 'int' %] "number" value="[% param.value %]"
-							class="stdinput" [% CASE %] # default (ayy lmao) "color" [% END %] />
+							class="stdinput" [% CASE %] "color" [% END %] />
 						<br />
 					</td>
 				</tr>

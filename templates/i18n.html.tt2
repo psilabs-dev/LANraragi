@@ -112,6 +112,19 @@ I18N.LocalProgressionCompleteDesc = "[% c.lh("You'll have to reopen archives in 
 I18N.PluginUploadSuccess = "[% c.lh("Plugin uploaded successfully!") %]";
 I18N.PluginUploadDesc = (name) => `[% c.lh("The plugin \${name} has been successfully added. Refresh the page to see it.") %]`;
 I18N.PluginUploadError = "[% c.lh("Error uploading plugin") %]";
+I18N.PluginSaved = "[% c.lh("Plugin configuration saved.") %]";
+I18N.PluginSaveError = "[% c.lh("Error saving plugin configuration") %]";
+I18N.PluginOrderSaveError = "[% c.lh("Error saving plugin order") %]";
+I18N.PluginInstalled = (ns) => `[% c.lh("Plugin installed: \${ns}") %]`;
+I18N.PluginInstallError = "[% c.lh("Error installing plugin") %]";
+I18N.PluginInstallBtn = "[% c.lh("Install") %]";
+I18N.PluginUninstalled = "[% c.lh("Plugin uninstalled.") %]";
+I18N.PluginUninstallError = "[% c.lh("Error uninstalling plugin") %]";
+I18N.PluginUninstallConfirm = (ns) => `[% c.lh("Uninstall \${ns}?") %]`;
+I18N.PluginUninstallDesc = "[% c.lh("The plugin file will be removed.") %]";
+I18N.PluginUninstallBtn = "[% c.lh("Uninstall") %]";
+I18N.PoolEmptyEnabled = "[% c.lh("Drag plugins here to enable auto-processing.") %]";
+I18N.PoolEmptyDisabled = "[% c.lh("All metadata plugins are enabled.") %]";
 
 I18N.ReaderSetPageAsThumbnail = "[% c.lh("Set this Page as Thumbnail") %]";
 I18N.ReaderUpdateThumbnail = (page) => `[% c.lh("Successfully set page \${page} as the thumbnail!") %]`;

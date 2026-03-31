@@ -35,6 +35,7 @@ my @vendor_js = (
     "/preact/hooks/dist/hooks.umd.js",                    "/sweetalert2/dist/sweetalert2.min.js",
     "/fscreen/dist/fscreen.esm.js",                       "/clipboard/dist/clipboard.min.js",
     "/raty-js/build/raty.min.js",
+    "/sortablejs/Sortable.min.js",
 );
 
 my @vendor_woff = (

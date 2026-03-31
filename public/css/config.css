@@ -55,3 +55,120 @@ input[type='checkbox']:checked::after {
     text-align: left;
     padding-bottom: 10px;
 }
+
+/*** Plugin page: source badges ***/
+.plugin-badge {
+    font-size: 8pt;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.plugin-badge--builtin { color: #999; border: 1px solid #666; }
+.plugin-badge--sideloaded { color: #d4a844; border: 1px solid #d4a844; }
+.plugin-badge--managed { color: #3b97ea; border: 1px solid #3b97ea; }
+
+/*** Plugin page: metadata drag-and-drop pools ***/
+.pool-container {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: stretch;
+}
+.plugin-pool {
+    flex: 1;
+    min-width: 280px;
+    border-radius: 4px;
+    padding: 8px;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+}
+.plugin-pool > div:last-child {
+    flex: 1;
+}
+.pool-enabled {
+    border: 1px solid rgba(59, 151, 234, 0.3);
+    background: rgba(59, 151, 234, 0.04);
+}
+.pool-disabled {
+    border: 1px dashed #555;
+    background: rgba(255, 255, 255, 0.02);
+}
+.pool-header {
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.pool-header--enabled { color: #3b97ea; }
+.pool-header--disabled { color: #999; }
+
+/*** Plugin page: plugin cards ***/
+.plugin-card {
+    display: flex;
+    align-items: flex-start;
+    text-align: left;
+    padding: 6px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    cursor: grab;
+    border-radius: 3px;
+}
+.plugin-card:last-child { border-bottom: none; }
+
+.plugin-order-badge {
+    background: #3b97ea;
+    color: #1a1a2e;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9pt;
+    font-weight: bold;
+    margin-right: 4px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.drag-handle {
+    padding: 2px 6px 0 0;
+    font-size: 14px;
+    color: #555;
+    flex-shrink: 0;
+}
+
+/*** Plugin page: SortableJS states ***/
+.sortable-ghost {
+    border: 2px dashed #3b97ea;
+    background: rgba(59, 151, 234, 0.08);
+    opacity: 0.4;
+    min-height: 40px;
+}
+.sortable-chosen {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    opacity: 0.9;
+    background: #363940;
+}
+
+.pool-empty-msg {
+    color: #666;
+    font-size: 9pt;
+    text-align: center;
+    padding: 20px 8px;
+}
+
+/*** Plugin page: registry available plugins ***/
+.registry-plugin-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    cursor: default;
+}
+.registry-plugin-row .drag-handle {
+    visibility: hidden;
+}
