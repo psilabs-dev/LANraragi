@@ -1590,6 +1590,60 @@ msgstr "The plugin ${name} has been successfully added. Refresh the page to see 
 msgid "Error uploading plugin"
 msgstr "Error uploading plugin"
 
+msgid "Plugin configuration saved."
+msgstr "Plugin configuration saved."
+
+msgid "Error saving plugin configuration"
+msgstr "Error saving plugin configuration"
+
+msgid "Error saving plugin order"
+msgstr "Error saving plugin order"
+
+msgid "Plugin installed: \${ns}"
+msgstr "Plugin installed: ${ns}"
+
+msgid "Error installing plugin"
+msgstr "Error installing plugin"
+
+msgid "Install"
+msgstr "Install"
+
+msgid "Plugin uninstalled."
+msgstr "Plugin uninstalled."
+
+msgid "Error uninstalling plugin"
+msgstr "Error uninstalling plugin"
+
+msgid "Uninstall \${ns}?"
+msgstr "Uninstall ${ns}?"
+
+msgid "The plugin file will be removed."
+msgstr "The plugin file will be removed."
+
+msgid "Uninstall"
+msgstr "Uninstall"
+
+msgid "No registry configured."
+msgstr "No registry configured."
+
+msgid "Add one in Settings."
+msgstr "Add one in Settings."
+
+msgid "Registry:"
+msgstr "Registry:"
+
+msgid "Refresh Index"
+msgstr "Refresh Index"
+
+msgid "Registry index refreshed."
+msgstr "Registry index refreshed."
+
+msgid "Error refreshing registry"
+msgstr "Error refreshing registry"
+
+msgid "Error loading registries"
+msgstr "Error loading registries"
+
 msgid "Successfully set page \${page} as the thumbnail!"
 msgstr "Successfully set page ${page} as the thumbnail!"
 
