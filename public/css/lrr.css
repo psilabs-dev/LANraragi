@@ -50,8 +50,14 @@ span.tags {
   cursor: text;
 }
 
-.toggled-exclude {
-  opacity: 0.5;
+.not-label {
+  display: inline-block;
+  background: #fff;
+  color: #6e7881;
+  font-weight: bold;
+  padding: 0 4px;
+  margin-right: 4px;
+  border-radius: 2px;
 }
 
 div.id1 {

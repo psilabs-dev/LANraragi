@@ -306,16 +306,25 @@ Index.toggleCategory = function (button) {
     const categoryId = button.id;
     const current = Index.selectedCategories[categoryId];
 
+    // Store the original label on first interaction
+    if (!button.dataset.originalLabel) {
+        button.dataset.originalLabel = button.innerHTML;
+    }
+    const original = button.dataset.originalLabel;
+
     button.classList.remove("toggled", "toggled-exclude");
 
     if (!current) {
         Index.selectedCategories[categoryId] = "include";
         button.classList.add("toggled");
+        button.innerHTML = original;
     } else if (current === "include") {
         Index.selectedCategories[categoryId] = "exclude";
         button.classList.add("toggled-exclude");
+        button.innerHTML = `<span class="not-label">NOT</span>${original}`;
     } else {
         delete Index.selectedCategories[categoryId];
+        button.innerHTML = original;
     }
 
     // Trigger search
@@ -871,15 +880,17 @@ Index.loadCategories = function () {
             data.sort((a, b) => b.pinned - a.pinned);
             const catClass = (id) => Index.selectedCategories[id] === "include" ? "toggled"
                                    : Index.selectedCategories[id] === "exclude" ? "toggled-exclude" : "";
+            const catLabel = (id, name) => Index.selectedCategories[id] === "exclude"
+                ? `<span class="not-label">NOT</span>${name}` : name;
 
             let html = `<div style='display:inline-block'>
-                            <input class='favtag-btn ${catClass("NEW_ONLY")}'
-                            type='button' id='NEW_ONLY' value='🆕 ${I18N.NewArchives}'
-                            onclick='Index.toggleCategory(this)' title='${I18N.NewArchiveDesc}'/>
+                            <button class='favtag-btn ${catClass("NEW_ONLY")}'
+                            id='NEW_ONLY'
+                            onclick='Index.toggleCategory(this)' title='${I18N.NewArchiveDesc}'>${catLabel("NEW_ONLY", `🆕 ${I18N.NewArchives}`)}</button>
                         </div><div style='display:inline-block'>
-                            <input class='favtag-btn ${catClass("UNTAGGED_ONLY")}'
-                            type='button' id='UNTAGGED_ONLY' value='🏷️ ${I18N.UntaggedArchives}'
-                            onclick='Index.toggleCategory(this)' title='${I18N.UntaggedArcDesc}'/>
+                            <button class='favtag-btn ${catClass("UNTAGGED_ONLY")}'
+                            id='UNTAGGED_ONLY'
+                            onclick='Index.toggleCategory(this)' title='${I18N.UntaggedArcDesc}'>${catLabel("UNTAGGED_ONLY", `🏷️ ${I18N.UntaggedArchives}`)}</button>
                         </div>`;
 
             const iteration = (data.length > 10 ? 10 : data.length);
@@ -892,9 +903,9 @@ Index.loadCategories = function () {
                 catName = LRR.encodeHTML(catName);
 
                 const div = `<div style='display:inline-block'>
-                    <input class='favtag-btn ${catClass(category.id)}'
-                            type='button' id='${category.id}' value='${catName}'
-                            onclick='Index.toggleCategory(this)' title='${I18N.CategoryDesc}'/>
+                    <button class='favtag-btn ${catClass(category.id)}'
+                            id='${category.id}'
+                            onclick='Index.toggleCategory(this)' title='${I18N.CategoryDesc}'>${catLabel(category.id, catName)}</button>
                 </div>`;
 
                 // Take this opportunity to update the bookmark
