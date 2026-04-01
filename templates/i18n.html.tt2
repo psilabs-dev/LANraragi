@@ -132,6 +132,7 @@ I18N.RegistryRefreshError = "[% c.lh("Error refreshing registry") %]";
 I18N.RegistryLoadError = "[% c.lh("Error loading registries") %]";
 I18N.PoolEmptyEnabled = "[% c.lh("Drag plugins here to enable auto-processing.") %]";
 I18N.PoolEmptyDisabled = "[% c.lh("All metadata plugins are enabled.") %]";
+I18N.PluginNoneInstalled = "[% c.lh("No plugins installed.") %]";
 
 I18N.ReaderSetPageAsThumbnail = "[% c.lh("Set this Page as Thumbnail") %]";
 I18N.ReaderUpdateThumbnail = (page) => `[% c.lh("Successfully set page \${page} as the thumbnail!") %]`;

@@ -226,10 +226,6 @@ Plugins.loadRegistrySection = function () {
             );
             bar.show();
 
-            // Show all plugin type sections when a registry is configured,
-            // so users know they can Refresh to discover available plugins
-            $("#section-login, #section-download, #section-script").show();
-
             $(document).on("click.registry-refresh", "#registry-refresh-btn", Plugins.refreshAndLoadAvailable);
         },
     );
@@ -299,11 +295,10 @@ Plugins.refreshAndLoadAvailable = function () {
                         content.append($("<span>").text(meta.description));
 
                         card.append(content);
-                        $("#" + containerId).append(card);
 
-                        // Show the section if it was hidden (no installed plugins of this type)
-                        const sectionId = "section-" + meta.type;
-                        $("#" + sectionId).show();
+                        // Remove the empty-state message before appending the first card
+                        $("#" + containerId).siblings("[data-type-empty]").remove();
+                        $("#" + containerId).append(card);
                     }
                 },
             );

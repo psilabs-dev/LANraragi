@@ -108,7 +108,7 @@
 				</li>
 
 				[%# ===== Login Plugins ===== %]
-				<li class="option-flyout" id="section-login" [% IF logins.size == 0 %]style="display:none"[% END %]>
+				<li class="option-flyout" id="section-login">
 					<div class="collapsible-title caret-right">
 						<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("Login Plugins") %]
 					</div>
@@ -119,7 +119,7 @@
 				</li>
 
 				[%# ===== Downloaders ===== %]
-				<li class="option-flyout" id="section-download" [% IF downloaders.size == 0 %]style="display:none"[% END %]>
+				<li class="option-flyout" id="section-download">
 					<div class="collapsible-title caret-right">
 						<i class="fas fa-cloud-download-alt" aria-hidden="true"></i> [% c.lh("Downloaders") %]
 					</div>
@@ -130,7 +130,7 @@
 				</li>
 
 				[%# ===== Scripts ===== %]
-				<li class="option-flyout" id="section-script" [% IF scripts.size == 0 %]style="display:none"[% END %]>
+				<li class="option-flyout" id="section-script">
 					<div class="collapsible-title caret-right">
 						<i class="fa fa-scroll" aria-hidden="true"></i> [% c.lh("Scripts") %]
 					</div>
@@ -231,6 +231,10 @@
 
 [%# ===== Standard plugin list block (login, download, script) ===== %]
 [% BLOCK pluginlist %]
+
+[% IF plugins.size == 0 %]
+<div class="pool-empty-msg" data-type-empty="1">[% c.lh("No plugins installed.") %]</div>
+[% END %]
 
 [% FOREACH plugin IN plugins %]
 <span style="display:inline-block; text-align: left; width:80%; border-bottom-width: 1px;border-bottom-style: solid">
