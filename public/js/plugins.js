@@ -393,8 +393,15 @@ Plugins.installPlugin = function (namespace) {
                 // Re-sort into correct position
                 Plugins.sortDisabledPool();
             } else {
-                // Non-metadata: just remove the registry card
-                regCard.remove();
+                // Non-metadata: convert registry card to installed card in-place
+                regCard.removeClass("registry-plugin-row");
+                regCard.find("input.stdbtn").replaceWith(
+                    $('<input class="stdbtn plugin-uninstall-btn" type="button">')
+                        .attr("data-namespace", namespace)
+                        .val(I18N.PluginUninstallBtn || "Uninstall")
+                        .css({ "flex-shrink": "0", "margin-left": "8px" })
+                );
+                regCard.find(".plugin-badge").text("managed").attr("class", "plugin-badge plugin-badge--managed");
             }
         },
     );
