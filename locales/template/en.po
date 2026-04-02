@@ -974,6 +974,9 @@ msgstr "Enabled - Run Order"
 msgid "Drag plugins here to enable auto-processing."
 msgstr "Drag plugins here to enable auto-processing."
 
+msgid "Show more"
+msgstr "Show more"
+
 msgid "Depends on"
 msgstr "Depends on"
 
