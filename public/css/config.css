@@ -71,16 +71,13 @@ input[type='checkbox']:checked::after {
 /*** Plugin page: metadata drag-and-drop pools ***/
 .pool-container {
     display: flex;
+    flex-direction: column;
     gap: 12px;
-    flex-wrap: wrap;
-    align-items: stretch;
 }
 .plugin-pool {
-    flex: 1;
-    min-width: 280px;
     border-radius: 4px;
     padding: 8px;
-    min-height: 100px;
+    min-height: 80px;
     display: flex;
     flex-direction: column;
 }
@@ -89,19 +86,22 @@ input[type='checkbox']:checked::after {
 }
 .pool-enabled {
     border: 1px solid rgba(59, 151, 234, 0.3);
-    background: rgba(59, 151, 234, 0.04);
+    background: rgba(59, 151, 234, 0.06);
 }
 .pool-disabled {
-    border: 1px dashed #555;
+    border: 1px dashed #777;
     background: rgba(255, 255, 255, 0.02);
+    max-height: 400px;
+    overflow-y: auto;
 }
 .pool-header {
-    font-size: 9pt;
+    font-size: 10pt;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 8px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
 }
 .pool-header--enabled { color: #3b97ea; }
 .pool-header--disabled { color: #999; }
@@ -111,12 +111,30 @@ input[type='checkbox']:checked::after {
     display: flex;
     align-items: flex-start;
     text-align: left;
-    padding: 6px 4px;
+    padding: 8px 6px;
     border-bottom: 1px solid rgba(255,255,255,0.06);
-    cursor: grab;
+    cursor: default;
     border-radius: 3px;
 }
 .plugin-card:last-child { border-bottom: none; }
+.plugin-card .plugin-description {
+    max-height: 2.8em;
+    overflow: hidden;
+    font-size: 9pt;
+    line-height: 1.4;
+    color: #aaa;
+    margin-top: 2px;
+}
+.plugin-card .plugin-description.expanded {
+    max-height: none;
+}
+.plugin-description-toggle {
+    font-size: 8pt;
+    color: #3b97ea;
+    cursor: pointer;
+    margin-top: 2px;
+    display: none;
+}
 
 .plugin-order-badge {
     background: #3b97ea;
@@ -137,20 +155,29 @@ input[type='checkbox']:checked::after {
 .drag-handle {
     padding: 2px 6px 0 0;
     font-size: 14px;
-    color: #555;
+    color: #777;
     flex-shrink: 0;
+    opacity: 0;
+    cursor: grab;
+    transition: opacity 0.15s;
+}
+.plugin-card:hover .drag-handle {
+    opacity: 1;
 }
 
 /*** Plugin page: SortableJS states ***/
 .sortable-ghost {
     border: 2px dashed #3b97ea;
-    background: rgba(59, 151, 234, 0.08);
-    opacity: 0.4;
+    background: rgba(59, 151, 234, 0.12);
     min-height: 40px;
+    border-radius: 3px;
+}
+.sortable-ghost * {
+    visibility: hidden;
 }
 .sortable-chosen {
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    opacity: 0.9;
+    opacity: 0.95;
     background: #363940;
 }
 

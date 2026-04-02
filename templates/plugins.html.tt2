@@ -12,7 +12,7 @@
 	<link type="image/png" rel="icon" href="/favicon.ico" />
 	<link rel="manifest" href="app.webappmanifest" />
 	<link rel="stylesheet" type="text/css" href="[% c.url_for("/css/lrr.css?$version") %]" />
-	<link rel="stylesheet" type="text/css" href="[% c.url_for("/css/config.css") %]" />
+	<link rel="stylesheet" type="text/css" href="[% c.url_for("/css/config.css?$version") %]" />
 
 	<link rel="stylesheet" type="text/css" href="[% c.url_for("/css/vendor/fontawesome-all.min.css") %]" />
 	<link rel="stylesheet" type="text/css" href="[% c.url_for("/css/vendor/jquery.fileupload.css") %]" />
@@ -48,99 +48,103 @@
 		<h1 class="ih" style="text-align:center">[% c.lh("Plugin Configuration") %]</h1>
 		<br />
 
-		<div id="registry-bar" style="display:none; margin-bottom:12px;">
+		<div id="registry-bar" style="display:none; margin-bottom:12px; font-size:9pt; color:#999;">
 			<span id="registry-status-text"></span>
 		</div>
 
 		<form name="editPluginForm" id="editPluginForm" enctype="multipart/form-data" method="post">
 
-			<ul class="collapsible extensible with-right-caret">
-
-				[%# ===== Metadata Plugins ===== %]
-				<li class="option-flyout">
-					<div class="collapsible-title caret-right">
-						<i class="fa fa-digital-tachograph" aria-hidden="true"></i> [% c.lh("Metadata Plugins") %]
-					</div>
-					<div class="collapsible-body">
-
-						<h1 class="ih" style="display:inline">[% c.lh("Allow Plugins to replace archive titles:") %] </h1>
-						[% IF replacetitles %]
-						<input id="replacetitles" name="replacetitles" class="fa" type="checkbox" checked> [% ELSE %]
-						<input id="replacetitles" name="replacetitles" class="fa" type="checkbox"> [% END %]
-						<label for="replacetitles">
-							<br> [% c.lh("If enabled, metadata plugins will be able to change the title of your archives alongside adding tags to them.") %]
-						</label>
-						<br /><br />
-
-						<div class="pool-container">
-							<div class="plugin-pool pool-disabled">
-								<div class="pool-header pool-header--disabled">
-									<i class="fa fa-pause-circle"></i> [% c.lh("Disabled") %]
-								</div>
-								<div id="metadata-disabled">
-									[% IF meta_disabled.size == 0 %]
-									<div class="pool-empty-msg">[% c.lh("All metadata plugins are enabled.") %]</div>
-									[% END %]
-									[% FOREACH plugin IN meta_disabled %]
-									[% INCLUDE metadata_card plugin=plugin show_order=0 %]
-									[% END %]
-								</div>
-							</div>
-
-							<div class="plugin-pool pool-enabled">
-								<div class="pool-header pool-header--enabled">
-									<i class="fa fa-play-circle"></i> [% c.lh("Enabled - Run Order") %]
-								</div>
-								<div id="metadata-enabled">
-									[% IF meta_enabled.size == 0 %]
-									<div class="pool-empty-msg">[% c.lh("Drag plugins here to enable auto-processing.") %]</div>
-									[% END %]
-									[% SET idx = 1 %]
-									[% FOREACH plugin IN meta_enabled %]
-									[% INCLUDE metadata_card plugin=plugin show_order=1 order_idx=idx %]
-									[% SET idx = idx + 1 %]
-									[% END %]
-								</div>
-							</div>
+			<div class="left-column" style="width:49%">
+				<ul class="collapsible extensible with-right-caret">
+					[%# ===== Login Plugins ===== %]
+					<li class="option-flyout" id="section-login">
+						<div class="collapsible-title caret-right">
+							<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("Login Plugins") %]
 						</div>
+						<div class="collapsible-body">
+							[% INCLUDE pluginlist plugins = logins %]
+							<div id="registry-login"></div>
+						</div>
+					</li>
 
-					</div>
-				</li>
+					[%# ===== Downloaders ===== %]
+					<li class="option-flyout" id="section-download">
+						<div class="collapsible-title caret-right">
+							<i class="fas fa-cloud-download-alt" aria-hidden="true"></i> [% c.lh("Downloaders") %]
+						</div>
+						<div class="collapsible-body">
+							[% INCLUDE pluginlist plugins = downloaders %]
+							<div id="registry-download"></div>
+						</div>
+					</li>
 
-				[%# ===== Login Plugins ===== %]
-				<li class="option-flyout" id="section-login">
-					<div class="collapsible-title caret-right">
-						<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("Login Plugins") %]
-					</div>
-					<div class="collapsible-body">
-						[% INCLUDE pluginlist plugins = logins %]
-						<div id="registry-login"></div>
-					</div>
-				</li>
-
-				[%# ===== Downloaders ===== %]
-				<li class="option-flyout" id="section-download">
-					<div class="collapsible-title caret-right">
-						<i class="fas fa-cloud-download-alt" aria-hidden="true"></i> [% c.lh("Downloaders") %]
-					</div>
-					<div class="collapsible-body">
-						[% INCLUDE pluginlist plugins = downloaders %]
-						<div id="registry-download"></div>
-					</div>
-				</li>
-
-				[%# ===== Scripts ===== %]
-				<li class="option-flyout" id="section-script">
-					<div class="collapsible-title caret-right">
-						<i class="fa fa-scroll" aria-hidden="true"></i> [% c.lh("Scripts") %]
-					</div>
-					<div class="collapsible-body">
-						[% INCLUDE pluginlist plugins = scripts %]
-						<div id="registry-script"></div>
-					</div>
-				</li>
-
+					[%# ===== Scripts ===== %]
+					<li class="option-flyout" id="section-script">
+						<div class="collapsible-title caret-right">
+							<i class="fa fa-scroll" aria-hidden="true"></i> [% c.lh("Scripts") %]
+						</div>
+						<div class="collapsible-body">
+							[% INCLUDE pluginlist plugins = scripts %]
+							<div id="registry-script"></div>
+						</div>
+					</li>
 				</ul>
+			</div>
+
+			<div class="right-column" style="width:50%">
+				<ul class="collapsible extensible with-right-caret">
+					[%# ===== Metadata Plugins ===== %]
+					<li class="option-flyout">
+						<div class="collapsible-title caret-right">
+							<i class="fa fa-digital-tachograph" aria-hidden="true"></i> [% c.lh("Metadata Plugins") %]
+						</div>
+						<div class="collapsible-body">
+
+							<h1 class="ih" style="display:inline">[% c.lh("Allow Plugins to replace archive titles:") %] </h1>
+							[% IF replacetitles %]
+							<input id="replacetitles" name="replacetitles" class="fa" type="checkbox" checked> [% ELSE %]
+							<input id="replacetitles" name="replacetitles" class="fa" type="checkbox"> [% END %]
+							<label for="replacetitles">
+								<br> [% c.lh("If enabled, metadata plugins will be able to change the title of your archives alongside adding tags to them.") %]
+							</label>
+							<br /><br />
+
+							<div class="pool-container">
+								<div class="plugin-pool pool-disabled">
+									<div class="pool-header pool-header--disabled">
+										<i class="fa fa-pause-circle"></i> [% c.lh("Disabled") %]
+									</div>
+									<div id="metadata-disabled">
+										[% IF meta_disabled.size == 0 %]
+										<div class="pool-empty-msg">[% c.lh("All metadata plugins are enabled.") %]</div>
+										[% END %]
+										[% FOREACH plugin IN meta_disabled %]
+										[% INCLUDE metadata_card plugin=plugin show_order=0 %]
+										[% END %]
+									</div>
+								</div>
+
+								<div class="plugin-pool pool-enabled">
+									<div class="pool-header pool-header--enabled">
+										<i class="fa fa-play-circle"></i> [% c.lh("Enabled - Run Order") %]
+									</div>
+									<div id="metadata-enabled">
+										[% IF meta_enabled.size == 0 %]
+										<div class="pool-empty-msg">[% c.lh("Drag plugins here to enable auto-processing.") %]</div>
+										[% END %]
+										[% SET idx = 1 %]
+										[% FOREACH plugin IN meta_enabled %]
+										[% INCLUDE metadata_card plugin=plugin show_order=1 order_idx=idx %]
+										[% SET idx = idx + 1 %]
+										[% END %]
+									</div>
+								</div>
+							</div>
+
+						</div>
+					</li>
+				</ul>
+			</div>
 
 			<br />
 			<h1 style="text-align:center">
@@ -165,7 +169,7 @@
 
 [%# ===== Metadata plugin card (used in both pools) ===== %]
 [% BLOCK metadata_card %]
-<div class="plugin-card" data-namespace="[% plugin.namespace %]">
+<div class="plugin-card" data-namespace="[% plugin.namespace %]" data-source="[% plugin.source %]">
 	[% IF show_order %]
 	<span class="plugin-order-badge">[% order_idx %]</span>
 	[% END %]
@@ -193,13 +197,14 @@
 		<br />
 		[% END %]
 
-		[% plugin.description %]
+		<div class="plugin-description">[% plugin.description %]</div>
+		<span class="plugin-description-toggle">[% c.lh("Show more") %]</span>
 
 		[% IF plugin.parameters && plugin.parameters.size %]
 		<div class="collapsible-title" style="padding: 5px 0 0 5px">
 			<a>
-				<i class="fas fa-sliders-h fa-2x" style="margin-right: 4px" aria-hidden="true"></i>
-				<b style="vertical-align: super;">[% c.lh("Plugin Settings") %]</b>
+				<i class="fas fa-sliders-h" style="margin-right: 4px" aria-hidden="true"></i>
+				<b>[% c.lh("Plugin Settings") %]</b>
 			</a>
 		</div>
 		<div class="collapsible-body" style="padding:5px 0 0 0">

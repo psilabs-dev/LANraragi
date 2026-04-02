@@ -53,6 +53,13 @@ sub index {
     }
     @meta_enabled = sort { $a->{priority} <=> $b->{priority} } @meta_enabled;
 
+    # Sort disabled pool: managed first, then sideloaded, then builtin; alphabetical within each group
+    my %source_rank = ( managed => 0, sideloaded => 1, builtin => 2 );
+    @meta_disabled = sort {
+        ( $source_rank{ $a->{source} // 'builtin' } <=> $source_rank{ $b->{source} // 'builtin' } )
+          || ( lc( $a->{name} ) cmp lc( $b->{name} ) )
+    } @meta_disabled;
+
     $redis->quit();
 
     $self->render(

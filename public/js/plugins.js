@@ -16,6 +16,37 @@ Plugins.initializeAll = function () {
         Plugins.uninstallPlugin($(this).data("namespace"));
     });
 
+    // Description show more/less toggles
+    $(document).on("click", ".plugin-description-toggle", function () {
+        const desc = $(this).siblings(".plugin-description");
+        desc.toggleClass("expanded");
+        $(this).text(desc.hasClass("expanded") ? I18N.ShowLess || "Show less" : I18N.ShowMore || "Show more");
+    });
+    // Show toggle only for descriptions that overflow; re-check when collapsibles open
+    function checkDescriptionOverflow() {
+        $(".plugin-description").each(function () {
+            const toggle = this.parentElement.querySelector(".plugin-description-toggle");
+            if (!toggle) return;
+            if (this.scrollHeight > this.clientHeight + 1) {
+                toggle.style.display = "block";
+            } else if (!this.classList.contains("expanded")) {
+                toggle.style.display = "none";
+            }
+        });
+    }
+    // Detect collapsible visibility changes via IntersectionObserver
+    var descCheckTimer = null;
+    function scheduleDescCheck() {
+        clearTimeout(descCheckTimer);
+        descCheckTimer = setTimeout(checkDescriptionOverflow, 100);
+    }
+    var intObs = new IntersectionObserver(function (entries) {
+        for (var i = 0; i < entries.length; i++) {
+            if (entries[i].isIntersecting) { scheduleDescCheck(); break; }
+        }
+    });
+    $(".plugin-description").each(function () { intObs.observe(this); });
+
     // File upload handler
     $("#fileupload").fileupload({
         url: "/config/plugins/upload",
@@ -105,7 +136,11 @@ Plugins.initSortable = function () {
 Plugins.sortDisabledPool = function () {
     const pool = $("#metadata-disabled");
     const cards = pool.children(".plugin-card").get();
+    const sourceRank = { managed: 0, sideloaded: 1, builtin: 2 };
     cards.sort(function (a, b) {
+        const srcA = sourceRank[$(a).data("source")] ?? 2;
+        const srcB = sourceRank[$(b).data("source")] ?? 2;
+        if (srcA !== srcB) return srcA - srcB;
         const nameA = $(a).find("h2").text().trim().toLowerCase();
         const nameB = $(b).find("h2").text().trim().toLowerCase();
         return nameA.localeCompare(nameB);
@@ -147,6 +182,8 @@ Plugins.savePriority = function (namespace, priority) {
 };
 
 Plugins.saveConfiguration = function () {
+    $("#save").prop("disabled", true);
+
     // Collect enabled metadata plugin namespaces in order (exclude registry cards)
     const enabledOrder = [];
     $("#metadata-enabled .plugin-card:not(.registry-plugin-row)").each(function () {
@@ -195,7 +232,8 @@ Plugins.saveConfiguration = function () {
                 hideAfter: 5000,
             });
         })
-        .catch((error) => LRR.showErrorToast(I18N.PluginSaveError, error));
+        .catch((error) => LRR.showErrorToast(I18N.PluginSaveError, error))
+        .finally(() => { $("#save").prop("disabled", false); });
 };
 
 //
@@ -206,11 +244,12 @@ Plugins.loadRegistrySection = function () {
     const bar = $("#registry-bar");
     const statusText = $("#registry-status-text");
 
-    Server.callAPI("/api/registries", "GET", null, I18N.RegistryLoadError,
+    Server.callAPI("/api/registries", "GET", null, null,
         (data) => {
             if (data.registries.length === 0) {
                 statusText.html(
-                    I18N.RegistryNone + ' <a href="' + new LRR.apiURL("/config") + '">' + I18N.RegistryAddSettings + "</a>",
+                    '<i class="fa fa-info-circle"></i> '
+                    + I18N.RegistryNone + ' <a href="' + new LRR.apiURL("/config") + '">' + I18N.RegistryAddSettings + "</a>",
                 );
                 bar.show();
                 return;
@@ -220,13 +259,20 @@ Plugins.loadRegistrySection = function () {
             Plugins.registryId = reg.id;
 
             statusText.html(
-                "<b>" + I18N.RegistryLabel + "</b> " + $("<span>").text(reg.name).html()
-                + " (" + $("<span>").text(reg.type).html() + ") &nbsp;"
-                + '<input id="registry-refresh-btn" class="stdbtn" type="button" value="' + I18N.RegistryRefreshBtn + '" />',
+                '<i class="fa fa-cube"></i> '
+                + $("<span>").text(reg.name).html()
+                + ' &nbsp;<a id="registry-refresh-btn" href="#" style="color:#3b97ea; font-size:8pt;">'
+                + (I18N.RegistryRefreshBtn || "Refresh") + "</a>",
             );
             bar.show();
 
-            $(document).on("click.registry-refresh", "#registry-refresh-btn", Plugins.refreshAndLoadAvailable);
+            $(document).on("click.registry-refresh", "#registry-refresh-btn", function (e) {
+                e.preventDefault();
+                Plugins.refreshAndLoadAvailable();
+            });
+
+            // Auto-load available plugins on page open
+            Plugins.refreshAndLoadAvailable();
         },
     );
 };
@@ -268,7 +314,7 @@ Plugins.refreshAndLoadAvailable = function () {
                         if (!containerId) continue;
 
                         // Build card matching the server-rendered plugin-card structure
-                        const card = $('<div class="plugin-card registry-plugin-row" data-namespace="' + ns + '">');
+                        const card = $('<div class="plugin-card registry-plugin-row" data-namespace="' + ns + '" data-source="managed">');
 
                         // Drag handle (visual only for registry cards)
                         card.append($('<div class="drag-handle"><i class="fa fa-grip-vertical"></i></div>'));
