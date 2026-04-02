@@ -87,6 +87,8 @@ Plugins.initSortable = function () {
 
     if (!enabledEl || !disabledEl) return;
 
+    var disabledPool = $(disabledEl).closest(".pool-disabled");
+
     Sortable.create(enabledEl, {
         group: "metadata-plugins",
         animation: 150,
@@ -95,7 +97,8 @@ Plugins.initSortable = function () {
         ghostClass: "sortable-ghost",
         chosenClass: "sortable-chosen",
         swapThreshold: 0.65,
-        onEnd: Plugins.renumberEnabled,
+        onStart: function () { disabledPool.addClass("is-dragging"); },
+        onEnd: function () { disabledPool.removeClass("is-dragging"); Plugins.renumberEnabled(); },
         onAdd: function () {
             $(enabledEl).find(".pool-empty-msg").remove();
             Plugins.renumberEnabled();
@@ -117,12 +120,14 @@ Plugins.initSortable = function () {
         chosenClass: "sortable-chosen",
         sort: false,
         filter: ".registry-plugin-row",
+        onStart: function () { disabledPool.addClass("is-dragging"); },
+        onEnd: function () { disabledPool.removeClass("is-dragging"); },
         onAdd: function (evt) {
             // Remove order badge when moved to disabled pool
             const badge = evt.item.querySelector(".plugin-order-badge");
             if (badge) badge.remove();
             $(disabledEl).find(".pool-empty-msg").remove();
-            // Re-sort disabled pool alphabetically
+            // Re-sort disabled pool
             Plugins.sortDisabledPool();
         },
         onRemove: function () {
@@ -359,8 +364,31 @@ Plugins.installPlugin = function (namespace) {
         { namespace: namespace, registry: Plugins.registryId },
         I18N.PluginInstalled(namespace), I18N.PluginInstallError,
         () => {
-            // Reload page to reflect new plugin
-            window.location.reload();
+            // Remove the registry card
+            const regCard = $(".registry-plugin-row[data-namespace='" + namespace + "']");
+            const isMetadata = regCard.closest("#metadata-disabled").length > 0;
+
+            if (isMetadata) {
+                // Convert registry card to an installed plugin card
+                regCard.removeClass("registry-plugin-row");
+                regCard.css("cursor", "");
+                // Replace install button with uninstall button
+                regCard.find("input.stdbtn").replaceWith(
+                    $('<input class="stdbtn plugin-uninstall-btn" type="button">')
+                        .attr("data-namespace", namespace)
+                        .val(I18N.PluginUninstallBtn || "Uninstall")
+                        .css({ "flex-shrink": "0", "margin-left": "8px" })
+                );
+                // Change badge from "registry" to "managed"
+                regCard.find(".plugin-badge").text("managed");
+                // Show drag handle
+                regCard.find(".drag-handle").css("visibility", "");
+                // Re-sort into correct position
+                Plugins.sortDisabledPool();
+            } else {
+                // Non-metadata: just remove the registry card
+                regCard.remove();
+            }
         },
     );
 };

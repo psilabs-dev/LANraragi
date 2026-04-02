@@ -155,14 +155,12 @@ input[type='checkbox']:checked::after {
 .drag-handle {
     padding: 2px 6px 0 0;
     font-size: 14px;
-    color: #777;
+    color: #666;
     flex-shrink: 0;
-    opacity: 0;
     cursor: grab;
-    transition: opacity 0.15s;
 }
-.plugin-card:hover .drag-handle {
-    opacity: 1;
+.pool-disabled.is-dragging {
+    overflow-y: hidden;
 }
 
 /*** Plugin page: SortableJS states ***/
