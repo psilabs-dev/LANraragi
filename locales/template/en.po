@@ -965,6 +965,9 @@ msgstr "Plugin Settings"
 msgid "All metadata plugins are enabled."
 msgstr "All metadata plugins are enabled."
 
+msgid "No plugins installed."
+msgstr "No plugins installed."
+
 msgid "Enabled - Run Order"
 msgstr "Enabled - Run Order"
 
