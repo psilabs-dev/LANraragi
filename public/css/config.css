@@ -186,14 +186,20 @@ input[type='checkbox']:checked::after {
     padding: 20px 8px;
 }
 
+/*** Plugin page: non-metadata plugin list items ***/
+.pluginlist-item {
+    display: inline-block;
+    text-align: left;
+    width: 80%;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+}
+
 /*** Plugin page: registry available plugins ***/
-.registry-plugin-row {
-    display: flex;
-    align-items: center;
-    padding: 6px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+.plugin-card.registry-plugin-row {
     cursor: default;
 }
-.registry-plugin-row .drag-handle {
+.plugin-card.registry-plugin-row .drag-handle {
     visibility: hidden;
 }

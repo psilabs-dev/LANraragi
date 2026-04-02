@@ -242,7 +242,7 @@
 [% END %]
 
 [% FOREACH plugin IN plugins %]
-<span style="display:inline-block; text-align: left; width:80%; border-bottom-width: 1px;border-bottom-style: solid">
+<span class="pluginlist-item">
 
 	<div style="display:flex; align-items:center;">
 		<div style="flex:1;">
@@ -262,15 +262,15 @@
 	</div>
 
 	[% IF plugin.login_from %]
-	<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("This plugin depends on the login plugin") %] "[% plugin.login_from %]".
+	<i class="fa fa-plug" aria-hidden="true"></i> [% c.lh("Depends on") %] "[% plugin.login_from %]"
 	<br />
 	[% END %]
 
 	[% IF plugin.type == "download" %]
 	<pre title="[% c.lh("This plugin will trigger on URLs matching this regex!") %]">	[% plugin.url_regex %]</pre>
 	[% END %]
-	[% plugin.description %]
-	<br />
+	<div class="plugin-description">[% plugin.description %]</div>
+	<span class="plugin-description-toggle">[% c.lh("Show more") %]</span>
 
 	[% IF plugin.type == "script" %]
 	<table>
@@ -299,8 +299,8 @@
 	[% IF plugin.parameters && plugin.parameters.size %]
 	<div class="collapsible-title" style="padding: 5px 0 0 5px">
 		<a>
-			<i class="fas fa-sliders-h fa-2x" style="margin-right: 4px" aria-hidden="true"></i>
-			<b style="vertical-align: super;">[% c.lh("Plugin Settings") %]</b>
+			<i class="fas fa-sliders-h" style="margin-right: 4px" aria-hidden="true"></i>
+			<b>[% c.lh("Plugin Settings") %]</b>
 		</a>
 	</div>
 	<div class="collapsible-body" style="padding:5px 0 0 0">
@@ -326,9 +326,7 @@
 	</div>
 	[% END %]
 
-	<br />
 </span>
-<br />
 <br />
 [% END %]
 

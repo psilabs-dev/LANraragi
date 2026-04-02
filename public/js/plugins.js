@@ -318,14 +318,7 @@ Plugins.refreshAndLoadAvailable = function () {
                         const containerId = typeMap[meta.type];
                         if (!containerId) continue;
 
-                        // Build card matching the server-rendered plugin-card structure
-                        const card = $('<div class="plugin-card registry-plugin-row" data-namespace="' + ns + '" data-source="managed">');
-
-                        // Drag handle (visual only for registry cards)
-                        card.append($('<div class="drag-handle"><i class="fa fa-grip-vertical"></i></div>'));
-
-                        // Content wrapper
-                        const content = $('<div style="flex:1; min-width:0;">');
+                        const isMetadata = meta.type === "metadata";
 
                         // Title row: icon + name + author + badge + install button
                         const titleRow = $('<div style="display:flex; align-items:center;">');
@@ -342,14 +335,28 @@ Plugins.refreshAndLoadAvailable = function () {
                         installBtn.on("click", () => Plugins.installPlugin(ns));
                         titleRow.append(installBtn);
 
-                        content.append(titleRow);
-                        content.append($("<span>").text(meta.description));
-
-                        card.append(content);
+                        var card;
+                        if (isMetadata) {
+                            // Metadata: use plugin-card layout (draggable)
+                            card = $('<div class="plugin-card registry-plugin-row" data-namespace="' + ns + '" data-source="managed">');
+                            card.append($('<div class="drag-handle"><i class="fa fa-grip-vertical"></i></div>'));
+                            const content = $('<div style="flex:1; min-width:0;">');
+                            content.append(titleRow);
+                            content.append($('<div class="plugin-description">').text(meta.description));
+                            card.append(content);
+                        } else {
+                            // Non-metadata: use pluginlist-item class
+                            card = $('<span class="pluginlist-item registry-plugin-row" data-namespace="' + ns + '">');
+                            card.append(titleRow);
+                            card.append($('<div class="plugin-description">').text(meta.description));
+                        }
 
                         // Remove the empty-state message before appending the first card
                         $("#" + containerId).siblings("[data-type-empty]").remove();
                         $("#" + containerId).append(card);
+                        if (!isMetadata) {
+                            $("#" + containerId).append("<br/>");
+                        }
                     }
                 },
             );
