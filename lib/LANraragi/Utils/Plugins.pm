@@ -22,24 +22,19 @@ our @EXPORT_OK =
 sub get_plugins {
 
     my $type    = shift;
+    my $redis   = LANraragi::Model::Config->get_redis_config;
     my @plugins = plugins;
     my @validplugins;
     foreach my $plugin (@plugins) {
 
-        # Skip plugins whose files have been removed (e.g. after uninstall).
-        # Module::Pluggable caches discovered classes for the worker lifetime,
-        # so a deleted plugin remains in the list until the process restarts.
-        my $inc_key = $plugin;
-        $inc_key =~ s/::/\//g;
-        $inc_key .= ".pm";
-        if ( exists $INC{$inc_key} && !-e $INC{$inc_key} ) {
-            delete $INC{$inc_key};
-            next;
-        }
-
         # Check that the metadata sub is there before invoking it
         if ( $plugin->can('plugin_info') ) {
-            my %pluginfo = $plugin->plugin_info();
+            my %pluginfo;
+            eval { %pluginfo = $plugin->plugin_info() };
+            next if $@;
+
+            # Redis is the authoritative membership list (see module header).
+            next unless $redis->exists( "LRR_PLUGIN_" . uc( $pluginfo{namespace} ) );
 
             if    ( $type eq 'script' )   { next if ( !$plugin->can('run_script') ); }
             elsif ( $type eq 'metadata' ) { next if ( !$plugin->can('get_tags') ); }
@@ -50,6 +45,7 @@ sub get_plugins {
         }
     }
 
+    $redis->quit();
     return @validplugins;
 }
 
@@ -101,6 +97,15 @@ sub get_enabled_plugins {
 sub get_plugin {
 
     my $name = shift;
+
+    # Plugin must be registered in Redis to be active.
+    my $redis   = LANraragi::Model::Config->get_redis_config;
+    my $namerds = "LRR_PLUGIN_" . uc($name);
+    unless ( $redis->exists($namerds) ) {
+        $redis->quit();
+        return 0;
+    }
+    $redis->quit();
 
     #Go through plugins to find one with a matching namespace
     my @plugins = plugins;

@@ -132,6 +132,11 @@ sub startup {
     # through LRR's rotating logger pipeline.
     $self->log( get_logger( "Mojolicious", "mojo" ) );
 
+    # Reconcile discovered plugins with Redis state.
+    my $redis_config = $self->LRR_CONF->get_redis_config;
+    LANraragi::Model::Registry::scan_plugins($redis_config);
+    $redis_config->quit();
+
     #Plugin listing
     my @plugins = get_plugins("metadata");
     foreach my $pluginfo (@plugins) {
@@ -150,11 +155,6 @@ sub startup {
         my $name = $pluginfo->{name};
         $self->LRR_LOGGER->info( "Downloader Detected: " . $name );
     }
-
-    # Reconcile discovered plugins with Redis state
-    my $redis_config = $self->LRR_CONF->get_redis_config;
-    LANraragi::Model::Registry::scan_plugins($redis_config);
-    $redis_config->quit();
 
     # Enable Minion capabilities in the app
     if ( IS_UNIX ) {
