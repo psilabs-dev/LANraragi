@@ -31,8 +31,8 @@ sub generate_opds_catalog {
     my @cats    = LANraragi::Model::PsilabsDev::PgCategory::get_category_list();
 
     # Use the Postgres search engine to get the list of archives to show in the catalog.
-    # TODO Add tankgroup support to opds?
-    my ( $total, $filtered, @keys ) = LANraragi::Model::PsilabsDev::PgSearch::do_search( "", $cat_id, $start, "title", 0, 0, 0, 0 );
+    # TODO Add tankgroup/hidecompleted support to opds?
+    my ( $total, $filtered, @keys ) = LANraragi::Model::PsilabsDev::PgSearch::do_search( "", $cat_id, $start, "title", 0, 0, 0, 0, 0 );
 
     my @list = ();
 
