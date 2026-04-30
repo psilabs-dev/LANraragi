@@ -19,7 +19,7 @@ use LANraragi::Model::PsilabsDev::PgCategory;
 # replaces LANraragi::Model::Search::do_search
 # Performs a search on the Postgres database.
 # Returns ($total, $filtered, @ids)
-sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks ) {
+sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks, $hidecompleted ) {
 
     my $logger = get_logger( "PgSearch Engine", "lanraragi" );
     my $dbh = get_dbh();
@@ -65,7 +65,7 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
         my $search_start = time();
         ( $filtered, @ids ) = search_postgres_with_dbh(
             $dbh, $category_id, $filter, $sortkey, $sortorder,
-            $newonly, $untaggedonly, $grouptanks,
+            $newonly, $untaggedonly, $grouptanks, $hidecompleted,
             $use_pagination ? $start : undef,
             $use_pagination ? $keysperpage : undef
         );
@@ -89,7 +89,7 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
 
 # Main search logic using Postgres
 # Returns ($filtered_count, @ids)
-sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks, $start, $keysperpage ) {
+sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks, $hidecompleted, $start, $keysperpage ) {
 
     my $logger = get_logger( "PgSearch Core", "lanraragi" );
 
@@ -134,6 +134,11 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
     # New filter
     if ($newonly) {
         push @where_clauses, "a.isnew = TRUE";
+    }
+
+    # Hide completed archives — match upstream's >85% threshold (Model::Search::search_uncached)
+    if ($hidecompleted) {
+        push @where_clauses, "NOT (a.pagecount > 0 AND a.progress::float / a.pagecount > 0.85)";
     }
 
     # Untagged filter - archives with no "meaningful" tags
