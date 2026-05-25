@@ -890,7 +890,7 @@ paths:
       operationId: updateRegistry
       x-mojo-to: api-registry#update_registry
       summary: 🔑 Update a Registry
-      description: Update registry configuration. Only provided fields are changed. Source field changes clear the cached index.
+      description: Update registry configuration. Only provided fields are changed. Clears cached index.
       tags:
         - registries
       parameters:
