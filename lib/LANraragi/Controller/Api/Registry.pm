@@ -168,7 +168,7 @@ sub delete_registry {
         $registry_id,
         sub {
             my $redis = $self->LRR_CONF->get_redis_config;
-            my ( $status, $success, $error ) = LANraragi::Model::Registry::delete_registry(
+            my ( $status, $error ) = LANraragi::Model::Registry::delete_registry(
                 $registry_id, $redis
             );
             $redis->quit();
@@ -219,7 +219,6 @@ sub update_default_registry {
             openapi => {
                 operation   => "update_default_registry",
                 success     => 0,
-                id          => $reg_id,
                 error       => $message,
             },
             status => $status,

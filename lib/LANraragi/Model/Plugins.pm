@@ -574,23 +574,23 @@ sub uninstall_plugin {
         $abs_installed_path = resolve_installed_path( $redis->hget( $namerds, "installed_path" ) );
     }
     unless ($abs_installed_path) {
-        return ( 404, undef, "Plugin '$namespace' has no install path recorded." );
+        return ( 404, "Plugin '$namespace' has no install path recorded." );
     }
 
     # We don't touch builtin plugins!
     my $plugin_origin = infer_plugin_origin( $namerds, $redis );
     if ( $plugin_origin eq "builtin" ) {
-        return ( 403, undef, "Cannot uninstall built-in plugin '$namespace'." );
+        return ( 403, "Cannot uninstall built-in plugin '$namespace'." );
     }
 
     # Delete the plugin file (only if it's actually inside LRR lib)
     if ( -e $abs_installed_path ) {
         my $plugindir = getcwd() . "/lib/LANraragi/Plugin";
         unless ( index( $abs_installed_path, "$plugindir/" ) == 0 ) {
-            return ( 403, undef, "Can't delete plugin outside Plugin/ directory: $abs_installed_path" );
+            return ( 403, "Can't delete plugin outside Plugin/ directory: $abs_installed_path" );
         }
         unlink $abs_installed_path or do {
-            return ( 500, undef, "Couldn't delete plugin file: $!" );
+            return ( 500, "Couldn't delete plugin file: $!" );
         };
         $logger->info("Deleted plugin file: $abs_installed_path");
     } else {
@@ -601,7 +601,7 @@ sub uninstall_plugin {
     signal_uninstalled( $redis, $namespace );
     $logger->info("Uninstalled plugin: '$namespace'");
 
-    return ( 200, 1, undef );
+    return ( 200, undef );
 }
 
 # Reconcile discovered plugins with Redis registration state.

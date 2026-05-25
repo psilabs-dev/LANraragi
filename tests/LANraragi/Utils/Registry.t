@@ -397,26 +397,24 @@ note('testing resolve_local_registry_artifact_path accepts valid containment...'
     open( my $fh, '>', "$root/artifacts/foo/Foo.pm" ) or die $!;
     close $fh;
 
-    my ( $root_canon, $file_canon, $err ) =
+    my ( $file_canon, $err ) =
         LANraragi::Utils::Registry::resolve_local_registry_artifact_path( $root, "artifacts/foo/Foo.pm" );
     is( $err,        undef,                                       "valid containment (no error)" );
     is( $file_canon, abs_path("$root/artifacts/foo/Foo.pm"),      "valid containment (file_canon matches)" );
-    is( $root_canon, abs_path($root),                             "valid containment (root_canon matches)" );
 }
 
 note('testing resolve_local_registry_artifact_path rejects each violation...');
 
 {
-    my ( $root_canon, $file_canon, $err ) =
+    my ( $file_canon, $err ) =
         LANraragi::Utils::Registry::resolve_local_registry_artifact_path( "/nonexistent/path/that/does/not/exist", "Foo.pm" );
-    is( $root_canon, undef, "non-existent root (root_canon undef)" );
     is( $file_canon, undef, "non-existent root (file_canon undef)" );
     is( $err, "Invalid local registry path: /nonexistent/path/that/does/not/exist", "non-existent root (error)" );
 }
 
 {
     my $root = tempdir( CLEANUP => 1 );
-    my ( $root_canon, $file_canon, $err ) =
+    my ( $file_canon, $err ) =
         LANraragi::Utils::Registry::resolve_local_registry_artifact_path( $root, "missing.pm" );
     is( $file_canon, undef, "missing artifact (file_canon undef)" );
     is( $err, "Plugin file not found: " . abs_path($root) . "/missing.pm", "missing artifact (error)" );
@@ -432,7 +430,7 @@ SKIP: {
         close $fh;
         symlink( "$escape/Outside.pm", "$root/Escape.pm" ) or die $!;
 
-        my ( $root_canon, $file_canon, $err ) =
+        my ( $file_canon, $err ) =
             LANraragi::Utils::Registry::resolve_local_registry_artifact_path( $root, "Escape.pm" );
         is( $file_canon, undef, "symlink escaping root (file_canon undef)" );
         is( $err, "Invalid plugin artifact path: Escape.pm", "symlink escaping root (error)" );
@@ -445,7 +443,7 @@ SKIP: {
         close $fh;
         symlink( "$root/artifacts/foo/Foo.pm", "$root/Inside.pm" ) or die $!;
 
-        my ( $root_canon, $file_canon, $err ) =
+        my ( $file_canon, $err ) =
             LANraragi::Utils::Registry::resolve_local_registry_artifact_path( $root, "Inside.pm" );
         is( $err,        undef,                                       "symlink staying inside root (no error)" );
         is( $file_canon, abs_path("$root/artifacts/foo/Foo.pm"),      "symlink staying inside root (file_canon resolves to target)" );

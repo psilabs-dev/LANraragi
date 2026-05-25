@@ -214,7 +214,7 @@ sub delete_registry {
     my $logger = get_logger( "Registry", "lanraragi" );
 
     my ( $registry, $lookup_status, $lookup_error ) = get_registry( $registry_id, $redis );
-    return ( $lookup_status, undef, $lookup_error ) unless $registry;
+    return ( $lookup_status, $lookup_error ) unless $registry;
 
     my ($suffix) = $registry_id =~ /^REG_(\d{10})$/;
     my $registry_index_key      = "REG_INDEX_$suffix";
@@ -228,7 +228,7 @@ sub delete_registry {
     eval { $redis->eval( $script, 2, $registry_id, $registry_index_key ) };
     if ($@) {
         $logger->error("Redis error during registry delete for '$registry_id': $@");
-        return ( 500, undef, "Redis error while deleting registry." );
+        return ( 500, "Redis error while deleting registry." );
     }
 
     if ( ( $redis->hget( 'LRR_CONFIG', 'default_registry' ) || "" ) eq $registry_id ) {
@@ -238,7 +238,7 @@ sub delete_registry {
 
     $logger->info("Deleted registry '$registry_id'.");
 
-    return ( 200, 1, undef );
+    return ( 200, undef );
 }
 
 # Get the configured default registry id, or empty string if unset.

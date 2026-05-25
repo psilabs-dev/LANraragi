@@ -223,15 +223,10 @@ sub get_plugin_parameters {
 # Register a validated plugin into the database.
 # A plugin should be registered after any type of discovery or installation,
 sub register_plugin {
-    my $redis           = shift;
-    my $namespace       = shift;
-    my $installed_path  = shift;
-    my $type            = shift;
+    my ( $redis, $namespace, $installed_path, $type ) = @_;
 
     my $namerds = "LRR_PLUGIN_" . uc($namespace);
-
     $redis->hset( $namerds, "installed_path", $installed_path, "type", $type );
-
     return $installed_path;
 }
 
@@ -239,10 +234,9 @@ sub register_plugin {
 # Should be called during removal of a plugin or when the plugin
 # could no longer be found.
 sub unregister_plugin {
-    my $redis       = shift;
-    my $namespace   = shift;
-    my $namerds     = "LRR_PLUGIN_" . uc($namespace);
+    my ( $redis, $namespace ) = @_;
 
+    my $namerds = "LRR_PLUGIN_" . uc($namespace);
     $redis->hdel(
         $namerds,
         "installed_path",

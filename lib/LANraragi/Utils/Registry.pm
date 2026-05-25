@@ -16,25 +16,21 @@ use LANraragi::Utils::Logging qw(get_logger);
 
 use Exporter 'import';
 our @EXPORT_OK = qw(
-    resolve_git_raw_url
-    resolve_cdn_artifact_url
     fetch_registry_resource
-    find_package_conflict
     find_namespace_conflict
-    validate_registry_index
-    validate_registry_artifact_path
-    resolve_local_registry_artifact_path
-    is_valid_registry_timestamp
+    find_package_conflict
     resolve_max_version
+    validate_registry_artifact_path
+    validate_registry_index
     MANAGED_TYPE_DIRS
 );
 
 # Maps plugin_info type values to directory names under Plugin/Managed/.
 use constant MANAGED_TYPE_DIRS => {
-    metadata => "Metadata",
-    download => "Download",
-    login    => "Login",
-    script   => "Scripts",
+    metadata    => "Metadata",
+    download    => "Download",
+    login       => "Login",
+    script      => "Scripts",
 };
 
 # Allowed-field whitelists for registry.json schema.
@@ -52,6 +48,7 @@ sub resolve_git_raw_url {
 
     # TODO: this just needs to be tested more (maybe with a Gitlab + Gitea repo)
     my ( $host, $owner, $repo );
+    # TODO(REVIEW): audit
     if ( $url =~ m{^https?://([^/]+)/(.+)/([^/]+?)(?:\.git)?$} ) {
         ( $host, $owner, $repo ) = ( $1, $2, $3 );
     } else {
@@ -59,16 +56,11 @@ sub resolve_git_raw_url {
         return;
     }
 
-    my $epath = join( "/", map { url_escape($_) } split( m{/}, $path ) );
-    my $eref  = url_escape($ref);
-
-    if ( $provider eq "github" ) {
-        return "https://raw.githubusercontent.com/$owner/$repo/$eref/$epath";
-    } elsif ( $provider eq "gitlab" ) {
-        return "https://$host/$owner/$repo/-/raw/$eref/$epath";
-    } elsif ( $provider eq "gitea" ) {
-        return "https://$host/api/v1/repos/$owner/$repo/raw/$epath?ref=$eref";
-    }
+    my $escaped_path    = join( "/", map { url_escape($_) } split( m{/}, $path ) ); # TODO(REVIEW): audit
+    my $escaped_ref     = url_escape($ref);
+    return "https://raw.githubusercontent.com/$owner/$repo/$escaped_ref/$escaped_path"      if ( $provider eq "github" );
+    return "https://$host/$owner/$repo/-/raw/$escaped_ref/$escaped_path"                    if ( $provider eq "gitlab" );
+    return "https://$host/api/v1/repos/$owner/$repo/raw/$escaped_path?ref=$escaped_ref"     if ( $provider eq "gitea" );
 
     $logger->error("Unknown registry provider '$provider' for URL: $url");
     return;
@@ -81,18 +73,19 @@ sub resolve_cdn_artifact_url {
 
     my $logger = get_logger( "Registry", "lanraragi" );
 
+    # TODO(REVIEW): audit
     unless ( defined $base_url && $base_url =~ m{^https?://}i ) {
         $logger->error( "CDN base URL must use http or https scheme: " . ( $base_url // "" ) );
         return;
     }
 
-    ( my $base = $base_url ) =~ s{/+\z}{};
-    my $epath = join( "/", map { url_escape($_) } grep { length $_ } split( m{/}, $path ) );
-    return "$base/$epath";
+    $base_url =~ s{/+\z}{}; # strip the URL of its trailing slashes
+    my $escaped_path = join( "/", map { url_escape($_) } grep { length $_ } split( m{/}, $path ) );
+    return "$base_url/$escaped_path";
 }
 
 # Transport adapter: fetch a registry-relative resource from any registry provider.
-# Returns ( $status, $body, $error ) — $status 200 on success.
+# Returns ( $status, $body, $error ) + $status 200 on success.
 sub fetch_registry_resource {
     my ( $registry_config, $relpath, $max_size ) = @_;
 
@@ -100,7 +93,7 @@ sub fetch_registry_resource {
     my $provider    = $registry_config->{provider};
 
     if ( $provider eq "local" ) {
-        my ( undef, $file_canon, $resolve_error ) =
+        my ( $file_canon, $resolve_error ) =
             resolve_local_registry_artifact_path( $registry_config->{path}, $relpath );
         if ($resolve_error) {
             $logger->warn("Local registry resolution failed for '$relpath': $resolve_error");
@@ -320,25 +313,25 @@ sub resolve_local_registry_artifact_path {
 
     my $root_canon = abs_path($registry_root);
     unless ( $root_canon && -d $root_canon ) {
-        return ( undef, undef, "Invalid local registry path: $registry_root" );
+        return ( undef, "Invalid local registry path: $registry_root" );
     }
 
     my $candidate = Mojo::File->new($root_canon)->child( @{ Mojo::File->new($plugpath)->to_array } )->to_string;
     unless ( -e $candidate ) {
-        return ( $root_canon, undef, "Plugin file not found: $candidate" );
+        return ( undef, "Plugin file not found: $candidate" );
     }
 
     my $file_canon = abs_path($candidate);
     unless ($file_canon) {
-        return ( $root_canon, undef, "Invalid plugin artifact path: $plugpath" );
+        return ( undef, "Invalid plugin artifact path: $plugpath" );
     }
 
     my $root_prefix = $root_canon =~ m{/\z} ? $root_canon : "$root_canon/";
     unless ( index( $file_canon, $root_prefix ) == 0 ) {
-        return ( $root_canon, undef, "Invalid plugin artifact path: $plugpath" );
+        return ( undef, "Invalid plugin artifact path: $plugpath" );
     }
 
-    return ( $root_canon, $file_canon, undef );
+    return ( $file_canon, undef );
 }
 
 # Check timestamp is (stylistically) of the form "9999-99-99T99:99:99Z".

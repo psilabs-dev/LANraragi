@@ -109,7 +109,7 @@ sub uninstall_plugin {
         $namespace,
         sub {
             my $redis = $self->LRR_CONF->get_redis_config;
-            my ( $status, $success, $message ) = LANraragi::Model::Plugins::uninstall_plugin(
+            my ( $status, $message ) = LANraragi::Model::Plugins::uninstall_plugin(
                 $namespace, $redis
             );
             $redis->quit();
