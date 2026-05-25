@@ -632,7 +632,10 @@ paths:
                 path:
                   type: string
                   minLength: 1
-                  description: Local filesystem path. Required when provider is 'local'.
+                  pattern: '^(/|[A-Za-z]:[\\/]|\\\\)'
+                  description: |
+                    Local filesystem path. Required when provider is 'local'.
+                    Must be an absolute path.
               allOf:
                 - if:
                     required:
@@ -927,6 +930,7 @@ paths:
                 path:
                   type: string
                   minLength: 1
+                  pattern: '^(/|[A-Za-z]:[\\/]|\\\\)'
               allOf:
                 - if:
                     required:
@@ -5137,7 +5141,8 @@ components:
         path:
           type: string
           minLength: 1
-          description: Local filesystem path to the registry. Present when provider is 'local'.
+          pattern: '^(/|[A-Za-z]:[\\/]|\\\\)'
+          description: Local filesystem path to the registry. Present when provider is 'local'. Always absolute.
       allOf:
         - if:
             required:
