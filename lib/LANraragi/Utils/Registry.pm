@@ -99,20 +99,14 @@ sub fetch_registry_resource {
             $logger->warn("Local registry resolution failed for '$relpath': $resolve_error");
             return ( 400, undef, $resolve_error );
         }
-        unless ( -f $file_canon ) {
-            return ( 400, undef, "Resource is not a regular file: $file_canon" );
-        }
+        return ( 400, undef, "Resource is not a regular file: $file_canon" )                        unless ( -f $file_canon );
         my $filesize = -s $file_canon;
-        if ( $filesize == 0 ) {
-            return ( 400, undef, "Resource is empty: $file_canon" );
-        }
-        if ( defined $max_size && $filesize > $max_size ) {
-            return ( 400, undef, "Resource too large: $file_canon ($filesize bytes, max $max_size)" );
-        }
+
+        return ( 400, undef, "Resource is empty: $file_canon" )                                     if ( $filesize == 0 );
+        return ( 400, undef, "Resource too large: $file_canon ($filesize bytes, max $max_size)" )   if ( defined $max_size && $filesize > $max_size );
+
         my $content = eval { Mojo::File->new($file_canon)->slurp };
-        unless ( defined $content ) {
-            return ( 500, undef, "Cannot read resource: $@" );
-        }
+        return ( 500, undef, "Cannot read resource: $@" )                                           unless ( defined $content );
         return ( 200, $content, undef );
     }
 
@@ -121,39 +115,27 @@ sub fetch_registry_resource {
             $provider, $registry_config->{url},
             $registry_config->{ref}, $relpath
         );
-        unless ($url) {
-            return ( 400, undef, "Cannot resolve git URL for $relpath" );
-        }
+        return ( 400, undef, "Cannot resolve git URL for $relpath" )                                unless ($url);
 
         $logger->info("Fetching registry resource from $url");
         my $ua = Mojo::UserAgent->new;
         $ua->max_response_size($max_size) if defined $max_size;
         my $res = eval { $ua->get($url)->result };
-        unless ( defined $res ) {
-            return ( 502, undef, "Cannot reach registry: $@" );
-        }
-        unless ( $res->is_success ) {
-            return ( 502, undef, "Failed to fetch resource: HTTP " . $res->code );
-        }
+        return ( 502, undef, "Cannot reach registry: $@" )                                          unless ( defined $res );
+        return ( 502, undef, "Failed to fetch resource: HTTP " . $res->code )                       unless ( $res->is_success );
         return ( 200, $res->body, undef );
     }
 
     if ( $provider eq "cdn" ) {
         my $url = resolve_cdn_artifact_url( $registry_config->{url}, $relpath );
-        unless ($url) {
-            return ( 400, undef, "Cannot resolve CDN URL for $relpath" );
-        }
+        return ( 400, undef, "Cannot resolve CDN URL for $relpath" )                                unless ($url);
 
         $logger->info("Fetching registry resource from $url");
         my $ua = Mojo::UserAgent->new;
         $ua->max_response_size($max_size) if defined $max_size;
         my $res = eval { $ua->get($url)->result };
-        unless ( defined $res ) {
-            return ( 502, undef, "Cannot reach registry: $@" );
-        }
-        unless ( $res->is_success ) {
-            return ( 502, undef, "Failed to fetch resource: HTTP " . $res->code );
-        }
+        return ( 502, undef, "Cannot reach registry: $@" )                                          unless ( defined $res );
+        return ( 502, undef, "Failed to fetch resource: HTTP " . $res->code )                       unless ( $res->is_success );
         return ( 200, $res->body, undef );
     }
 
@@ -190,99 +172,66 @@ sub find_namespace_conflict {
 
 # strictly check registry index satisfies a bunch of registry spec-related conditions...
 sub validate_registry_index {
-    my ($index) = @_;
+    my ( $index ) = @_;
 
-    unless ( ref $index eq "HASH" ) {
-        return "Invalid registry.json: root must be an object.";
-    }
+    return "Invalid registry.json: root must be an object."                                         unless ( ref $index eq "HASH" );
 
     my %allowed_root = map { $_ => 1 } @ALLOWED_ROOT_FIELDS;
     foreach my $field ( keys %{$index} ) {
-        unless ( $allowed_root{$field} ) {
-            return "Invalid registry.json: unknown root field '$field'.";
-        }
+        return "Invalid registry.json: unknown root field '$field'."                                unless ( $allowed_root{$field} );
     }
 
-    unless ( defined $index->{version} && $index->{version} == 1 ) {
-        return "Invalid registry.json: registry version must be 1.";
-    }
-    unless ( defined $index->{generated_at} && $index->{generated_at} ne "" ) {
-        return "Invalid registry.json: 'generated_at' is required.";
-    }
-    unless ( is_valid_registry_timestamp( $index->{generated_at} ) ) {
-        return "Invalid registry.json: 'generated_at' must be a UTC RFC3339 timestamp.";
-    }
-    unless ( ref $index->{plugins} eq "HASH" ) {
-        return "Invalid registry.json: 'plugins' must be an object.";
-    }
+    return "Invalid registry.json: registry version must be 1."                                     unless ( defined $index->{version} && $index->{version} == 1 );
+    return "Invalid registry.json: 'generated_at' is required."                                     unless ( defined $index->{generated_at} && $index->{generated_at} ne "" );
+    return "Invalid registry.json: 'generated_at' must be a UTC RFC3339 timestamp."                 unless ( is_valid_registry_timestamp( $index->{generated_at} ) );
+    return "Invalid registry.json: 'plugins' must be an object."                                    unless ( ref $index->{plugins} eq "HASH" );
 
     foreach my $namespace ( sort keys %{ $index->{plugins} } ) {
         my $plugin = $index->{plugins}{$namespace};
-        unless ( ref $plugin eq "HASH" ) {
-            return "Invalid registry.json: plugin '$namespace' must be an object.";
-        }
+        return "Invalid registry.json: plugin '$namespace' must be an object."                      unless ( ref $plugin eq "HASH" );
 
         my %allowed_plugin = map { $_ => 1 } @ALLOWED_PLUGIN_FIELDS;
         foreach my $field ( keys %{$plugin} ) {
-            unless ( $allowed_plugin{$field} ) {
-                return "Invalid registry.json: plugin '$namespace' has unknown field '$field'.";
-            }
+            return "Invalid registry.json: plugin '$namespace' has unknown field '$field'."         unless ( $allowed_plugin{$field} );
         }
 
-        unless ( defined $plugin->{namespace} && $plugin->{namespace} eq $namespace ) {
-            return "Invalid registry.json: plugin key '$namespace' must match inner namespace.";
-        }
-        unless ( $namespace =~ /\A[a-z0-9_-]+\z/ ) {
-            return "Invalid registry.json: plugin namespace '$namespace' must match ^[a-z0-9_-]+\$ (lowercase only).";
-        }
-        unless ( defined $plugin->{type} && MANAGED_TYPE_DIRS->{ $plugin->{type} } ) {
-            return "Invalid registry.json: plugin '$namespace' has invalid type '$plugin->{type}'.";
-        }
-        unless ( ref $plugin->{versions} eq "HASH" && keys %{ $plugin->{versions} } ) {
-            return "Invalid registry.json: plugin '$namespace' 'versions' must be a non-empty object.";
-        }
+        return "Invalid registry.json: plugin key '$namespace' must match inner namespace."         unless ( defined $plugin->{namespace} && $plugin->{namespace} eq $namespace );
+        return "Invalid registry.json: plugin namespace '$namespace'" . 
+            "must match ^[a-z0-9_-]+\$ (lowercase only).";                                          unless ( $namespace =~ /\A[a-z0-9_-]+\z/ )
+        return "Invalid registry.json: plugin '$namespace' has invalid type '$plugin->{type}'.";    unless ( defined $plugin->{type} && MANAGED_TYPE_DIRS->{ $plugin->{type} } )
+        return "Invalid registry.json: plugin '$namespace' 'versions' must be a non-empty object."  unless ( ref $plugin->{versions} eq "HASH" && keys %{ $plugin->{versions} } );
 
         foreach my $version_key ( sort keys %{ $plugin->{versions} } ) {
-            # SemVer 2.0.0 forbids a leading "v" prefix. The SemVer module accepts it; reject explicitly.
-            if ( $version_key =~ /^v/i ) {
-                return "Invalid registry.json: plugin '$namespace' version key '$version_key' is not a valid SemVer 2.0.0 string.";
-            }
+
+            # Explicitly enforce SemVer 2.0.0 syntax.
+            return "Invalid registry.json: plugin '$namespace'" .
+                "version key '$version_key' is not a valid SemVer 2.0.0 string."                    if ( $version_key =~ /^v/i );
             my $semver_ok = eval { SemVer->new($version_key); 1 };
-            unless ($semver_ok) {
-                return "Invalid registry.json: plugin '$namespace' version key '$version_key' is not a valid SemVer 2.0.0 string.";
-            }
+            return "Invalid registry.json: plugin '$namespace'" .
+                "version key '$version_key' is not a valid SemVer 2.0.0 string."                    unless ($semver_ok);
             my $version = $plugin->{versions}{$version_key};
-            unless ( ref $version eq "HASH" ) {
-                return "Invalid registry.json: plugin '$namespace' version '$version_key' must be an object.";
-            }
+            return "Invalid registry.json: plugin '$namespace'" .
+                "version '$version_key' must be an object."                                         unless ( ref $version eq "HASH" );
 
             my %allowed_version = map { $_ => 1 } @ALLOWED_VERSION_FIELDS;
             foreach my $field ( keys %{$version} ) {
-                unless ( $allowed_version{$field} ) {
-                    return "Invalid registry.json: plugin '$namespace' version '$version_key' has unknown field '$field'.";
-                }
+                return "Invalid registry.json: plugin '$namespace'" .
+                    "version '$version_key' has unknown field '$field'."                            unless ( $allowed_version{$field} );
             }
 
-            unless ( defined $version->{version} && $version->{version} eq $version_key ) {
-                return "Invalid registry.json: plugin '$namespace' version key '$version_key' must match inner version.";
-            }
+            return "Invalid registry.json: plugin '$namespace'" .
+                "version key '$version_key' must match inner version."                              unless ( defined $version->{version} && $version->{version} eq $version_key );
             foreach my $required (@REQUIRED_VERSION_FIELDS) {
-                unless ( defined $version->{$required} && $version->{$required} ne "" ) {
-                    return "Invalid registry.json: plugin '$namespace' version '$version_key' is missing '$required'.";
-                }
+                return "Invalid registry.json: plugin '$namespace'" .
+                    "version '$version_key' is missing '$required'."                                unless ( defined $version->{$required} && $version->{$required} ne "" );
             }
 
             my ( $artifact_valid, $artifact_error ) = validate_registry_artifact_path( $version->{artifact} );
-            unless ($artifact_valid) {
-                return $artifact_error;
-            }
-
-            unless ( $version->{sha256} =~ /\A[a-f0-9]{64}\z/ ) {
-                return "Invalid registry.json: plugin '$namespace' version '$version_key' sha256 must be 64 lowercase hexadecimal characters.";
-            }
-            unless ( is_valid_registry_timestamp( $version->{published_at} ) ) {
-                return "Invalid registry.json: plugin '$namespace' version '$version_key' published_at must be a UTC RFC3339 timestamp.";
-            }
+            return $artifact_error                                                                  unless ($artifact_valid);
+            return "Invalid registry.json: plugin '$namespace'" .
+                "version '$version_key' sha256 must be 64 lowercase hexadecimal characters."        unless ( $version->{sha256} =~ /\A[a-f0-9]{64}\z/ );
+            return "Invalid registry.json: plugin '$namespace'" .
+                "version '$version_key' published_at must be a UTC RFC3339 timestamp."              unless ( is_valid_registry_timestamp( $version->{published_at} ) );
         }
     }
 
@@ -292,18 +241,11 @@ sub validate_registry_index {
 sub validate_registry_artifact_path {
     my ($plugpath) = @_;
 
-    unless ( defined $plugpath && $plugpath ne "" ) {
-        return ( undef, "Invalid registry.json: version artifact is required." );
-    }
-    if ( index( $plugpath, "\0" ) >= 0 ) {
-        return ( undef, "Invalid registry.json: artifact path contains a null byte." );
-    }
-    if ( Mojo::File->new($plugpath)->is_abs ) {
-        return ( undef, "Invalid registry.json: artifact path must be relative." );
-    }
-    if ( grep { $_ eq "." || $_ eq ".." } @{ Mojo::File->new($plugpath)->to_array } ) {
-        return ( undef, "Invalid registry.json: artifact path must not contain '.' or '..' segments." );
-    }
+    return ( undef, "Invalid registry.json: version artifact is required." )            unless ( defined $plugpath && $plugpath ne "" );
+    return ( undef, "Invalid registry.json: artifact path contains a null byte." )      if ( index( $plugpath, "\0" ) >= 0 );
+    return ( undef, "Invalid registry.json: artifact path must be relative." )          if ( Mojo::File->new($plugpath)->is_abs );
+    return ( undef, "Invalid registry.json: artifact path" .
+        "must not contain '.' or '..' segments." )                                      if ( grep { $_ eq "." || $_ eq ".." } @{ Mojo::File->new($plugpath)->to_array } );
 
     return ( 1, undef );
 }
@@ -311,25 +253,20 @@ sub validate_registry_artifact_path {
 sub resolve_local_registry_artifact_path {
     my ( $registry_root, $plugpath ) = @_;
 
+    # TODO(REVIEW): root_canon and file_canon are simply bad names.
+    # TODO(REVIEW): why do we need registry_root abs_path-ed?
     my $root_canon = abs_path($registry_root);
-    unless ( $root_canon && -d $root_canon ) {
-        return ( undef, "Invalid local registry path: $registry_root" );
-    }
+    return ( undef, "Invalid local registry path: $registry_root" )                     unless ( $root_canon && -d $root_canon );
 
     my $candidate = Mojo::File->new($root_canon)->child( @{ Mojo::File->new($plugpath)->to_array } )->to_string;
-    unless ( -e $candidate ) {
-        return ( undef, "Plugin file not found: $candidate" );
-    }
+    return ( undef, "Plugin file not found: $candidate" )                               unless ( -e $candidate );
 
     my $file_canon = abs_path($candidate);
-    unless ($file_canon) {
-        return ( undef, "Invalid plugin artifact path: $plugpath" );
-    }
+    return ( undef, "Invalid plugin artifact path: $plugpath" )                         unless ( $file_canon );
 
+    # TODO(REVIEW): same error message.
     my $root_prefix = $root_canon =~ m{/\z} ? $root_canon : "$root_canon/";
-    unless ( index( $file_canon, $root_prefix ) == 0 ) {
-        return ( undef, "Invalid plugin artifact path: $plugpath" );
-    }
+    return ( undef, "Invalid plugin artifact path: $plugpath" )                         unless ( index( $file_canon, $root_prefix ) == 0 );
 
     return ( $file_canon, undef );
 }
