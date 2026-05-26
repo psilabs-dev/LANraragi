@@ -433,7 +433,7 @@ SKIP: {
         my ( $file_canon, $err ) =
             LANraragi::Utils::Registry::resolve_local_registry_artifact_path( $root, "Escape.pm" );
         is( $file_canon, undef, "symlink escaping root (file_canon undef)" );
-        is( $err, "Invalid plugin artifact path: Escape.pm", "symlink escaping root (error)" );
+        is( $err, "Plugin artifact path escapes registry root: Escape.pm", "symlink escaping root (error)" );
     }
 
     {

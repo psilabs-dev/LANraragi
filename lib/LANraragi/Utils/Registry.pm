@@ -250,25 +250,24 @@ sub validate_registry_artifact_path {
     return ( 1, undef );
 }
 
+# Resolve local registry root (the directory), including through any symlinks.
+# abs_path is used for symlink canonicalization.
 sub resolve_local_registry_artifact_path {
     my ( $registry_root, $plugpath ) = @_;
 
-    # TODO(REVIEW): root_canon and file_canon are simply bad names.
-    # TODO(REVIEW): why do we need registry_root abs_path-ed?
-    my $root_canon = abs_path($registry_root);
-    return ( undef, "Invalid local registry path: $registry_root" )                     unless ( $root_canon && -d $root_canon );
+    my $resolved_registry_root = abs_path($registry_root);
+    return ( undef, "Invalid local registry path: $registry_root" )                     unless ( $resolved_registry_root && -d $resolved_registry_root );
 
-    my $candidate = Mojo::File->new($root_canon)->child( @{ Mojo::File->new($plugpath)->to_array } )->to_string;
+    my $candidate = Mojo::File->new($resolved_registry_root)->child( @{ Mojo::File->new($plugpath)->to_array } )->to_string;
     return ( undef, "Plugin file not found: $candidate" )                               unless ( -e $candidate );
 
-    my $file_canon = abs_path($candidate);
-    return ( undef, "Invalid plugin artifact path: $plugpath" )                         unless ( $file_canon );
+    my $resolved_artifact = abs_path($candidate);
+    return ( undef, "Failed to resolve plugin artifact path: $plugpath" )               unless ( $resolved_artifact );
 
-    # TODO(REVIEW): same error message.
-    my $root_prefix = $root_canon =~ m{/\z} ? $root_canon : "$root_canon/";
-    return ( undef, "Invalid plugin artifact path: $plugpath" )                         unless ( index( $file_canon, $root_prefix ) == 0 );
+    my $root_prefix = $resolved_registry_root =~ m{/\z} ? $resolved_registry_root : "$resolved_registry_root/";
+    return ( undef, "Plugin artifact path escapes registry root: $plugpath" )           unless ( index( $resolved_artifact, $root_prefix ) == 0 );
 
-    return ( $file_canon, undef );
+    return ( $resolved_artifact, undef );
 }
 
 # Check timestamp is (stylistically) of the form "9999-99-99T99:99:99Z".
