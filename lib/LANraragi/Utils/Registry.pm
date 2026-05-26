@@ -196,42 +196,42 @@ sub validate_registry_index {
         }
 
         return "Invalid registry.json: plugin key '$namespace' must match inner namespace."         unless ( defined $plugin->{namespace} && $plugin->{namespace} eq $namespace );
-        return "Invalid registry.json: plugin namespace '$namespace'" . 
-            "must match ^[a-z0-9_-]+\$ (lowercase only).";                                          unless ( $namespace =~ /\A[a-z0-9_-]+\z/ )
-        return "Invalid registry.json: plugin '$namespace' has invalid type '$plugin->{type}'.";    unless ( defined $plugin->{type} && MANAGED_TYPE_DIRS->{ $plugin->{type} } )
+        return "Invalid registry.json: plugin namespace '$namespace'" .
+            " must match ^[a-z0-9_-]+\$ (lowercase only)."                                          unless ( $namespace =~ /\A[a-z0-9_-]+\z/ );
+        return "Invalid registry.json: plugin '$namespace' has invalid type '$plugin->{type}'."     unless ( defined $plugin->{type} && MANAGED_TYPE_DIRS->{ $plugin->{type} } );
         return "Invalid registry.json: plugin '$namespace' 'versions' must be a non-empty object."  unless ( ref $plugin->{versions} eq "HASH" && keys %{ $plugin->{versions} } );
 
         foreach my $version_key ( sort keys %{ $plugin->{versions} } ) {
 
             # Explicitly enforce SemVer 2.0.0 syntax.
             return "Invalid registry.json: plugin '$namespace'" .
-                "version key '$version_key' is not a valid SemVer 2.0.0 string."                    if ( $version_key =~ /^v/i );
+                " version key '$version_key' is not a valid SemVer 2.0.0 string."                   if ( $version_key =~ /^v/i );
             my $semver_ok = eval { SemVer->new($version_key); 1 };
             return "Invalid registry.json: plugin '$namespace'" .
-                "version key '$version_key' is not a valid SemVer 2.0.0 string."                    unless ($semver_ok);
+                " version key '$version_key' is not a valid SemVer 2.0.0 string."                   unless ($semver_ok);
             my $version = $plugin->{versions}{$version_key};
             return "Invalid registry.json: plugin '$namespace'" .
-                "version '$version_key' must be an object."                                         unless ( ref $version eq "HASH" );
+                " version '$version_key' must be an object."                                        unless ( ref $version eq "HASH" );
 
             my %allowed_version = map { $_ => 1 } @ALLOWED_VERSION_FIELDS;
             foreach my $field ( keys %{$version} ) {
                 return "Invalid registry.json: plugin '$namespace'" .
-                    "version '$version_key' has unknown field '$field'."                            unless ( $allowed_version{$field} );
+                    " version '$version_key' has unknown field '$field'."                           unless ( $allowed_version{$field} );
             }
 
             return "Invalid registry.json: plugin '$namespace'" .
-                "version key '$version_key' must match inner version."                              unless ( defined $version->{version} && $version->{version} eq $version_key );
+                " version key '$version_key' must match inner version."                             unless ( defined $version->{version} && $version->{version} eq $version_key );
             foreach my $required (@REQUIRED_VERSION_FIELDS) {
                 return "Invalid registry.json: plugin '$namespace'" .
-                    "version '$version_key' is missing '$required'."                                unless ( defined $version->{$required} && $version->{$required} ne "" );
+                    " version '$version_key' is missing '$required'."                               unless ( defined $version->{$required} && $version->{$required} ne "" );
             }
 
             my ( $artifact_valid, $artifact_error ) = validate_registry_artifact_path( $version->{artifact} );
             return $artifact_error                                                                  unless ($artifact_valid);
             return "Invalid registry.json: plugin '$namespace'" .
-                "version '$version_key' sha256 must be 64 lowercase hexadecimal characters."        unless ( $version->{sha256} =~ /\A[a-f0-9]{64}\z/ );
+                " version '$version_key' sha256 must be 64 lowercase hexadecimal characters."       unless ( $version->{sha256} =~ /\A[a-f0-9]{64}\z/ );
             return "Invalid registry.json: plugin '$namespace'" .
-                "version '$version_key' published_at must be a UTC RFC3339 timestamp."              unless ( is_valid_registry_timestamp( $version->{published_at} ) );
+                " version '$version_key' published_at must be a UTC RFC3339 timestamp."             unless ( is_valid_registry_timestamp( $version->{published_at} ) );
         }
     }
 
@@ -245,7 +245,7 @@ sub validate_registry_artifact_path {
     return ( undef, "Invalid registry.json: artifact path contains a null byte." )      if ( index( $plugpath, "\0" ) >= 0 );
     return ( undef, "Invalid registry.json: artifact path must be relative." )          if ( Mojo::File->new($plugpath)->is_abs );
     return ( undef, "Invalid registry.json: artifact path" .
-        "must not contain '.' or '..' segments." )                                      if ( grep { $_ eq "." || $_ eq ".." } @{ Mojo::File->new($plugpath)->to_array } );
+        " must not contain '.' or '..' segments." )                                     if ( grep { $_ eq "." || $_ eq ".." } @{ Mojo::File->new($plugpath)->to_array } );
 
     return ( 1, undef );
 }
