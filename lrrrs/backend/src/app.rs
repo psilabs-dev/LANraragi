@@ -1,0 +1,106 @@
+use axum::Router;
+use axum::http::{HeaderName, Method, header};
+use axum::middleware;
+use tower_http::cors::{Any, CorsLayer};
+
+use crate::{auth, controller, state::AppState};
+
+pub fn build_app(app_state: AppState) -> Router {
+    // Match Perl's `Controller/Login.pm::setup_cors`: literal `Allow-Origin: *`,
+    // fixed method list, `Authorization` allowed. No credentials flag — `*`
+    // and `allow_credentials(true)` are mutually exclusive per CORS spec,
+    // which is why `tower-http::CorsLayer::very_permissive()` (which sets
+    // credentials) would not produce `*`.
+    let cors = if app_state.lrr_config.enablecors {
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+            .allow_headers([header::AUTHORIZATION, HeaderName::from_static("x-csrf-token")])
+    } else {
+        CorsLayer::new()
+    };
+
+    let api = Router::new()
+        .route("/opds", axum::routing::get(controller::opds::get_opds_catalog))
+        .route("/opds/{id}", axum::routing::get(controller::opds::get_opds_item))
+        .route("/opds/{id}/pse", axum::routing::get(controller::opds::get_opds_page))
+        .route("/info", axum::routing::get(controller::misc::get_server_info))
+        .route("/plugins/{type}", axum::routing::get(controller::plugins::list_plugins))
+        .route("/plugins/use", axum::routing::post(controller::plugins::use_plugin_sync))
+        .route("/plugins/queue", axum::routing::post(controller::plugins::use_plugin_async))
+        .route("/tempfolder", axum::routing::delete(controller::misc::clean_tempfolder))
+        .route("/download_url", axum::routing::post(controller::misc::download_url))
+        .route("/regen_thumbs", axum::routing::post(controller::misc::regen_thumbnails))
+        .route("/archives", axum::routing::get(controller::archive::get_all_archives))
+        .route("/archives/untagged", axum::routing::get(controller::archive::get_untagged_archives))
+        .route("/archives/upload", axum::routing::put(controller::archive::upload_archive))
+        .route("/archives/{id}", axum::routing::get(controller::archive::get_archive))
+        .route("/archives/{id}", axum::routing::delete(controller::archive::delete_archive))
+        .route("/archives/{id}/metadata", axum::routing::get(controller::archive::get_archive_metadata))
+        .route("/archives/{id}/metadata", axum::routing::put(controller::archive::update_archive_metadata))
+        .route("/archives/{id}/thumbnail", axum::routing::get(controller::archive::get_archive_thumbnail))
+        .route("/archives/{id}/thumbnail", axum::routing::put(controller::archive::update_archive_thumbnail))
+        .route("/archives/{id}/categories", axum::routing::get(controller::archive::get_archive_categories))
+        .route("/archives/{id}/tankoubons", axum::routing::get(controller::archive::get_archive_tankoubons))
+        .route("/archives/{id}/toc", axum::routing::put(controller::archive::add_archive_toc))
+        .route("/archives/{id}/toc", axum::routing::delete(controller::archive::delete_archive_toc))
+        .route("/archives/{id}/download", axum::routing::get(controller::archive::download_archive))
+        .route("/archives/{id}/files", axum::routing::get(controller::archive::get_files))
+        .route("/archives/{id}/files/thumbnails", axum::routing::post(controller::archive::queue_archive_page_thumbnail_extraction))
+        .route("/archives/{id}/page", axum::routing::get(controller::archive::get_page))
+        .route("/archives/{id}/progress/{page}", axum::routing::put(controller::archive::update_archive_progress))
+        .route("/archives/{id}/isnew", axum::routing::put(controller::archive::set_new_archive_flag))
+        .route("/archives/{id}/isnew", axum::routing::delete(controller::archive::clear_new_archive_flag))
+        .route("/archives/{id}/stamps", axum::routing::get(controller::stamps::stamped_pages))
+        .route("/archives/{id}/stamps/{index}", axum::routing::get(controller::stamps::stamps_by_page))
+        .route("/archives/{id}/stamps/{index}", axum::routing::put(controller::stamps::add_stamp))
+        .route("/search", axum::routing::get(controller::search::search_archives))
+        .route("/search/random", axum::routing::get(controller::search::search_random_archives))
+        .route("/search/cache", axum::routing::delete(controller::search::discard_search_cache))
+        .route("/database/stats", axum::routing::get(controller::database::get_statistics))
+        .route("/database/backup", axum::routing::get(controller::database::get_backup_json))
+        .route("/database/backup", axum::routing::post(controller::database::queue_backup_job))
+        .route("/database/backup/{jobid}", axum::routing::get(controller::database::download_backup))
+        .route("/database/restore", axum::routing::post(controller::database::queue_restore_job))
+        .route("/database/isnew", axum::routing::delete(controller::database::clear_new_all))
+        .route("/database/drop", axum::routing::post(controller::database::drop_database))
+        .route("/database/clean", axum::routing::post(controller::database::clean_database))
+        .route("/shinobu", axum::routing::get(controller::shinobu::shinobu_status))
+        .route("/shinobu/stop", axum::routing::post(controller::shinobu::shinobu_stop))
+        .route("/shinobu/restart", axum::routing::post(controller::shinobu::shinobu_restart))
+        .route("/shinobu/rescan", axum::routing::post(controller::shinobu::shinobu_rescan))
+        .route("/minion/{jobid}", axum::routing::get(controller::minion::minion_job_status))
+        .route("/minion/{jobid}/detail", axum::routing::get(controller::minion::minion_job_detail))
+        .route("/minion/{jobname}/queue", axum::routing::post(controller::minion::queue_minion_job))
+        .route("/categories", axum::routing::get(controller::category::get_category_list))
+        .route("/categories", axum::routing::put(controller::category::create_category))
+        .route("/categories/bookmark_link", axum::routing::get(controller::category::get_bookmark_link))
+        .route("/categories/bookmark_link", axum::routing::delete(controller::category::remove_bookmark_link))
+        .route("/categories/bookmark_link/{id}", axum::routing::put(controller::category::update_bookmark_link))
+        .route("/categories/{id}", axum::routing::get(controller::category::get_category))
+        .route("/categories/{id}", axum::routing::put(controller::category::update_category))
+        .route("/categories/{id}", axum::routing::delete(controller::category::delete_category))
+        .route("/categories/{id}/{archive}", axum::routing::put(controller::category::add_to_category))
+        .route("/categories/{id}/{archive}", axum::routing::delete(controller::category::remove_from_category))
+        .route("/tankoubons", axum::routing::get(controller::tankoubon::get_tankoubon_list))
+        .route("/tankoubons", axum::routing::put(controller::tankoubon::create_tankoubon))
+        .route("/tankoubons/{id}", axum::routing::get(controller::tankoubon::get_tankoubon))
+        .route("/tankoubons/{id}", axum::routing::put(controller::tankoubon::update_tankoubon))
+        .route("/tankoubons/{id}", axum::routing::delete(controller::tankoubon::delete_tankoubon))
+        .route("/tankoubons/{id}/thumbnail", axum::routing::get(controller::tankoubon::get_tankoubon_thumbnail))
+        .route("/tankoubons/{id}/thumbnail", axum::routing::put(controller::tankoubon::update_tankoubon_thumbnail))
+        .route("/tankoubons/{id}/progress/{page}", axum::routing::put(controller::tankoubon::update_tankoubon_progress))
+        .route("/tankoubons/{id}/{archive}", axum::routing::put(controller::tankoubon::add_to_tankoubon))
+        .route("/tankoubons/{id}/{archive}", axum::routing::delete(controller::tankoubon::remove_from_tankoubon))
+        .route("/stamps/{id}", axum::routing::get(controller::stamps::get_stamp))
+        .route("/stamps/{id}", axum::routing::put(controller::stamps::update_stamp))
+        .route("/stamps/{id}", axum::routing::delete(controller::stamps::delete_stamp))
+        .layer(middleware::from_fn_with_state(app_state.clone(), auth::middleware::layer));
+
+    Router::new()
+        .route("/", axum::routing::get(controller::misc::root))
+        .route("/api/rs/health", axum::routing::get(controller::misc::health))
+        .nest("/api", api)
+        .layer(cors)
+        .with_state(app_state)
+}

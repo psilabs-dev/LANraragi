@@ -1,0 +1,46 @@
+[package]
+name = "lrrrs-backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+argon2 = { version = "0.5", features = ["std"] }
+axum = { version = "0.8.6", features = ["multipart"] }
+base64 = "0.22"
+hex = "0.4"
+num_cpus = "1"
+percent-encoding = "2"
+rayon = "1.10"
+regress = "0.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha1 = "0.10"
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "macros", "migrate"] }
+tokio = { version = "1.48.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal"] }
+tower-http = { version = "0.6", features = ["cors"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[build-dependencies]
+openapiv3 = "2"
+prettyplease = "0.2"
+progenitor = "0.14"
+serde_yaml = "0.9"
+syn = { version = "2.0", features = ["full"] }
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Pedantic lints suppressed where they produce noise without safety or readability benefit.
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"

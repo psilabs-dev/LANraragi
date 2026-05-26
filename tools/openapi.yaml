@@ -1,4 +1,4 @@
-openapi: 3.1.0
+openapi: 3.0.3
 info:
   version: 0.9.6
   title: LANraragi API
@@ -478,7 +478,8 @@ paths:
                       - 0
                       - 1
                   error:
-                    type: [string, "null"]
+                    type: string
+                    nullable: true
                   data:
                     type: object
                     description: Arbitrary data returned by the Plugin.
@@ -581,7 +582,8 @@ paths:
                       - 0
                       - 1
                   error:
-                    type: [string, "null"]
+                    type: string
+                    nullable: true
                     description: Error message if something went wrong during cleanup. (The call will still return 200)
                   newsize:
                     type: integer
@@ -651,7 +653,8 @@ paths:
                     type: string
                     description: URL queued for download
                   category:
-                    type: [string, "null"]
+                    type: string
+                    nullable: true
                   success:
                     type: integer
                     enum:
@@ -2302,7 +2305,8 @@ paths:
                       - text
                   properties:
                     namespace:
-                      type: [string, "null"]
+                      type: string
+                      nullable: true
                       description: Namespace of the tag
                     text:
                       type: string
@@ -2755,10 +2759,12 @@ paths:
                       - finished
                       - failed
                   notes:
-                    type: [object, "null"]
+                    type: object
+                    nullable: true
                     description: Arbitrary data attached to the Job.
                   error:
-                    type: [string, "null"]
+                    type: string
+                    nullable: true
                 example:
                   state: finished
                   task: handle_upload
@@ -3948,6 +3954,23 @@ components:
     ServerInfo:
       type: object
       description: Server info payload emitted by /api/info. Older server versions used integers instead of booleans here.
+      required:
+        - name
+        - motd
+        - version
+        - version_name
+        - version_desc
+        - has_password
+        - debug_mode
+        - nofun_mode
+        - archives_per_page
+        - server_resizes_images
+        - server_tracks_progress
+        - authenticated_progress
+        - total_pages_read
+        - total_archives
+        - cache_last_cleared
+        - excluded_namespaces
       properties:
         name:
           type: string
@@ -4053,13 +4076,16 @@ components:
           type: string
           description: Version of the plugin
         oneshot_arg:
-          type: [string, "null"]
+          type: string
+          nullable: true
           description: Description of the manual one-shot argument users can fill in for manual plugin calls
         url_regex:
-          type: [string, "null"]
+          type: string
+          nullable: true
           description: For downloader plugins, regex where it should be used
         login_from:
-          type: [string, "null"]
+          type: string
+          nullable: true
           description: Namespace of the login plugin this plugin depends on
       example:
         author: Difegue
@@ -4082,7 +4108,8 @@ components:
       description: Parameter for a LRR Plugin.
       properties:
         name:
-          type: [string, "null"]
+          type: string
+          nullable: true
           description: Name of the parameter
         desc:
           type: string
@@ -4095,7 +4122,8 @@ components:
               - int
               - string
         default_value:
-          type: [string, "null"]
+          type: string
+          nullable: true
           description: Default value of the parameter
       example:
         default_value: 0
@@ -4160,14 +4188,8 @@ components:
       properties:
         arcid:
           type: string
-          description: Unique identifier for the archive (40-char SHA1) or tankoubon (15-char TANK_* ID)
-          oneOf:
-            - minLength: 40
-              maxLength: 40
-              pattern: "^[0-9a-f]{40}$"
-            - minLength: 15
-              maxLength: 15
-              pattern: "^TANK_[0-9]{10}$"
+          description: Unique identifier for the archive (40-char SHA1) or tankoubon (15-char TANK_* ID).
+          pattern: "^([0-9a-f]{40}|TANK_[0-9]{10})$"
         title:
           type: string
           description: Title of the archive
@@ -4178,14 +4200,15 @@ components:
           type: string
           description: Comma-separated list of tags associated with the archive
         summary:
-          type: [string, "null"]
+          type: string
+          nullable: true
           description: Summary description of the archive
         isnew:
-          oneOf:
-            - type: boolean
-            - type: string
-            - type: "null"
-          description: Whether the archive is newly added.
+          type: string
+          enum:
+            - "true"
+            - "false"
+          description: Whether the archive is newly added. LRR emits "true"/"false" strings; older versions emitted booleans, but the current contract is string-only.
         extension:
           type: string
           description: File extension of the archive
@@ -4246,13 +4269,16 @@ components:
           type: string
           description: Name of the category
         pinned:
-          type: [integer, string]
+          oneOf:
+            - type: integer
+            - type: string
           description: Whether this category should be pinned in the UI
           enum:
             - 0
             - 1
         search:
-          type: [string, "null"]
+          type: string
+          nullable: true
           description: Category search filter (if this is a dynamic category, empty otherwise)
       example:
         id: SET_1613080290
@@ -4309,10 +4335,12 @@ components:
           type: string
           description: Comma-separated list of tags associated with the archive
         summary:
-          type: [string, "null"]
+          type: string
+          nullable: true
           description: Summary description of the archive
         thumbhash:
-          type: [string, "null"]
+          type: string
+          nullable: true
           minLength: 40
           maxLength: 40
           description: Thumbnail hash, or null if not set

@@ -1,0 +1,1 @@
+//! Tankoubon business logic.

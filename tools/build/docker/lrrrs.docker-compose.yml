@@ -1,0 +1,39 @@
+services:
+  lrrrs-db:
+    image: postgres:17-bookworm
+    container_name: lrrrs-db
+    environment:
+      POSTGRES_DB: lanraragi
+      POSTGRES_USER: lanraragi
+      POSTGRES_PASSWORD: lanraragi
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lanraragi -d lanraragi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - lrrrs-data:/var/lib/postgresql/data
+
+  lrrrs-service:
+    build:
+      dockerfile: tools/build/docker/lrrrs.Dockerfile
+      context: ../../..
+    container_name: lrrrs-service
+    ports:
+      - "3000:3000"
+    environment:
+      LRR_POSTGRES_DB: lanraragi
+      LRR_POSTGRES_HOST: lrrrs-db
+      LRR_POSTGRES_PORT: 5432
+      LRR_POSTGRES_USER: lanraragi
+      LRR_POSTGRES_PASSWORD: lanraragi
+    depends_on:
+      lrrrs-db:
+        condition: service_healthy
+
+networks:
+  default:
+    name: lrrrs
+
+volumes:
+  lrrrs-data:

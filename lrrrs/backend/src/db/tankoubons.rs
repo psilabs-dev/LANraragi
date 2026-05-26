@@ -1,0 +1,1 @@
+//! Tankoubon SQL queries.

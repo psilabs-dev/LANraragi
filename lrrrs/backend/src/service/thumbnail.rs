@@ -1,0 +1,1 @@
+//! Thumbnail generation business logic.
