@@ -1,4 +1,5 @@
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderName, Method, header};
 use axum::middleware;
 use tower_http::cors::{Any, CorsLayer};
@@ -6,9 +7,7 @@ use tower_http::cors::{Any, CorsLayer};
 use crate::{auth, controller, state::AppState};
 
 pub fn build_app(app_state: AppState) -> Router {
-    // Match Perl's `Controller/Login.pm::setup_cors`: literal `Allow-Origin: *`,
-    // fixed method list, `Authorization` allowed. No credentials flag — `*`
-    // and `allow_credentials(true)` are mutually exclusive per CORS spec,
+    // `*` and `allow_credentials(true)` are mutually exclusive per CORS spec,
     // which is why `tower-http::CorsLayer::very_permissive()` (which sets
     // credentials) would not produce `*`.
     let cors = if app_state.lrr_config.enablecors {
@@ -61,7 +60,8 @@ pub fn build_app(app_state: AppState) -> Router {
         .route("/database/backup", axum::routing::get(controller::database::get_backup_json))
         .route("/database/backup", axum::routing::post(controller::database::queue_backup_job))
         .route("/database/backup/{jobid}", axum::routing::get(controller::database::download_backup))
-        .route("/database/restore", axum::routing::post(controller::database::queue_restore_job))
+        .route("/database/restore", axum::routing::post(controller::database::queue_restore_job)
+            .layer(DefaultBodyLimit::max(100 * 1024 * 1024)))
         .route("/database/isnew", axum::routing::delete(controller::database::clear_new_all))
         .route("/database/drop", axum::routing::post(controller::database::drop_database))
         .route("/database/clean", axum::routing::post(controller::database::clean_database))
@@ -99,8 +99,78 @@ pub fn build_app(app_state: AppState) -> Router {
 
     Router::new()
         .route("/", axum::routing::get(controller::misc::root))
+        // `/api/rs/*` is the LRRRS-specific namespace (design D6); these routes
+        // sit outside the `/api` auth-layered subtree and are intentionally
+        // anonymous. Health probes must not require credentials.
         .route("/api/rs/health", axum::routing::get(controller::misc::health))
         .nest("/api", api)
         .layer(cors)
         .with_state(app_state)
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+
+    /// Verifies that POST /api/database/restore enforces a 100 MiB body limit.
+    ///
+    /// Requires a live Postgres DB; skipped otherwise.
+    #[tokio::test]
+    #[ignore = "requires live Postgres DB (TEST_DATABASE_URL)"]
+    async fn restore_rejects_oversized_body() {
+        let db_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
+        let pool = sqlx::PgPool::connect(&db_url).await.unwrap();
+        crate::db::migrate::run(&pool).await.unwrap();
+
+        let config = crate::config::Config::from_env().unwrap();
+        let lrr_config = crate::db::config::load(&pool).await.unwrap();
+        let api_key_hash = crate::db::api_key::load_hash(&pool)
+            .await
+            .unwrap()
+            .map(|s| std::sync::Arc::from(s.as_str()));
+        let secured = std::sync::Arc::new(crate::auth::build_secured_set(&lrr_config));
+        let rayon = std::sync::Arc::new(
+            rayon::ThreadPoolBuilder::new().num_threads(1).build().unwrap(),
+        );
+        let minion = std::sync::Arc::new(
+            crate::minion::Controller::new_with_pool(pool.clone(), &config.temp_dir, rayon),
+        );
+        let state = crate::state::AppState::new(
+            config, pool, std::sync::Arc::new(crate::shinobu::Controller::new()),
+            minion, std::sync::Arc::new(rayon::ThreadPoolBuilder::new().build().unwrap()),
+            lrr_config, api_key_hash, secured,
+        );
+        let app = super::build_app(state);
+
+        // Build a multipart body that is just over 100 MiB.
+        let boundary = "testboundary";
+        let header = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"big.json\"\r\nContent-Type: application/json\r\n\r\n"
+        );
+        let footer = format!("\r\n--{boundary}--\r\n");
+        let payload_size = 101 * 1024 * 1024; // 101 MiB
+        let body_bytes = {
+            let mut v = header.into_bytes();
+            v.extend(std::iter::repeat(b'x').take(payload_size));
+            v.extend_from_slice(footer.as_bytes());
+            v
+        };
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/database/restore")
+            .header(
+                "content-type",
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(Body::from(body_bytes))
+            .unwrap();
+
+        use tower::util::ServiceExt;
+        let resp: axum::response::Response = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    }
 }

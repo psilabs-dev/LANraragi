@@ -10,21 +10,18 @@ pub async fn load_hash(pool: &PgPool) -> Result<Option<String>, sqlx::Error> {
         .await
 }
 
+/// Deletes the single row (if any). Used by `service::database::drop_database`
+/// to invalidate auth as part of a full database reset.
+pub async fn delete_all(pool: &PgPool) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM lrr_api_key").execute(pool).await?;
+    Ok(())
+}
+
 /// Inserts the hashed key only when the table is empty. No-op otherwise.
 pub async fn insert_if_empty(pool: &PgPool, key_hash: &str) -> Result<(), sqlx::Error> {
-    let mut tx = pool.begin().await?;
-
-    let exists: bool =
-        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM lrr_api_key WHERE id = 1)")
-            .fetch_one(&mut *tx)
-            .await?;
-
-    if !exists {
-        sqlx::query("INSERT INTO lrr_api_key (key_hash) VALUES ($1)")
-            .bind(key_hash)
-            .execute(&mut *tx)
-            .await?;
-    }
-
-    tx.commit().await
+    sqlx::query("INSERT INTO lrr_api_key (id, key_hash) VALUES (1, $1) ON CONFLICT DO NOTHING")
+        .bind(key_hash)
+        .execute(pool)
+        .await?;
+    Ok(())
 }

@@ -11,13 +11,15 @@ mod generated {
     include!(concat!(env!("OUT_DIR"), "/openapi_types.rs"));
 }
 
+// ArchiveMetadataJsonIsnew serializes the `isnew` field as "true"/"false" strings,
+// not JSON booleans. This is a known wire-format quirk documented in openapi.yaml.
 pub use generated::types::{
     ArchiveMetadataJson, ArchiveMetadataJsonArcid, ArchiveMetadataJsonIsnew, ServerInfo,
 };
 
 use serde::Serialize;
 
-/// Response payload of GET /api/shinobu.
+/// Response payload for operationId `shinobuStatus` (`GET /api/shinobu`).
 #[derive(Serialize)]
 pub struct ShinobuStatus {
     pub operation: &'static str,
@@ -26,7 +28,8 @@ pub struct ShinobuStatus {
     pub pid: u32,
 }
 
-/// Response payload of POST /api/shinobu/restart and POST /api/shinobu/rescan.
+/// Response payload for operationId `shinobuRestart` (`POST /api/shinobu/restart`)
+/// and operationId `shinobuRescan` (`POST /api/shinobu/rescan`).
 #[derive(Serialize)]
 pub struct ShinobuRestart {
     pub operation: &'static str,

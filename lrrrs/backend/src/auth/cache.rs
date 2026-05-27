@@ -3,7 +3,7 @@
 //! Keys: bearer plaintext. Values: `(expiration, valid)`. Both valid and
 //! invalid verification outcomes are cached; the `valid` flag distinguishes
 //! them at read time so an invalid cache hit does not pass auth. No background
-//! sweeper — stale entries are evicted at read time.
+//! sweeper; stale entries are evicted at read time.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -23,10 +23,10 @@ impl VerifyCache {
     }
 
     /// Returns the cached verification result for `plaintext`:
-    /// - `Some(true)` — recently verified valid; caller may pass the request.
-    /// - `Some(false)` — recently verified invalid; caller should 401 without
+    /// - `Some(true)`: recently verified valid; caller may pass the request.
+    /// - `Some(false)`: recently verified invalid; caller should 401 without
     ///   re-running Argon2.
-    /// - `None` — no entry or entry expired; caller must run Argon2.
+    /// - `None`: no entry or entry expired; caller must run Argon2.
     pub async fn get(&self, plaintext: &str) -> Option<bool> {
         self.0
             .read()
@@ -40,5 +40,11 @@ impl VerifyCache {
     pub async fn insert(&self, plaintext: String, valid: bool) {
         let exp = Instant::now() + Duration::from_secs(VERIFY_CACHE_TTL_SECS);
         self.0.write().await.insert(plaintext, (exp, valid));
+    }
+
+    /// Removes all cached verify entries. Called after drop_database so that a
+    /// previously-valid bearer plaintext no longer passes auth (the key row is gone).
+    pub async fn clear(&self) {
+        self.0.write().await.clear();
     }
 }

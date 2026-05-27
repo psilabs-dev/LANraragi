@@ -22,6 +22,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      LRR_API_KEY: lanraragi
       LRR_POSTGRES_DB: lanraragi
       LRR_POSTGRES_HOST: lrrrs-db
       LRR_POSTGRES_PORT: 5432

@@ -2,7 +2,7 @@
 //!
 //! `AUTH_REQUIRED_ROUTES` and `ANONYMOUS_ROUTES` are emitted by `build.rs`
 //! from `tools/openapi.yaml`. Paths lack the `/api` prefix; middleware prepends
-//! it at boot so `MatchedPath` lookups match directly (design rule 11).
+//! it at boot so `MatchedPath` lookups match directly.
 
 use std::collections::HashSet;
 
@@ -20,7 +20,7 @@ include!(concat!(env!("OUT_DIR"), "/auth_routes.rs"));
 ///
 /// Paths from the generated slices lack `/api`; this function prepends it so
 /// `MatchedPath` comparisons in the middleware work without per-request string
-/// ops (design rule 11).
+/// ops.
 pub fn build_secured_set(config: &LrrConfig) -> HashSet<(Method, String)> {
     let mut set = HashSet::new();
 
@@ -31,6 +31,7 @@ pub fn build_secured_set(config: &LrrConfig) -> HashSet<(Method, String)> {
 
     if config.authprogress {
         set.insert((Method::PUT, "/api/archives/{id}/progress/{page}".to_string()));
+        set.insert((Method::PUT, "/api/tankoubons/{id}/progress/{page}".to_string()));
     }
 
     if config.nofunmode {

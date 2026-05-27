@@ -7,9 +7,6 @@ use serde_json::{Value, json};
 use crate::error::{ApiError, TagErr};
 use crate::service;
 use crate::state::AppState;
-
-// port of LANraragi::Controller::Api::Minion::minion_job_status
-// commit hash: f7249980
 pub async fn minion_job_status(
     State(state): State<AppState>,
     Path(jobid): Path<i64>,
@@ -21,9 +18,6 @@ pub async fn minion_job_status(
         .map(Json)
         .ok_or_else(|| ApiError::not_found("minionJobStatus", "No job with this ID."))
 }
-
-// port of LANraragi::Controller::Api::Minion::minion_job_detail
-// commit hash: f7249980
 pub async fn minion_job_detail(
     State(state): State<AppState>,
     Path(jobid): Path<i64>,
@@ -42,9 +36,6 @@ pub struct QueueParams {
     #[serde(default)]
     priority: i32,
 }
-
-// port of LANraragi::Controller::Api::Minion::queue_minion_job
-// commit hash: f7249980
 pub async fn queue_minion_job(
     State(state): State<AppState>,
     Path(jobname): Path<String>,

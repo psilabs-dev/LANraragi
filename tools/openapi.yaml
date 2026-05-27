@@ -487,8 +487,14 @@ paths:
                   operation: use_plugin
                   success: 1
                   type: metadata
-                  data: 
-                    new_tags: pages:45                   
+                  data:
+                    new_tags: pages:45
+        '501':
+          description: Not implemented — plugins are permanently dropped in LRRRS
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
   /plugins/queue:
     post:
       security:
@@ -553,7 +559,13 @@ paths:
                   job: 86
                   operation: queue_plugin_exec
                   success: 1
-  
+        '501':
+          description: Not implemented — plugins are permanently dropped in LRRRS
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+
   /tempfolder:
     delete:
       security:
@@ -891,12 +903,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: Locked resource response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
         '500':
           description: Internal Server Error
           content:
@@ -992,12 +998,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: Locked resource response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
   /archives/{id}/metadata:
     get:
       operationId: getArchiveMetadata
@@ -1079,12 +1079,6 @@ paths:
                 success: 1
         '400':
           description: No archive ID response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: Locked resource response
           content:
             application/json:
               schema:
@@ -1385,12 +1379,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: Locked resource response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
     delete:
       security:
         - api_key: []
@@ -1429,12 +1417,6 @@ paths:
                 successMessage: Removed ToC entry for page 143.
         '400':
           description: No archive ID response or other error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: Locked resource response
           content:
             application/json:
               schema:
@@ -1754,12 +1736,6 @@ paths:
                 operation: update_progress
                 error: This operation requires authentication.
                 success: 0
-        '423':
-          description: Locked resource response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
   /archives/{id}/isnew:
     put:
       security:
@@ -1788,12 +1764,6 @@ paths:
                 $ref: '#/components/schemas/OperationResponse'
         '400':
           description: No archive ID response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: Locked resource response
           content:
             application/json:
               schema:
@@ -1844,12 +1814,6 @@ paths:
                     description: Returns 1 if successful, else 0
         '400':
           description: No archive ID response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: Locked resource response
           content:
             application/json:
               schema:
@@ -2126,7 +2090,7 @@ paths:
                 example:
                   data:
                     - arcid: 28697b96f0ac5858be2614ed10ca47742c9522fd
-                      isnew: false
+                      isnew: "false"
                       extension: rar
                       pagecount: 34
                       progress: 3
@@ -2136,7 +2100,7 @@ paths:
                       filename: Fate GO MEMO
                       summary: null
                     - arcid: 28697b96f0ac5858be2614ed10ca47742c9522fd
-                      isnew: false
+                      isnew: "false"
                       extension: rar
                       pagecount: 34
                       progress: 3
@@ -2231,7 +2195,7 @@ paths:
               example:
                   data:
                     - arcid: 28697b96f0ac5858be2614ed10ca47742c9522fd
-                      isnew: false
+                      isnew: "false"
                       extension: rar
                       pagecount: 34
                       progress: 3
@@ -2762,14 +2726,19 @@ paths:
                     type: object
                     nullable: true
                     description: Arbitrary data attached to the Job.
+                  result:
+                    type: object
+                    nullable: true
+                    description: Finish payload returned by the task on successful completion.
                   error:
                     type: string
                     nullable: true
                 example:
                   state: finished
                   task: handle_upload
-                  notes:
-                    example_note: This note could contain the name of the upload, for example.
+                  notes: {}
+                  result:
+                    example_key: This is the task finish payload.
                   error: null
 
   /minion/{jobid}/detail:
@@ -3174,12 +3143,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The Category is currently locked for modification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
     delete:
       security:
         - api_key: []
@@ -3191,12 +3154,6 @@ paths:
       responses:
         '200':
           description: Success response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The category ID is currently locked for modification
           content:
             application/json:
               schema:
@@ -3234,12 +3191,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The category ID is currently locked for modification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
     delete:
       security:
         - api_key: []
@@ -3268,12 +3219,6 @@ paths:
       responses:
         '200':
           description: Result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The category ID is currently locked for modification
           content:
             application/json:
               schema:
@@ -3512,12 +3457,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The Tankoubon is currently locked for modification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
     delete:
       security:
         - api_key: []
@@ -3536,12 +3475,6 @@ paths:
                 $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Error response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The Tankoubon is currently locked for modification
           content:
             application/json:
               schema:
@@ -3779,12 +3712,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The Tankoubon is currently locked for modification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
     delete:
       security:
         - api_key: []
@@ -3821,12 +3748,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The Tankoubon is currently locked for modification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
   /stamps/{id}:
     get:
       operationId: getStamp
@@ -3851,12 +3772,6 @@ paths:
                 $ref: '#/components/schemas/StampsData'
         '400':
           description: Error response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The Stamp is currently locked for modification
           content:
             application/json:
               schema:
@@ -3902,12 +3817,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The Stamp is currently locked for modification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
     delete:
       security:
         - api_key: []
@@ -3933,12 +3842,6 @@ paths:
                 $ref: '#/components/schemas/OperationResponse'
         '400':
           description: Error response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationResponse'
-        '423':
-          description: The Stamp is currently locked for modification
           content:
             application/json:
               schema:
@@ -4208,7 +4111,7 @@ components:
           enum:
             - "true"
             - "false"
-          description: Whether the archive is newly added. LRR emits "true"/"false" strings; older versions emitted booleans, but the current contract is string-only.
+          description: Whether the archive is newly added.
         extension:
           type: string
           description: File extension of the archive
@@ -4229,7 +4132,7 @@ components:
           description: Table of contents for the archive
       example:
         arcid: 28697b96f0ac5858be2614ed10ca47742c9522fd
-        isnew: false
+        isnew: "false"
         extension: rar
         pagecount: 34
         progress: 3

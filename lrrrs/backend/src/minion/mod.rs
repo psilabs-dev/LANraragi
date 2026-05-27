@@ -5,6 +5,8 @@ pub mod worker;
 
 use std::sync::Arc;
 
+use std::path::Path;
+
 use sqlx::PgPool;
 use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
@@ -13,6 +15,7 @@ use tasks::Registry;
 
 pub struct Controller {
     registry: Arc<Registry>,
+    rayon: Arc<rayon::ThreadPool>,
     inner: Mutex<Inner>,
 }
 
@@ -28,16 +31,13 @@ enum TaskState {
     Stopped,
 }
 
-impl Default for Controller {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Controller {
-    pub fn new() -> Self {
+    /// Creates a controller whose registry includes pool-backed tasks
+    /// (backup_json, restore_backup).
+    pub fn new_with_pool(pool: PgPool, temp_dir: &Path, rayon: Arc<rayon::ThreadPool>) -> Self {
         Self {
-            registry: Arc::new(Registry::with_defaults()),
+            registry: Arc::new(Registry::with_pool(pool, temp_dir)),
+            rayon,
             inner: Mutex::new(Inner {
                 state: TaskState::Stopped,
             }),
@@ -52,7 +52,8 @@ impl Controller {
         }
         let (cmd_tx, cmd_rx) = mpsc::channel(8);
         let registry = self.registry.clone();
-        let handle = tokio::spawn(worker::run(pool, registry, cmd_rx));
+        let rayon = self.rayon.clone();
+        let handle = tokio::spawn(worker::run(pool, registry, rayon, cmd_rx));
         inner.state = TaskState::Running { handle, cmd_tx };
     }
 

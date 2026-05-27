@@ -1,11 +1,10 @@
 //! Bootstrap: seed `lrr_api_key` from `LRR_API_KEY` env on first boot.
 //!
-//! Per design rule 3 (design.md "Auth (resolved)"):
-//! - env set + table empty  → hash with `Argon2::default()`, insert.
-//! - env set + table populated → ignore env (DB wins).
-//! - env unset + table empty  → read-only mode (rule 3); a `tracing::warn!` is
-//!   emitted at startup so the read-only posture is visible in logs (rule 5).
-//! - env unset + table populated → use DB.
+//! - env set + table empty: hash with `Argon2::default()`, insert.
+//! - env set + table populated: ignore env (DB wins).
+//! - env unset + table empty: read-only mode; a `tracing::warn!` is
+//!   emitted at startup so the read-only posture is visible in logs.
+//! - env unset + table populated: use DB.
 
 use argon2::{
     Argon2, PasswordHasher,

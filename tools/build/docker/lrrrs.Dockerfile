@@ -19,10 +19,14 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
+RUN useradd -m -d /home/koyomi -s /bin/bash koyomi
+RUN chown -R koyomi:koyomi /home/koyomi
+
 WORKDIR /home/koyomi/lrrrs
 
 COPY --from=builder /build/lrrrs/backend/target/release/lrrrs-backend /usr/local/bin/lrrrs-backend
 
 EXPOSE 3000
 
+USER koyomi
 CMD ["lrrrs-backend"]

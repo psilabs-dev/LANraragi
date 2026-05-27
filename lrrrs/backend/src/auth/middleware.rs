@@ -1,17 +1,20 @@
 //! Auth tower layer.
 //!
-//! Implements the middleware algorithm from design.md "Auth (resolved)" rule 10:
-//!  1. OPTIONS → always pass (CORS preflight; mirrors Perl Login.pm:61).
-//!  2. (method, MatchedPath) not in secured set → pass (anonymous route).
-//!  3. Secured + api_key_hash is None → 401 (read-only mode).
-//!  4. Extract candidate plaintext from `Authorization: Bearer <base64>` or
-//!     `?key=<plaintext>` query param (OPDS fallback; Perl Utils/Login.pm:22-23).
-//!  5. Cache hit → pass.
-//!  6. Argon2 verify on Rayon. Success → cache + pass. Failure → 401.
+//! # Auth 401s
 //!
-//! 401 responses use `constants::UNAUTHORIZED_BODY` directly — NOT `ApiError`.
-//! The `ApiError` envelope (`{operation, success, error}`) is wrong for this
-//! contract (design rule 13).
+//! Auth-failure 401 responses must NOT use `ApiError`; its `IntoResponse`
+//! emits the `{operation, success, error}` envelope, which diverges from the
+//! verbatim body required by the auth contract. Auth middleware emits
+//! `constants::UNAUTHORIZED_BODY` directly as a raw string response tuple.
+//!
+//! Algorithm:
+//!  1. OPTIONS: always pass (CORS preflight).
+//!  2. (method, MatchedPath) not in secured set: pass (anonymous route).
+//!  3. Secured + api_key_hash is None: 401 (read-only mode).
+//!  4. Extract candidate plaintext from `Authorization: Bearer <base64>` or
+//!     `?key=<plaintext>` query param (OPDS fallback).
+//!  5. Cache hit: pass.
+//!  6. Argon2 verify on Rayon. Success: cache + pass. Failure: 401.
 
 use std::sync::Arc;
 
@@ -27,18 +30,14 @@ use percent_encoding::percent_decode_str;
 
 use crate::{constants::UNAUTHORIZED_BODY, error::ApiError, state::AppState};
 
-/// Argon2 verify errors. Only used inside the Rayon closure; never surfaced
-/// to callers directly.
+// Argon2 verify errors. Only used inside the Rayon closure; never surfaced to callers directly.
 enum VerifyError {
     HashParse,
     Mismatch,
     Cancelled,
 }
 
-/// Runs Argon2id verification on the Rayon pool. Returns `Ok(())` on success.
-///
-/// port of LANraragi::Utils::Login::is_logged_in_api (verify path)
-/// commit hash: f7249980
+// Offloads Argon2id verification to Rayon so the async runtime is not blocked.
 async fn verify_on_rayon(
     rayon: Arc<rayon::ThreadPool>,
     plaintext: String,
@@ -52,7 +51,7 @@ async fn verify_on_rayon(
     rx.await.unwrap_or(Err(VerifyError::Cancelled))
 }
 
-/// Pure synchronous Argon2 verify; runs on Rayon.
+// Pure synchronous Argon2 verify; called from the Rayon closure in verify_on_rayon.
 fn verify_argon2(plaintext: &str, stored_hash: &str) -> Result<(), VerifyError> {
     use argon2::{Argon2, PasswordVerifier, password_hash::PasswordHash};
 
@@ -71,12 +70,7 @@ fn unauthorized() -> Response {
         .into_response()
 }
 
-/// Extracts bearer plaintext from the `Authorization` header or the `?key=`
-/// query param (OPDS fallback). Returns `None` when neither is present or the
-/// base64 is malformed (design contract: malformed base64 → 401, not 400).
-///
-/// port of LANraragi::Utils::Login::is_logged_in_api (extract path)
-/// commit hash: f7249980
+// Extracts bearer plaintext from Authorization header or ?key= query param (OPDS fallback).
 fn extract_plaintext(req: &Request) -> Option<String> {
     // Primary: Authorization: Bearer <base64(plaintext)>
     if let Some(value) = req.headers().get(header::AUTHORIZATION) {
@@ -87,7 +81,7 @@ fn extract_plaintext(req: &Request) -> Option<String> {
         }
     }
 
-    // Fallback: ?key=<plaintext> (OPDS; Perl Utils/Login.pm:22-23)
+    // Fallback: ?key=<plaintext> query parameter (OPDS clients).
     if let Some(query) = req.uri().query() {
         for pair in query.split('&') {
             if let Some((k, v)) = pair.split_once('=') {
@@ -120,8 +114,13 @@ pub async fn layer(State(state): State<AppState>, req: Request, next: Next) -> R
     }
 
     // 3. Secured + read-only mode.
-    let Some(ref stored_hash) = state.api_key_hash else {
-        return unauthorized();
+    // Read-lock api_key_hash: None means the API key row was dropped (read-only mode).
+    let stored = {
+        let guard = state.api_key_hash.read().await;
+        match guard.as_ref() {
+            None => return unauthorized(),
+            Some(h) => h.to_string(),
+        }
     };
 
     // 4. Extract candidate plaintext.
@@ -129,8 +128,8 @@ pub async fn layer(State(state): State<AppState>, req: Request, next: Next) -> R
         return unauthorized();
     };
 
-    // 5. Cache hit. `Some(true)` → previously validated, pass; `Some(false)` →
-    //    previously invalid, 401 without re-verify; `None` → must run Argon2.
+    // 5. Cache hit. `Some(true)`: previously validated, pass; `Some(false)`:
+    //    previously invalid, 401 without re-verify; `None`: must run Argon2.
     match state.verify_cache.get(&plaintext).await {
         Some(true) => return next.run(req).await,
         Some(false) => return unauthorized(),
@@ -138,17 +137,22 @@ pub async fn layer(State(state): State<AppState>, req: Request, next: Next) -> R
     }
 
     // 6. Argon2 verify on Rayon.
-    let stored = stored_hash.to_string();
     match verify_on_rayon(state.rayon.clone(), plaintext.clone(), stored).await {
         Ok(()) => {
+            // Re-read api_key_hash: a concurrent drop_database may have set it to None
+            // while Argon2 was running. Do not cache or pass when the key is gone.
+            let still_set = state.api_key_hash.read().await.is_some();
+            if !still_set {
+                return unauthorized();
+            }
             state.verify_cache.insert(plaintext, true).await;
             next.run(req).await
         }
         Err(VerifyError::HashParse) => {
             tracing::error!("lrr_api_key row contains an unparseable Argon2 PHC string");
             // 500: corrupted DB row, not an auth failure. ApiError envelope is
-            // fine here — the 401-must-not-use-ApiError rule (design rule 13)
-            // applies only to the auth-failure path, not to server errors.
+            // fine here; the 401-must-not-use-ApiError rule applies only to
+            // the auth-failure path, not to server errors.
             ApiError::internal("hashParse", "lrr_api_key row contains an unparseable Argon2 PHC string").into_response()
         }
         // Cache the mismatch to avoid re-paying Argon2 on repeated wrong-key

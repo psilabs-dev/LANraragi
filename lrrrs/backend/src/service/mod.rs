@@ -4,6 +4,8 @@ pub mod category;
 pub mod database;
 pub mod minion;
 pub mod misc;
+pub mod opds;
 pub mod search;
+pub mod stamps;
 pub mod tankoubons;
 pub mod thumbnail;

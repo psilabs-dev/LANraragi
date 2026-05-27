@@ -90,6 +90,26 @@ pub async fn mark_failed(pool: &PgPool, id: i64, error: &str) -> Result<(), sqlx
     Ok(())
 }
 
+/// Marks all `'active'` job rows as `'failed'` with an orphan-sweep note.
+///
+/// Called once at startup before the worker loop begins. Safe under single-instance
+/// deployment (LRRRS architecture): any `'active'` row at startup was abandoned by
+/// the previous process and cannot be reclaimed by the claim_next query.
+pub async fn sweep_orphaned_active(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        UPDATE lrr_jobs
+        SET state = 'failed',
+            finished = EXTRACT(EPOCH FROM now())::BIGINT,
+            error = 'orphan sweep: job was active at startup and has been marked failed'
+        WHERE state = 'active'
+        "#,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 pub async fn fetch(pool: &PgPool, id: i64) -> Result<Option<JobRow>, sqlx::Error> {
     sqlx::query_as::<_, JobRow>(
         r#"
@@ -101,4 +121,35 @@ pub async fn fetch(pool: &PgPool, id: i64) -> Result<Option<JobRow>, sqlx::Error
     .bind(id)
     .fetch_optional(pool)
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Verifies that sweep_orphaned_active transitions 'active' rows to 'failed'.
+    ///
+    /// Requires a live Postgres DB; skipped otherwise.
+    #[tokio::test]
+    #[ignore = "requires live Postgres DB (TEST_DATABASE_URL)"]
+    async fn sweep_orphaned_active_transitions_row() {
+        let db_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
+        let pool = PgPool::connect(&db_url).await.unwrap();
+        crate::db::migrate::run(&pool).await.unwrap();
+
+        // Insert a row then manually force it to 'active' to simulate orphan state.
+        let id = insert(&pool, "noop", &json!([]), 0).await.unwrap();
+        sqlx::query("UPDATE lrr_jobs SET state = 'active' WHERE id = $1")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let swept = sweep_orphaned_active(&pool).await.unwrap();
+        assert!(swept >= 1, "at least one row must be swept");
+
+        let row = fetch(&pool, id).await.unwrap().unwrap();
+        assert_eq!(row.state, "failed", "orphan row must be marked failed after sweep");
+    }
 }

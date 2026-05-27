@@ -1,4 +1,4 @@
-//! No-op task: sleeps briefly then echoes its args. Skeleton few-shot.
+//! No-op task: sleeps briefly then echoes its args.
 
 use std::time::Duration;
 
@@ -15,7 +15,7 @@ impl Task for Noop {
         NAME
     }
 
-    fn run<'a>(&'a self, args: &'a JsonValue) -> TaskFuture<'a> {
+    fn run<'a>(&'a self, args: &'a JsonValue, _rayon: &'a rayon::ThreadPool) -> TaskFuture<'a> {
         Box::pin(async move {
             tokio::time::sleep(Duration::from_millis(50)).await;
             Ok(json!({ "echo": args }))

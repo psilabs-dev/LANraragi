@@ -8,19 +8,27 @@ argon2 = { version = "0.5", features = ["std"] }
 axum = { version = "0.8.6", features = ["multipart"] }
 base64 = "0.22"
 hex = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 num_cpus = "1"
 percent-encoding = "2"
+rand = "0.8"
 rayon = "1.10"
+uuid = { version = "1", features = ["v4"] }
 regress = "0.11"
+url = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha1 = "0.10"
 sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "macros", "migrate"] }
 tokio = { version = "1.48.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal"] }
+tokio-util = { version = "0.7", features = ["io"] }
 tower-http = { version = "0.6", features = ["cors"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
 
 [build-dependencies]
 openapiv3 = "2"

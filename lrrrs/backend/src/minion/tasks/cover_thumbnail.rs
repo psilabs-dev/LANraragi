@@ -1,5 +1,4 @@
-//! Cover-thumbnail generation stub. Returns `{generated: false}` until the
-//! `image` crate is wired in.
+//! Cover-thumbnail generation stub. Returns `{generated: false}`; not yet implemented.
 
 use serde_json::{Value as JsonValue, json};
 
@@ -14,9 +13,10 @@ impl Task for CoverThumbnail {
         NAME
     }
 
-    fn run<'a>(&'a self, args: &'a JsonValue) -> TaskFuture<'a> {
+    fn run<'a>(&'a self, args: &'a JsonValue, _rayon: &'a rayon::ThreadPool) -> TaskFuture<'a> {
         Box::pin(async move {
-            Ok(json!({ "arcid": args.get(0), "generated": false }))
+            let arcid = args.get(0).and_then(|v| v.as_str()).unwrap_or("");
+            Ok(json!({ "arcid": arcid, "generated": false }))
         })
     }
 }

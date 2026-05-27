@@ -1,4 +1,4 @@
-//! Tokio → Rayon bridge for CPU-bound work.
+//! Tokio-to-Rayon bridge for CPU-bound work.
 
 use std::any::Any;
 use std::fmt;

@@ -1,11 +1,11 @@
 //! Auth module: bootstrap, middleware, route sets, and verify cache.
 //!
 //! Public surface consumed by `main.rs`, `app.rs`, and `state.rs`:
-//! - `seed_from_env` — boot-time API key seeding.
-//! - `build_secured_set` — constructs the `HashSet<(Method, String)>` at boot.
-//! - `LrrConfig` — re-exported from `db::config` for `AppState`.
-//! - `VerifyCache` — re-exported from `cache` for `AppState`.
-//! - `middleware::layer` — axum middleware function.
+//! - `seed_from_env`: boot-time API key seeding.
+//! - `build_secured_set`: constructs the `HashSet<(Method, String)>` at boot.
+//! - `LrrConfig`: re-exported from `db::config` for `AppState`.
+//! - `VerifyCache`: re-exported from `cache` for `AppState`.
+//! - `middleware::layer`: axum middleware function.
 
 pub mod cache;
 pub mod middleware;

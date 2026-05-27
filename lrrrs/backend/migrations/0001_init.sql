@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS lrr_archive (
     filename        VARCHAR(255) NOT NULL,
     extension       VARCHAR(255),
     isnew           BOOLEAN NOT NULL,
-    lastreadtime    INTEGER NOT NULL,
+    lastreadtime    BIGINT NOT NULL,
     pagecount       INTEGER NOT NULL,
     progress        INTEGER NOT NULL,
     title           TEXT COLLATE natural_sort NOT NULL,
@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS lrr_tank (
     tankid          VARCHAR(255) PRIMARY KEY,
     name            VARCHAR(255) COLLATE natural_sort NOT NULL,
     summary         TEXT,
-    tags            TEXT
+    tags            TEXT,
+    progress        INTEGER NOT NULL DEFAULT 0,
+    lastreadtime    BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS lrr_tag (
@@ -49,6 +51,7 @@ CREATE TABLE IF NOT EXISTS lrr_category_to_archive_map (
     catid           VARCHAR(255) NOT NULL,
     arcid           VARCHAR(255) NOT NULL,
     update_date     DATE,
+    PRIMARY KEY (catid, arcid),
     FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
     FOREIGN KEY (catid) REFERENCES lrr_category (catid)
 );
@@ -59,6 +62,7 @@ CREATE TABLE IF NOT EXISTS lrr_archive_to_tag_map (
     namespace       VARCHAR(255) NOT NULL DEFAULT '',
     value           VARCHAR(255) NOT NULL DEFAULT '',
     update_date     DATE,
+    PRIMARY KEY (arcid, tagid),
     FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
     FOREIGN KEY (tagid) REFERENCES lrr_tag (tagid)
 );
@@ -68,6 +72,7 @@ CREATE TABLE IF NOT EXISTS lrr_tank_to_archive_map (
     arcid           VARCHAR(255) NOT NULL,
     position        INTEGER NOT NULL,
     update_date     DATE,
+    PRIMARY KEY (tankid, arcid),
     FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
     FOREIGN KEY (tankid) REFERENCES lrr_tank (tankid)
 );

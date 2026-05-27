@@ -8,6 +8,10 @@ pub struct Config {
     pub bind_addr: SocketAddr,
     pub postgres_url: String,
     pub content_dir: PathBuf,
+    /// Directory for cover and per-page WebP thumbnails. Default: `./thumb`.
+    pub thumb_dir: PathBuf,
+    /// Directory for lazy-extracted archive pages. Default: `./temp`.
+    pub temp_dir: PathBuf,
     pub rayon_threads: usize,
 }
 
@@ -19,6 +23,10 @@ impl Config {
         let postgres_url = postgres_url_from_env();
         let content_dir = env::var("LRR_CONTENT_DIR")
             .map_or_else(|_| PathBuf::from("./content"), PathBuf::from);
+        let thumb_dir = env::var("LRR_THUMB_DIR")
+            .map_or_else(|_| PathBuf::from("./thumb"), PathBuf::from);
+        let temp_dir = env::var("LRR_TEMP_DIR")
+            .map_or_else(|_| PathBuf::from("./temp"), PathBuf::from);
         let rayon_threads = env::var("LRR_RAYON_THREADS")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
@@ -28,6 +36,8 @@ impl Config {
             bind_addr,
             postgres_url,
             content_dir,
+            thumb_dir,
+            temp_dir,
             rayon_threads,
         })
     }
