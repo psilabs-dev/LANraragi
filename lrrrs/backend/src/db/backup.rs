@@ -327,30 +327,28 @@ pub async fn clear_isnew_all(pool: &PgPool) -> Result<u64, sqlx::Error> {
     Ok(result.rows_affected())
 }
 
-/// Drops all archives and their dependent rows in FK-safe order, inside a transaction.
-pub async fn drop_all_archives(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    let mut tx = pool.begin().await?;
-
+/// Drops all archives and their dependent rows in FK-safe order.
+/// Caller must supply a connection; runs inside the caller's transaction.
+pub async fn drop_all_archives(conn: &mut sqlx::PgConnection) -> Result<u64, sqlx::Error> {
     // Delete child tables first to satisfy FK constraints.
     // lrr_stamp has no CASCADE; must precede lrr_archive.
-    sqlx::query("DELETE FROM lrr_stamp").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM lrr_toc").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM lrr_archive_to_tag_map").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM lrr_category_to_archive_map").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM lrr_tank_to_archive_map").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM lrr_stamp").execute(&mut *conn).await?;
+    sqlx::query("DELETE FROM lrr_toc").execute(&mut *conn).await?;
+    sqlx::query("DELETE FROM lrr_archive_to_tag_map").execute(&mut *conn).await?;
+    sqlx::query("DELETE FROM lrr_category_to_archive_map").execute(&mut *conn).await?;
+    sqlx::query("DELETE FROM lrr_tank_to_archive_map").execute(&mut *conn).await?;
     // lrr_filemap has ON DELETE CASCADE but explicit delete is consistent.
-    sqlx::query("DELETE FROM lrr_filemap").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM lrr_filemap").execute(&mut *conn).await?;
 
     let result = sqlx::query("DELETE FROM lrr_archive")
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?;
 
     // Remove orphan category/tank/tag rows.
-    sqlx::query("DELETE FROM lrr_category").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM lrr_tank").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM lrr_tag").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM lrr_category").execute(&mut *conn).await?;
+    sqlx::query("DELETE FROM lrr_tank").execute(&mut *conn).await?;
+    sqlx::query("DELETE FROM lrr_tag").execute(&mut *conn).await?;
 
-    tx.commit().await?;
     Ok(result.rows_affected())
 }
 pub async fn get_tag_stats(

@@ -63,9 +63,7 @@ pub struct UpdateThumbnailQuery {
     pub page: Option<u32>,
 }
 
-/// Validates that `id` is a 40-character lowercase hex string (SHA-1 arcid format).
-/// Returns an ApiError matching the OpenAPI validation message expected by clients:
-/// `"String is too short: N/40."` for short ids.
+// Rejects ids shorter than 40 chars or with non-hex characters.
 fn validate_arcid(op: &'static str, id: &str) -> Result<(), ApiError> {
     if id.len() < 40 {
         return Err(ApiError::bad_request(
@@ -470,7 +468,7 @@ pub async fn queue_archive_page_thumbnail_extraction(
     }
 }
 
-/// RAII guard that removes a temp file on drop unless explicitly disarmed.
+// RAII guard that removes a temp file on drop unless explicitly disarmed.
 struct TempFileGuard {
     path: Option<PathBuf>,
 }
@@ -613,25 +611,29 @@ pub async fn upload_archive(
 
     temp_guard.disarm();
 
-    // Apply optional category assignment.
+    // Apply optional category assignment. A category failure is a soft warning:
+    // the archive is already committed. Return 200 + id regardless, with a
+    // "warning" field describing the failure (mirrors Perl PgUpload.pm:161-166).
+    let mut warning: Option<String> = None;
     if let Some(cid) = category_id.filter(|s| !s.is_empty()) {
-        service::category::add_to_category(&state.db, &cid, &arcid)
-            .await
-            .map_err(|e| match e {
-                // Dynamic categories and missing categories are caller errors.
-                CategoryError::NotFound(msg)
-                | CategoryError::IsDynamic(msg)
-                | CategoryError::ArchiveNotFound(msg) => {
-                    ApiError::bad_request("uploadArchive", msg)
-                }
-                CategoryError::Db(db) => ApiError::internal("uploadArchive", db.to_string()),
-            })?;
+        match service::category::add_to_category(&state.db, &cid, &arcid).await {
+            Ok(_) => {}
+            Err(CategoryError::NotFound(msg)
+            | CategoryError::IsDynamic(msg)
+            | CategoryError::ArchiveNotFound(msg)) => {
+                warning = Some(format!("Couldn't add to Category: {msg}"));
+            }
+            Err(CategoryError::Db(db)) => {
+                return Err(ApiError::internal("uploadArchive", db.to_string()));
+            }
+        }
     }
 
     Ok(Json(json!({
         "operation": "upload",
         "success": 1,
         "id": arcid,
+        "warning": warning,
     })))
 }
 

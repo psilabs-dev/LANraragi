@@ -91,17 +91,22 @@ pub async fn clear_isnew_all(pool: &PgPool) -> Result<(), DatabaseError> {
 /// Deletes all archives and all dependent rows (filemap, category maps,
 /// tank maps, tag maps, toc, stamps). Also deletes the API key row and
 /// invalidates in-memory auth state.
+///
+/// Archive deletion and API key deletion run in a single transaction so that
+/// a partial failure cannot leave archives gone while the API key survives.
 pub async fn drop_database(
     pool: &PgPool,
     api_key_hash: &Arc<RwLock<Option<Arc<str>>>>,
     verify_cache: &VerifyCache,
 ) -> Result<(), DatabaseError> {
-    db::backup::drop_all_archives(pool)
+    let mut tx = pool.begin().await.map_err(DatabaseError::Db)?;
+    db::backup::drop_all_archives(&mut *tx)
         .await
         .map_err(DatabaseError::Db)?;
-    db::api_key::delete_all(pool)
+    db::api_key::delete_all(&mut *tx)
         .await
         .map_err(DatabaseError::Db)?;
+    tx.commit().await.map_err(DatabaseError::Db)?;
     *api_key_hash.write().await = None;
     verify_cache.clear().await;
     Ok(())

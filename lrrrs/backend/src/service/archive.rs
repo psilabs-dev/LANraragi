@@ -35,7 +35,7 @@ pub async fn list_all(pool: &PgPool) -> Result<Vec<ArchiveMetadataJson>, sqlx::E
     }
 
     // Batch-fetch filemap paths and drop archives whose backing file is absent.
-    // Mirrors PgArchive.pm:71-72: `next unless (defined($file) && -e $file)`.
+    // Mirrors PgArchive.pm list_archives file-existence check.
     let path_rows = db::archive::list_paths_for_arcids(pool, &arcids).await?;
     let mut path_map: std::collections::HashMap<String, String> =
         path_rows.into_iter().collect();
@@ -743,7 +743,7 @@ async fn read_extract_dir(dir: &Path) -> std::io::Result<Vec<String>> {
             entries.push(name);
         }
     }
-    entries.sort();
+    sort_filelist(&mut entries);
     Ok(entries)
 }
 

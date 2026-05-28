@@ -37,7 +37,8 @@ If you like LRR the way it is but want *faster search* and already have a stable
 
 ## Switching from Perl LRR
 
-LRRRS uses API-key-only authentication; there is no login page or session cookies. Pass the key as `Authorization: Bearer <base64(key)>` or `?key=<plaintext>`. Existing Perl LRR Bearer clients that already base64-encode the key are unaffected.
+LRRRS uses API-key-only authentication; there is no login page or session cookies.
+Pass the key as `Authorization: Bearer <base64(key)>` or `?key=<plaintext>`. Existing Perl LRR Bearer clients that already base64-encode the key are unaffected.
 
 ## Quick Start (Docker Compose)
 
@@ -57,7 +58,7 @@ docker compose -f tools/build/docker/lrrrs.docker-compose.yml down
 
 | Variable | Default | Notes |
 |---|---|---|
-| `LRR_API_KEY` | _(unset)_ | Bootstrap-only API key. On first boot with an empty `lrr_api_key` table, if unset, LRRRS runs in read-only mode (401 on secured routes). Once the key is seeded to the DB, this variable is not required on subsequent restarts. |
+| `LRR_API_KEY` | _(unset)_ | Bootstrap-only API key. On first boot with an empty `lrr_api_key` table, if unset, LRRRS runs in read-only mode (401 on secured routes). Once the key is seeded to the DB, this variable is not required on subsequent restarts. If the `lrr_api_key` table is already populated, this variable is ignored on restart — the DB value wins. |
 | `LRR_BIND_ADDR` | `0.0.0.0:3000` | Server listen address. Invalid value fails startup. |
 | `LRR_POSTGRES_HOST` | `localhost` | |
 | `LRR_POSTGRES_PORT` | `5432` | |

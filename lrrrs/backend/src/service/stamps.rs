@@ -38,8 +38,9 @@ impl From<StampError> for PendingApiError {
     fn from(e: StampError) -> Self {
         let msg = e.to_string();
         match e {
+            // openapi declares 400 only; matches Perl render_api_response behavior
             StampError::NotFound | StampError::ArchiveNotFound => {
-                PendingApiError::not_found(msg)
+                PendingApiError::bad_request(msg)
             }
             StampError::PageOutOfRange(_) => PendingApiError::bad_request(msg),
             StampError::Db(_) => PendingApiError::internal(msg),

@@ -6,7 +6,7 @@
 //!
 //! TODO: revalidate after HTTP redirects when the task HTTP fetch is implemented.
 
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 #[derive(Debug)]
 pub enum DownloadUrlError {
@@ -102,7 +102,7 @@ fn is_blocked_v6(ip: Ipv6Addr) -> bool {
 /// 3. Host must be present.
 /// 4. Host must resolve via DNS.
 /// 5. All resolved addresses must not be private/loopback/link-local/unspecified.
-pub fn validate_download_url(raw: &str) -> Result<(), DownloadUrlError> {
+pub async fn validate_download_url(raw: &str) -> Result<(), DownloadUrlError> {
     let parsed = url::Url::parse(raw).map_err(|e| DownloadUrlError::Parse(e.to_string()))?;
 
     let scheme = parsed.scheme();
@@ -113,8 +113,8 @@ pub fn validate_download_url(raw: &str) -> Result<(), DownloadUrlError> {
     let host = parsed.host_str().ok_or(DownloadUrlError::NoHost)?;
     let port = parsed.port_or_known_default().unwrap_or(80);
 
-    let addrs: Vec<IpAddr> = format!("{host}:{port}")
-        .to_socket_addrs()
+    let addrs: Vec<IpAddr> = tokio::net::lookup_host(format!("{host}:{port}"))
+        .await
         .map_err(|e| DownloadUrlError::DnsFailure(e.to_string()))?
         .map(|sa| sa.ip())
         .collect();
@@ -132,93 +132,99 @@ pub fn validate_download_url(raw: &str) -> Result<(), DownloadUrlError> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn rejects_file_scheme() {
-        let err = validate_download_url("file:///etc/passwd").unwrap_err();
+    #[tokio::test]
+    async fn rejects_file_scheme() {
+        let err = validate_download_url("file:///etc/passwd").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BadScheme(_)));
     }
 
-    #[test]
-    fn rejects_ftp_scheme() {
-        let err = validate_download_url("ftp://example.com/file.zip").unwrap_err();
+    #[tokio::test]
+    async fn rejects_ftp_scheme() {
+        let err = validate_download_url("ftp://example.com/file.zip").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BadScheme(_)));
     }
 
-    #[test]
-    fn rejects_loopback_v4() {
-        let err = validate_download_url("http://127.0.0.1/file.zip").unwrap_err();
+    #[tokio::test]
+    async fn rejects_loopback_v4() {
+        let err = validate_download_url("http://127.0.0.1/file.zip").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BlockedAddress(_)));
     }
 
-    #[test]
-    fn rejects_loopback_localhost() {
+    #[tokio::test]
+    async fn rejects_loopback_localhost() {
         // localhost resolves to 127.0.0.1 or ::1; both are blocked.
-        let err = validate_download_url("http://localhost/file.zip").unwrap_err();
+        let err = validate_download_url("http://localhost/file.zip").await.unwrap_err();
         assert!(
             matches!(err, DownloadUrlError::BlockedAddress(_) | DownloadUrlError::DnsFailure(_)),
             "expected blocked or dns failure, got: {err}"
         );
     }
 
-    #[test]
-    fn rejects_rfc1918_10() {
-        let err = validate_download_url("http://10.0.0.1/file.zip").unwrap_err();
+    #[tokio::test]
+    async fn rejects_rfc1918_10() {
+        let err = validate_download_url("http://10.0.0.1/file.zip").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BlockedAddress(_)));
     }
 
-    #[test]
-    fn rejects_rfc1918_172_16() {
-        let err = validate_download_url("http://172.16.0.1/file.zip").unwrap_err();
+    #[tokio::test]
+    async fn rejects_rfc1918_172_16() {
+        let err = validate_download_url("http://172.16.0.1/file.zip").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BlockedAddress(_)));
     }
 
-    #[test]
-    fn rejects_rfc1918_192_168() {
-        let err = validate_download_url("http://192.168.1.1/file.zip").unwrap_err();
+    #[tokio::test]
+    async fn rejects_rfc1918_192_168() {
+        let err = validate_download_url("http://192.168.1.1/file.zip").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BlockedAddress(_)));
     }
 
-    #[test]
-    fn rejects_link_local_v4() {
-        let err = validate_download_url("http://169.254.169.254/latest/meta-data/").unwrap_err();
+    #[tokio::test]
+    async fn rejects_link_local_v4() {
+        let err = validate_download_url("http://169.254.169.254/latest/meta-data/").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BlockedAddress(_)));
     }
 
-    #[test]
-    fn rejects_loopback_v6() {
-        let err = validate_download_url("http://[::1]/file.zip").unwrap_err();
+    #[tokio::test]
+    async fn rejects_loopback_v6() {
+        let err = validate_download_url("http://[::1]/file.zip").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BlockedAddress(_)));
     }
 
-    #[test]
-    fn rejects_link_local_v6() {
-        let err = validate_download_url("http://[fe80::1]/file.zip").unwrap_err();
+    #[tokio::test]
+    async fn rejects_link_local_v6() {
+        let err = validate_download_url("http://[fe80::1]/file.zip").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BlockedAddress(_)));
     }
 
-    #[test]
-    fn rejects_unique_local_v6() {
-        let err = validate_download_url("http://[fc00::1]/file.zip").unwrap_err();
+    #[tokio::test]
+    async fn rejects_unique_local_v6() {
+        let err = validate_download_url("http://[fc00::1]/file.zip").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::BlockedAddress(_)));
     }
 
-    #[test]
-    fn rejects_malformed_url() {
-        let err = validate_download_url("not a url at all").unwrap_err();
+    #[tokio::test]
+    async fn rejects_malformed_url() {
+        let err = validate_download_url("not a url at all").await.unwrap_err();
         assert!(matches!(err, DownloadUrlError::Parse(_)));
     }
 
     /// Accept case: https://example.com resolves to a public IP.
     /// Requires network; skipped in offline environments.
-    #[test]
-    fn accepts_public_https_url() {
+    #[tokio::test]
+    async fn accepts_public_https_url() {
         // example.com resolves to 93.184.216.34, which is public.
-        match validate_download_url("https://example.com/foo.zip") {
+        match validate_download_url("https://example.com/foo.zip").await {
             Ok(()) => {}
             Err(DownloadUrlError::DnsFailure(_)) => {
                 // No network in CI; treat as pass.
             }
             Err(e) => panic!("unexpected error for public URL: {e}"),
         }
+    }
+
+    #[tokio::test]
+    async fn validate_blocks_loopback_via_async_lookup() {
+        let result = validate_download_url("http://127.0.0.1/some/path").await;
+        assert!(result.is_err(), "loopback URL must be rejected post-async-refactor");
     }
 }

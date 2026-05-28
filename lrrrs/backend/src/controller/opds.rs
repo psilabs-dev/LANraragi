@@ -22,7 +22,6 @@ use crate::state::AppState;
 
 const OPDS_CONTENT_TYPE: &str = "application/atom+xml;profile=opds-catalog";
 
-/// Wraps an Atom XML body with the correct OPDS content-type header.
 fn opds_response(body: String) -> Response {
     (
         StatusCode::OK,
@@ -195,7 +194,6 @@ pub async fn get_opds_page(
 
 // Helpers
 
-/// Finds the Nth (1-based) extracted image under `temp_dir`, sorted by name.
 async fn find_extracted_page(
     temp_dir: &std::path::Path,
     page: usize,
@@ -217,7 +215,6 @@ async fn find_extracted_page(
     Ok(files.into_iter().nth(page.saturating_sub(1)))
 }
 
-/// Infers MIME type from image file extension for OPDS-PSE page serving.
 fn mime_from_path(path: &std::path::Path) -> &'static str {
     match path
         .extension()

@@ -29,6 +29,15 @@ pub async fn lock_category_create(conn: &mut PgConnection) -> Result<(), sqlx::E
     Ok(())
 }
 
+pub async fn lock_tankoubon_write(conn: &mut PgConnection, tankid: &str) -> Result<(), sqlx::Error> {
+    // hashtext() is 32-bit; distinct keys can alias under extreme cardinality, causing false serialization.
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)")
+        .bind(format!("tankoubon-write:{tankid}"))
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
 pub async fn lock_first_install(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
     // Serializes concurrent first-boot SELECT+INSERT on lrr_category so only one
     // process creates the Favorites category and bookmark link.

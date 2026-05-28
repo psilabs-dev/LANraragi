@@ -165,7 +165,10 @@ pub async fn mapping_exists(pool: &PgPool, tankid: &str, arcid: &str) -> Result<
     .fetch_one(pool)
     .await
 }
-pub async fn add_archive(pool: &PgPool, tankid: &str, arcid: &str) -> Result<(), sqlx::Error> {
+pub async fn add_archive<'e, E>(executor: E, tankid: &str, arcid: &str) -> Result<(), sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     // Append at max(position)+1.
     sqlx::query(
         r#"
@@ -180,7 +183,7 @@ pub async fn add_archive(pool: &PgPool, tankid: &str, arcid: &str) -> Result<(),
     )
     .bind(tankid)
     .bind(arcid)
-    .execute(pool)
+    .execute(executor)
     .await?;
     Ok(())
 }

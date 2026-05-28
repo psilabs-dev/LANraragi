@@ -253,7 +253,7 @@ pub async fn set_tags(
 
         // Insert the tag if it does not exist, then SELECT to get the tagid.
         // DO NOTHING avoids a spurious row-update lock on existing tags.
-        // Mirrors PgDatabase.pm:576.
+        // Mirrors PgDatabase.pm::set_archive_tags insert pattern.
         sqlx::query(
             "INSERT INTO lrr_tag (namespace, value) VALUES ($1, $2) ON CONFLICT (namespace, value) DO NOTHING",
         )

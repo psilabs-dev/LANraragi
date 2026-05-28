@@ -100,7 +100,7 @@ pub async fn enqueue_download_url(
     url: &str,
     catid: Option<&str>,
 ) -> Result<i64, crate::error::PendingApiError> {
-    validate_download_url(url).map_err(crate::error::PendingApiError::from)?;
+    validate_download_url(url).await.map_err(crate::error::PendingApiError::from)?;
     // TODO(ssrf): revalidate after HTTP redirects when the task fetch is implemented.
     let args_raw = serde_json::json!([url, catid]).to_string();
     super::minion::enqueue(pool, controller, download_url::NAME, &args_raw, 1)

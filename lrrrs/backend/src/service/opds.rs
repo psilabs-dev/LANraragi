@@ -15,9 +15,7 @@ use crate::db;
 use crate::db::archive::ArchiveRow;
 use crate::db::category::CategoryRow;
 
-/// Escapes the five predefined XML character references.
-///
-// port of Mojo::Util::xml_escape
+// Ported from Perl's Mojo::Util::xml_escape behavior.
 pub fn xml_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
@@ -35,13 +33,12 @@ pub fn xml_escape(s: &str) -> String {
 
 /// Infers the OPDS acquisition MIME type from the archive file extension.
 ///
-/// Application/zip is universally hated by OPDS readers so we use x-cbz and
-/// x-cbr here, matching Perl's `Model::Opds::get_opds_data`.
+/// Application/zip is poorly supported by OPDS readers; x-cbz and x-cbr are
+/// used here, matching Perl's `Model::Opds::get_opds_data`.
 ///
 /// Returns `None` for an empty or unrecognised extension. The column is
 /// nullable in the schema; `None` means the caller should omit the MIME type
 /// rather than emit a wrong content-type hint.
-///
 pub fn mime_for_extension(ext: &str) -> Option<&'static str> {
     match ext.to_ascii_lowercase().as_str() {
         "pdf"          => Some("application/pdf"),
@@ -53,9 +50,7 @@ pub fn mime_for_extension(ext: &str) -> Option<&'static str> {
     }
 }
 
-/// Converts a Unix timestamp (seconds since epoch) to an ISO 8601 UTC string.
-///
-// port of POSIX::strftime("%Y-%m-%dT%H:%M:%SZ", gmtime($date))
+// Ported from Perl's POSIX::strftime("%Y-%m-%dT%H:%M:%SZ", gmtime($date)) behavior.
 pub fn unix_to_iso8601(ts: i64) -> String {
     DateTime::<Utc>::from_timestamp(ts, 0)
         .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())

@@ -339,7 +339,7 @@ pub async fn search_archives(conn: &mut sqlx::PgConnection, params: &SearchParam
     Ok(SearchResult { filtered, records })
 }
 
-/// Combined row from the windowed outer query.
+// Combined row from the windowed outer query.
 #[derive(sqlx::FromRow)]
 struct SearchRowWithTotal {
     arcid: String,
@@ -356,7 +356,7 @@ struct SearchRowWithTotal {
     filtered_total: i64,
 }
 
-/// IDs-only row for random archive sampling.
+// IDs-only row for random archive sampling.
 #[derive(sqlx::FromRow)]
 struct SearchArcidRow {
     arcid: String,
@@ -545,7 +545,7 @@ pub async fn search_tanks(
     Ok((filtered, ids))
 }
 
-/// Tank row fetched for DTO conversion.
+// Tank row fetched for DTO conversion.
 #[derive(sqlx::FromRow)]
 struct TankRow {
     tankid: String,

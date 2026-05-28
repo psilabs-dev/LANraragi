@@ -350,10 +350,14 @@ pub async fn add_archive(pool: &PgPool, tankid: &str, arcid: &str) -> Result<(),
         return Ok(());
     }
 
-    db::tankoubons::add_archive(pool, tankid, arcid)
+    let mut tx = pool.begin().await.map_err(TankError::Db)?;
+    db::lock::lock_tankoubon_write(&mut *tx, tankid)
         .await
         .map_err(TankError::Db)?;
-    Ok(())
+    db::tankoubons::add_archive(&mut *tx, tankid, arcid)
+        .await
+        .map_err(TankError::Db)?;
+    tx.commit().await.map_err(TankError::Db)
 }
 pub async fn remove_archive(pool: &PgPool, tankid: &str, arcid: &str) -> Result<(), TankError> {
     let tank_exists = db::tankoubons::exists(pool, tankid)

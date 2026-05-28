@@ -10,10 +10,10 @@ pub async fn load_hash(pool: &PgPool) -> Result<Option<String>, sqlx::Error> {
         .await
 }
 
-/// Deletes the single row (if any). Used by `service::database::drop_database`
-/// to invalidate auth as part of a full database reset.
-pub async fn delete_all(pool: &PgPool) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM lrr_api_key").execute(pool).await?;
+/// Deletes the single row (if any). Caller must supply a connection;
+/// runs inside the caller's transaction.
+pub async fn delete_all(conn: &mut sqlx::PgConnection) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM lrr_api_key").execute(&mut *conn).await?;
     Ok(())
 }
 

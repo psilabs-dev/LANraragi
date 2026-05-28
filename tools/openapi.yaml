@@ -844,6 +844,10 @@ paths:
                     minLength: 40
                     maxLength: 40
                     description: ID of the uploaded archive
+                  warning:
+                    type: string
+                    nullable: true
+                    description: Non-fatal warning (e.g. category assignment failed after archive was committed)
         '400':
           description: Bad request
           content:
@@ -3557,24 +3561,11 @@ paths:
             minimum: 1
       responses:
         '200':
-          description: Tankoubon thumbnail updated
+          description: Tankoubon thumbnail update enqueued.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  operation:
-                    type: string
-                    enum:
-                      - update_tankoubon_thumbnail
-                  success:
-                    type: integer
-                    enum:
-                      - 0
-                      - 1
-                  new_thumbnail:
-                    type: string
-                    description: Path to the new thumbnail file
+                $ref: '#/components/schemas/MinionJobResponse'
         '400':
           description: Error response
           content:
