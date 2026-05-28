@@ -583,12 +583,7 @@ sub uninstall_plugin {
         return ( 403, "Cannot uninstall built-in plugin '$namespace'." );
     }
 
-    # Delete the plugin file (only if it's actually inside LRR lib)
     if ( -e $abs_installed_path ) {
-        my $plugindir = getcwd() . "/lib/LANraragi/Plugin";
-        unless ( index( $abs_installed_path, "$plugindir/" ) == 0 ) {
-            return ( 403, "Can't delete plugin outside Plugin/ directory: $abs_installed_path" );
-        }
         unlink $abs_installed_path or do {
             return ( 500, "Couldn't delete plugin file: $!" );
         };

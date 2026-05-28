@@ -225,6 +225,12 @@ sub get_plugin_parameters {
 sub register_plugin {
     my ( $redis, $namespace, $installed_path, $type ) = @_;
 
+    # enforce relative path being under LANraragi/Plugin
+    # basically should never happen
+    unless ( $installed_path =~ m{^LANraragi/Plugin/} ) {
+        die "register_plugin: installed_path must be under LANraragi/Plugin/, got '$installed_path'";
+    }
+
     my $namerds = "LRR_PLUGIN_" . uc($namespace);
     $redis->hset( $namerds, "installed_path", $installed_path, "type", $type );
     return $installed_path;
