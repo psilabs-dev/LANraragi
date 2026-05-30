@@ -658,6 +658,16 @@ paths:
                       - provider
                     properties:
                       provider:
+                        const: github
+                  then:
+                    properties:
+                      url:
+                        pattern: '^https://github\.com/[^/]+/[^/]+'
+                - if:
+                    required:
+                      - provider
+                    properties:
+                      provider:
                         const: cdn
                   then:
                     required:
@@ -948,6 +958,16 @@ paths:
                     properties:
                       url:
                         pattern: "^https://"
+                - if:
+                    required:
+                      - provider
+                    properties:
+                      provider:
+                        const: github
+                  then:
+                    properties:
+                      url:
+                        pattern: '^https://github\.com/[^/]+/[^/]+'
                 - if:
                     required:
                       - provider
@@ -5421,5 +5441,15 @@ components:
             properties:
               url:
                 pattern: "^https://"
+        - if:
+            required:
+              - provider
+            properties:
+              provider:
+                const: github
+          then:
+            properties:
+              url:
+                pattern: '^https://github\.com/[^/]+/[^/]+'
 servers:
   - url: https://lrr.tvc-16.science/api
