@@ -71,6 +71,8 @@ pub async fn build_backup_json(pool: &PgPool) -> Result<JsonValue, BackupError> 
         tankoubons.push(json!({
             "tankid":   tank.tankid,
             "name":     tank.name,
+            "summary":  tank.summary.as_deref().unwrap_or(""),
+            "tags":     tank.tags.as_deref().unwrap_or(""),
             "archives": archives,
         }));
     }
@@ -169,9 +171,11 @@ pub async fn restore_from_json(pool: &PgPool, backup: &JsonValue) -> Result<(), 
                 continue;
             }
             let name = tank["name"].as_str().unwrap_or_default();
+            let summary = tank["summary"].as_str().unwrap_or_default();
+            let tags = tank["tags"].as_str().unwrap_or_default();
             info!("Restoring Tankoubon {tankid}...");
 
-            db::backup::upsert_tankoubon(&mut *tx, tankid, name)
+            db::backup::upsert_tankoubon(&mut *tx, tankid, name, summary, tags)
                 .await
                 .map_err(|e| {
                     error!("Failed to upsert tankoubon {tankid}: {e}");

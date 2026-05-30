@@ -203,16 +203,23 @@ async fn find_extracted_page(
     }
 
     let mut entries = tokio::fs::read_dir(temp_dir).await?;
-    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
     while let Some(e) = entries.next_entry().await? {
         let p = e.path();
         if p.is_file() {
-            files.push(p);
+            if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                names.push(name.to_string());
+            }
         }
     }
-    files.sort();
+    // Use the same natural-sort + cover/credit ordering as the archive page list
+    // so OPDS-PSE page N matches getFiles page N (not lexicographic).
+    crate::service::archive::sort_filelist(&mut names);
 
-    Ok(files.into_iter().nth(page.saturating_sub(1)))
+    Ok(names
+        .into_iter()
+        .nth(page.saturating_sub(1))
+        .map(|name| temp_dir.join(name)))
 }
 
 fn mime_from_path(path: &std::path::Path) -> &'static str {

@@ -134,7 +134,11 @@ pub async fn update(
     search: Option<&str>,
     pinned: bool,
 ) -> Result<(), CategoryError> {
-    let exists = db::category::get(pool, catid)
+    let mut tx = pool.begin().await.map_err(CategoryError::Db)?;
+    db::lock::lock_category_write(&mut *tx, catid)
+        .await
+        .map_err(CategoryError::Db)?;
+    let exists = db::category::get(&mut *tx, catid)
         .await
         .map_err(CategoryError::Db)?;
     if exists.is_none() {
@@ -142,9 +146,10 @@ pub async fn update(
             "{catid} doesn't exist in the database!"
         )));
     }
-    db::category::upsert(pool, catid, name, search, pinned)
+    db::category::upsert(&mut *tx, catid, name, search, pinned)
         .await
-        .map_err(CategoryError::Db)
+        .map_err(CategoryError::Db)?;
+    tx.commit().await.map_err(CategoryError::Db)
 }
 // Perl returns 1 (success) for both existing and missing categories; no 404
 // is declared in openapi.yaml for deleteCategory, so this mirrors that behavior.

@@ -18,6 +18,8 @@ pub struct CategoryArchiveRow {
 pub struct TankoubonRow {
     pub tankid: String,
     pub name: String,
+    pub summary: Option<String>,
+    pub tags: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -72,7 +74,7 @@ pub async fn list_category_archives(
 pub async fn list_tankoubons(pool: &PgPool) -> Result<Vec<TankoubonRow>, sqlx::Error> {
     sqlx::query_as::<_, TankoubonRow>(
         r#"
-        SELECT tankid, name
+        SELECT tankid, name, summary, tags
         FROM lrr_tank
         ORDER BY tankid
         "#,
@@ -173,17 +175,21 @@ pub async fn upsert_tankoubon(
     conn: &mut sqlx::PgConnection,
     tankid: &str,
     name: &str,
+    summary: &str,
+    tags: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
         INSERT INTO lrr_tank (tankid, name, summary, tags)
-        VALUES ($1, $2, '', '')
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (tankid) DO UPDATE
-            SET name = EXCLUDED.name
+            SET name = EXCLUDED.name, summary = EXCLUDED.summary, tags = EXCLUDED.tags
         "#,
     )
     .bind(tankid)
     .bind(name)
+    .bind(summary)
+    .bind(tags)
     .execute(&mut *conn)
     .await?;
     Ok(())
@@ -219,7 +225,10 @@ pub async fn update_archive_metadata(
     let rows = sqlx::query(
         r#"
         UPDATE lrr_archive
-        SET title = $2, summary = $3, thumbhash = $4
+        SET title = $2,
+            summary = $3,
+            -- Never clobber a stored thumbnail with an empty backup value (Perl guards this).
+            thumbhash = COALESCE(NULLIF($4, ''), thumbhash)
         WHERE arcid = $1
         "#,
     )

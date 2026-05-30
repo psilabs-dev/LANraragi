@@ -16,7 +16,7 @@ use crate::state::AppState;
 pub async fn clean_database(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, ApiError> {
-    let (deleted, unlinked) = service::database::clean_database(&state.db)
+    let (deleted, unlinked) = service::database::clean_database(&state.db, &state.config.thumb_dir)
         .await
         .tag_err("cleanDatabase")?;
     Ok(Json(json!({

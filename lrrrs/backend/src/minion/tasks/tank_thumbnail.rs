@@ -7,7 +7,8 @@ use serde_json::{Value as JsonValue, json};
 
 use super::{Task, TaskFuture};
 
-pub const NAME: &str = "tank_thumbnail";
+// `tank_thumbnail_task` per the queueMinionJob enum in openapi.yaml.
+pub const NAME: &str = "tank_thumbnail_task";
 
 pub struct TankThumbnail;
 

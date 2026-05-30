@@ -9,6 +9,7 @@ axum = { version = "0.8.6", features = ["multipart"] }
 base64 = "0.22"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+lru = "0.12"
 num_cpus = "1"
 percent-encoding = "2"
 rand = "0.8"

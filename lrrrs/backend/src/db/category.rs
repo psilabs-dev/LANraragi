@@ -22,13 +22,16 @@ pub async fn list_all(pool: &PgPool) -> Result<Vec<CategoryRow>, sqlx::Error> {
 }
 
 /// Fetches a single category row, or `None` if not found.
-pub async fn get(pool: &PgPool, catid: &str) -> Result<Option<CategoryRow>, sqlx::Error> {
+pub async fn get<'e, E>(executor: E, catid: &str) -> Result<Option<CategoryRow>, sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     sqlx::query_as::<_, CategoryRow>(
         "SELECT catid, name, pinned, COALESCE(search, '') AS search \
          FROM lrr_category WHERE catid = $1",
     )
     .bind(catid)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await
 }
 

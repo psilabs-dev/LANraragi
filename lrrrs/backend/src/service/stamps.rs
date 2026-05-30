@@ -140,9 +140,16 @@ pub async fn add_stamp(
 
     let stampid = format!("{arcid}:{page}:{}:{}", now_millis(), random_hex4());
 
-    db::stamps::insert(pool, &stampid, arcid, page, &position, &content)
+    let mut tx = pool.begin().await.map_err(StampError::Db)?;
+    // Archive-granularity lock: creating a stamp mutates the archive's stamp set,
+    // not a pre-existing stampid (matches Perl add_stamp). update/delete lock by stampid.
+    db::lock::lock_archive_write(&mut *tx, arcid)
         .await
         .map_err(StampError::Db)?;
+    db::stamps::insert(&mut *tx, &stampid, arcid, page, &position, &content)
+        .await
+        .map_err(StampError::Db)?;
+    tx.commit().await.map_err(StampError::Db)?;
 
     Ok(stampid)
 }
@@ -155,39 +162,50 @@ pub async fn update_stamp(
     new_position: Option<&str>,
     new_content: Option<&str>,
 ) -> Result<(), StampError> {
-    let current = db::stamps::get(pool, stampid)
+    let mut tx = pool.begin().await.map_err(StampError::Db)?;
+    db::lock::lock_stamp_write(&mut *tx, stampid)
+        .await
+        .map_err(StampError::Db)?;
+    let current = db::stamps::get(&mut *tx, stampid)
         .await
         .map_err(StampError::Db)?
         .ok_or(StampError::NotFound)?;
 
+    // Treat an empty string as "not supplied" (Perl-falsy), so a blank field
+    // does not overwrite the stored position/content.
     let position = new_position
+        .filter(|s| !s.is_empty())
         .map(strip_pipe)
         .unwrap_or(current.position);
     let content = new_content
+        .filter(|s| !s.is_empty())
         .map(strip_pipe)
         .unwrap_or(current.content);
 
-    let updated = db::stamps::update(pool, stampid, &position, &content)
+    let updated = db::stamps::update(&mut *tx, stampid, &position, &content)
         .await
         .map_err(StampError::Db)?;
 
     if !updated {
         return Err(StampError::NotFound);
     }
-    Ok(())
+    tx.commit().await.map_err(StampError::Db)
 }
 
 /// Removes a stamp.  Returns `StampError::NotFound` if the stamp does not
 /// exist.
 pub async fn delete_stamp(pool: &PgPool, stampid: &str) -> Result<(), StampError> {
-    let deleted = db::stamps::delete(pool, stampid)
+    let mut tx = pool.begin().await.map_err(StampError::Db)?;
+    db::lock::lock_stamp_write(&mut *tx, stampid)
+        .await
+        .map_err(StampError::Db)?;
+    let deleted = db::stamps::delete(&mut *tx, stampid)
         .await
         .map_err(StampError::Db)?;
     if !deleted {
-        Err(StampError::NotFound)
-    } else {
-        Ok(())
+        return Err(StampError::NotFound);
     }
+    tx.commit().await.map_err(StampError::Db)
 }
 
 // Perl uses `|` as an in-band separator; pipes in position/content would corrupt stored values.

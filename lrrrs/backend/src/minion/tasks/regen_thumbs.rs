@@ -12,7 +12,8 @@ use serde_json::{Value as JsonValue, json};
 
 use super::{Task, TaskFuture};
 
-pub const NAME: &str = "regen_thumbs";
+// `regen_all_thumbnails` per the queueMinionJob enum in openapi.yaml.
+pub const NAME: &str = "regen_all_thumbnails";
 
 pub struct RegenThumbs;
 

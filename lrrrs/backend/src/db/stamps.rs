@@ -11,13 +11,16 @@ pub struct StampRow {
 }
 
 /// Returns the stamp identified by `stampid`, or `None` if absent.
-pub async fn get(pool: &PgPool, stampid: &str) -> Result<Option<StampRow>, sqlx::Error> {
+pub async fn get<'e, E>(executor: E, stampid: &str) -> Result<Option<StampRow>, sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     sqlx::query_as::<_, StampRow>(
         "SELECT stampid, position, content \
          FROM lrr_stamp WHERE stampid = $1",
     )
     .bind(stampid)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await
 }
 

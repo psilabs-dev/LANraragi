@@ -19,7 +19,9 @@ pub struct SearchInput<'a> {
     pub category_id: Option<&'a str>,
     pub start: i64,
     pub sortby: Option<&'a str>,
-    pub sort_desc: bool,
+    /// Raw `order` query param: `Some("desc")`, `Some("asc")`, or `None`
+    /// (no param → field default via `SortBy::default_desc`).
+    pub order: Option<&'a str>,
     pub newonly: bool,
     pub untaggedonly: bool,
     pub grouptanks: bool,
@@ -136,6 +138,7 @@ async fn run_search(pool: &PgPool, input: &SearchInput<'_>) -> Result<(i64, i64,
         resolve_category(&mut conn, input.category_id, &tokens).await?;
 
     let sortby = parse_sortby(input.sortby);
+    let sort_desc = resolve_sort_desc(input.order, &sortby);
 
     let use_pagination = input.start != -1;
     let (start, keysperpage) = if use_pagination {
@@ -153,7 +156,7 @@ async fn run_search(pool: &PgPool, input: &SearchInput<'_>) -> Result<(i64, i64,
             category_id: resolved_catid.as_deref(),
             extra_tokens: &extra_tokens,
             sortby: sortby.clone(),
-            sort_desc: input.sort_desc,
+            sort_desc,
             newonly: input.newonly,
             untaggedonly: input.untaggedonly,
             grouptanks: input.grouptanks,
@@ -179,7 +182,7 @@ async fn run_search(pool: &PgPool, input: &SearchInput<'_>) -> Result<(i64, i64,
             &extra_tokens,
             resolved_catid.as_deref(),
             &sortby,
-            input.sort_desc,
+            sort_desc,
             start,
             keysperpage,
         )
@@ -224,6 +227,17 @@ async fn resolve_category(
     } else {
         // Static category: add membership WHERE predicate via catid
         Ok((Vec::new(), Some(cat.catid)))
+    }
+}
+
+/// Resolve the sort direction. Explicit `order=desc`/`order=asc` are honoured;
+/// when the client supplies no `order`, fall back to the field's default
+/// (`SortBy::default_desc`) so e.g. `lastread` lists most-recently-read first.
+fn resolve_sort_desc(order: Option<&str>, sortby: &SortBy) -> bool {
+    match order {
+        Some("desc") => true,
+        Some(_) => false,
+        None => sortby.default_desc(),
     }
 }
 

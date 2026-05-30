@@ -45,7 +45,7 @@ impl From<DatabaseError> for crate::error::PendingApiError {
 /// `unlinked` is always 0: the rename-reconciliation pass
 /// (`change_archive_id_with_dbh`) is not yet implemented.
 // TODO: implement ID-reconciliation pass (Perl change_archive_id_with_dbh).
-pub async fn clean_database(pool: &PgPool) -> Result<(u64, u64), DatabaseError> {
+pub async fn clean_database(pool: &PgPool, thumb_dir: &std::path::Path) -> Result<(u64, u64), DatabaseError> {
     // Fetch (arcid, filename) pairs from lrr_archive.
     let rows = db::archive::list_paths_for_clean(pool)
         .await
@@ -62,7 +62,7 @@ pub async fn clean_database(pool: &PgPool) -> Result<(u64, u64), DatabaseError> 
         let exists = tokio::fs::try_exists(&filename).await.unwrap_or(false);
         if !exists {
             debug!(arcid, filename, "archive file missing; deleting archive row");
-            match service::archive::delete_archive(pool, &arcid).await {
+            match service::archive::delete_archive(pool, thumb_dir, &arcid).await {
                 Ok(_) => {
                     info!(arcid, "deleted missing-file archive");
                     deleted += 1;

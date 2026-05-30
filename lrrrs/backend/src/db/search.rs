@@ -107,6 +107,16 @@ pub enum SortBy {
     TagNamespace(String),
 }
 
+impl SortBy {
+    /// Default sort direction when the client supplies no `order` parameter.
+    ///
+    /// Mirrors Perl LRR: `lastread` defaults to most-recently-read first (DESC);
+    /// `title` and tag-namespace sorts default to A→Z (ASC).
+    pub fn default_desc(&self) -> bool {
+        matches!(self, SortBy::LastRead)
+    }
+}
+
 /// Parameters for a search query.
 pub struct SearchParams<'a> {
     pub tokens: &'a [SearchToken],
@@ -242,33 +252,8 @@ pub async fn search_archives(conn: &mut sqlx::PgConnection, params: &SearchParam
         sql.push_str(", sort_tag.sort_value");
     }
 
-    // ORDER BY
-    match &params.sortby {
-        SortBy::Title => {
-            let dir = if params.sort_desc { "DESC" } else { "ASC" };
-            sql.push_str(&format!(" ORDER BY a.title {dir}"));
-        }
-        SortBy::LastRead => {
-            // Archives with lastreadtime > 0 first, unread last
-            let dir = if params.sort_desc { "DESC" } else { "ASC" };
-            sql.push_str(&format!(
-                " ORDER BY CASE WHEN a.lastreadtime IS NULL OR a.lastreadtime = 0 THEN 1 ELSE 0 END, a.lastreadtime {dir}"
-            ));
-        }
-        SortBy::TagNamespace(_) => {
-            if lateral_ns_value.is_some() {
-                // Keyed archives first (have sort namespace tag), unkeyed last
-                let dir = if params.sort_desc { "DESC" } else { "ASC" };
-                sql.push_str(&format!(
-                    " ORDER BY CASE WHEN sort_tag.sort_value IS NULL THEN 1 ELSE 0 END, sort_tag.sort_value {dir}, a.title ASC"
-                ));
-            } else {
-                // Fallback: invalid sortkey falls back to title
-                let dir = if params.sort_desc { "DESC" } else { "ASC" };
-                sql.push_str(&format!(" ORDER BY a.title {dir}"));
-            }
-        }
-    }
+    // ORDER BY (direction already resolved upstream; see service::search::resolve_sort_desc)
+    sql.push_str(&build_order_by(&params.sortby, params.sort_desc, lateral_ns_value.is_some()));
 
     // LIMIT / OFFSET
     let mut limit_value: Option<i64> = None;
@@ -795,6 +780,32 @@ fn convert_wildcards<'a>(
     (ns, val)
 }
 
+/// Build the archive `ORDER BY` clause. `keyed` is true when the tag-namespace
+/// sort LEFT JOIN (`sort_tag`) is present. `sort_desc` is the already-resolved
+/// direction; default resolution lives in `service::search::resolve_sort_desc`.
+fn build_order_by(sortby: &SortBy, sort_desc: bool, keyed: bool) -> String {
+    let dir = if sort_desc { "DESC" } else { "ASC" };
+    match sortby {
+        SortBy::Title => format!(" ORDER BY a.title {dir}"),
+        SortBy::LastRead => format!(
+            " ORDER BY CASE WHEN a.lastreadtime IS NULL OR a.lastreadtime = 0 THEN 1 ELSE 0 END, a.lastreadtime {dir}"
+        ),
+        SortBy::TagNamespace(_) if keyed => format!(
+            " ORDER BY CASE WHEN sort_tag.sort_value IS NULL THEN 1 ELSE 0 END, sort_tag.sort_value {dir}, a.title ASC"
+        ),
+        // Invalid/absent sort namespace falls back to title.
+        SortBy::TagNamespace(_) => format!(" ORDER BY a.title {dir}"),
+    }
+}
+
+/// LIKE/ILIKE pattern for a `namespace:value` match against the comma-joined
+/// `lrr_tank.tags` string. The `:` separator is always present so a namespaced
+/// query cannot match across namespace boundaries; an empty `value` matches any
+/// value in the namespace.
+fn tank_tag_pattern(ns: &str, value: &str) -> String {
+    format!("%{ns}:{value}%")
+}
+
 fn build_exact_archive_clause(
     namespace: &Option<String>,
     value: &str,
@@ -932,13 +943,13 @@ fn build_exact_tank_clause(
     match namespace {
         Some(ns) if value.is_empty() => {
             let clause = format!("t.tags LIKE ${}", main_idx);
-            bind_values.push(format!("%{ns}:%"));
+            bind_values.push(tank_tag_pattern(ns, ""));
             *main_idx += 1;
             clause
         }
         Some(ns) => {
             let clause = format!("t.tags LIKE ${}", main_idx);
-            bind_values.push(format!("%{ns}:{value}%"));
+            bind_values.push(tank_tag_pattern(ns, value));
             *main_idx += 1;
             clause
         }
@@ -960,13 +971,13 @@ fn build_fuzzy_tank_clause(
     match namespace {
         Some(ns) if value.is_empty() => {
             let clause = format!("t.tags ILIKE ${}", main_idx);
-            bind_values.push(format!("%{ns}:%"));
+            bind_values.push(tank_tag_pattern(ns, ""));
             *main_idx += 1;
             clause
         }
         Some(ns) => {
             let clause = format!("t.tags ILIKE ${}", main_idx);
-            bind_values.push(format!("%{ns}%{value}%"));
+            bind_values.push(tank_tag_pattern(ns, value));
             *main_idx += 1;
             clause
         }
@@ -979,5 +990,51 @@ fn build_fuzzy_tank_clause(
             *main_idx += 1;
             clause
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lastread_defaults_to_descending() {
+        assert!(SortBy::LastRead.default_desc());
+        assert!(!SortBy::Title.default_desc());
+        assert!(!SortBy::TagNamespace("artist".to_string()).default_desc());
+    }
+
+    #[test]
+    fn order_by_title_honours_direction() {
+        assert_eq!(build_order_by(&SortBy::Title, false, false), " ORDER BY a.title ASC");
+        assert_eq!(build_order_by(&SortBy::Title, true, false), " ORDER BY a.title DESC");
+    }
+
+    #[test]
+    fn order_by_lastread_partitions_unread_then_applies_direction() {
+        assert_eq!(
+            build_order_by(&SortBy::LastRead, false, false),
+            " ORDER BY CASE WHEN a.lastreadtime IS NULL OR a.lastreadtime = 0 THEN 1 ELSE 0 END, a.lastreadtime ASC"
+        );
+        assert!(build_order_by(&SortBy::LastRead, true, false).ends_with("a.lastreadtime DESC"));
+    }
+
+    #[test]
+    fn tank_tag_pattern_anchors_the_namespace_colon() {
+        assert_eq!(tank_tag_pattern("artist", "foo"), "%artist:foo%");
+        assert_eq!(tank_tag_pattern("artist", ""), "%artist:%");
+    }
+
+    #[test]
+    fn tank_clauses_share_the_colon_anchored_pattern() {
+        let mut idx = 1;
+        let mut binds = Vec::new();
+        let _ = build_fuzzy_tank_clause(&Some("artist".to_string()), "foo", &mut idx, &mut binds);
+        assert_eq!(binds, vec!["%artist:foo%".to_string()]);
+
+        let mut idx2 = 1;
+        let mut binds2 = Vec::new();
+        let _ = build_exact_tank_clause(&Some("artist".to_string()), "foo", &mut idx2, &mut binds2);
+        assert_eq!(binds2, vec!["%artist:foo%".to_string()]);
     }
 }

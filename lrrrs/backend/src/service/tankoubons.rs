@@ -250,6 +250,9 @@ pub async fn delete(pool: &PgPool, tankid: &str) -> Result<(), TankError> {
         return Err(TankError::NotFound(tankid.to_string()));
     }
     let mut tx = pool.begin().await.map_err(TankError::Db)?;
+    db::lock::lock_tankoubon_write(&mut *tx, tankid)
+        .await
+        .map_err(TankError::Db)?;
     db::tankoubons::delete(&mut tx, tankid)
         .await
         .map_err(TankError::Db)?;
@@ -288,6 +291,9 @@ pub async fn update(pool: &PgPool, tankid: &str, input: UpdateInput) -> Result<S
     // If any arcid does not exist the transaction rolls back, leaving
     // metadata unchanged.
     let mut tx = pool.begin().await.map_err(TankError::Db)?;
+    db::lock::lock_tankoubon_write(&mut *tx, tankid)
+        .await
+        .map_err(TankError::Db)?;
 
     if let Some(arcids) = &input.archives {
         for arcid in arcids {
@@ -383,6 +389,9 @@ pub async fn remove_archive(pool: &PgPool, tankid: &str, arcid: &str) -> Result<
     }
 
     let mut tx = pool.begin().await.map_err(TankError::Db)?;
+    db::lock::lock_tankoubon_write(&mut *tx, tankid)
+        .await
+        .map_err(TankError::Db)?;
     db::tankoubons::remove_archive(&mut tx, tankid, arcid)
         .await
         .map_err(TankError::Db)?;
@@ -439,7 +448,7 @@ pub async fn total_pagecount(pool: &PgPool, tankid: &str) -> Result<i64, sqlx::E
 
 /// Enqueue a tankoubon thumbnail generation job and return the job id.
 pub async fn enqueue_thumbnail_job(pool: &PgPool, tankid: &str) -> Result<i64, TankError> {
-    db::jobs::insert(pool, "tank_thumbnail", &json!([tankid]), 0)
+    db::jobs::insert(pool, crate::minion::tasks::tank_thumbnail::NAME, &json!([tankid]), 0)
         .await
         .map_err(TankError::Db)
 }
@@ -450,7 +459,7 @@ pub async fn enqueue_thumbnail_job_for_page(
     tankid: &str,
     page: i64,
 ) -> Result<i64, TankError> {
-    db::jobs::insert(pool, "tank_thumbnail", &json!([tankid, page]), 0)
+    db::jobs::insert(pool, crate::minion::tasks::tank_thumbnail::NAME, &json!([tankid, page]), 0)
         .await
         .map_err(TankError::Db)
 }

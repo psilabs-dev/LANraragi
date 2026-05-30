@@ -37,10 +37,10 @@ pub async fn search_archives(
     State(state): State<AppState>,
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<Value>, ApiError> {
-    let sort_desc = q.order.as_deref() == Some("desc");
     let newonly = q.newonly.as_deref() == Some("true");
     let untaggedonly = q.untaggedonly.as_deref() == Some("true");
-    let grouptanks = q.groupby_tanks.as_deref() == Some("true");
+    // grouptanks defaults to true when the param is absent (openapi default:true; Perl `// "true"`).
+    let grouptanks = q.groupby_tanks.as_deref().map_or(true, |v| v == "true");
     let hidecompleted = q.hidecompleted.as_deref() == Some("true");
     let start = q.start.unwrap_or(0);
 
@@ -51,7 +51,7 @@ pub async fn search_archives(
         category_id: q.category.as_deref(),
         start,
         sortby: q.sortby.as_deref(),
-        sort_desc,
+        order: q.order.as_deref(),
         newonly,
         untaggedonly,
         grouptanks,
@@ -75,9 +75,11 @@ pub async fn search_random_archives(
 ) -> Result<Json<Value>, ApiError> {
     let newonly = q.newonly.as_deref() == Some("true");
     let untaggedonly = q.untaggedonly.as_deref() == Some("true");
+    // Random search intentionally defaults grouptanks to FALSE, matching Perl
+    // Search.pm (`// "false"`); this diverges from openapi's `default: true`.
     let grouptanks = q.groupby_tanks.as_deref() == Some("true");
     let hidecompleted = q.hidecompleted.as_deref() == Some("true");
-    let count = q.count.unwrap_or(5);
+    let count = q.count.filter(|&c| c > 0).unwrap_or(5); // Perl `count || 5`: absent or 0 → 5
 
     let data = service::search::search_random_archives(
         &state.db,

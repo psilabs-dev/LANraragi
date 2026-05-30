@@ -32,7 +32,10 @@ pub fn build_app(app_state: AppState) -> Router {
         .route("/regen_thumbs", axum::routing::post(controller::misc::regen_thumbnails))
         .route("/archives", axum::routing::get(controller::archive::get_all_archives))
         .route("/archives/untagged", axum::routing::get(controller::archive::get_untagged_archives))
-        .route("/archives/upload", axum::routing::put(controller::archive::upload_archive))
+        // No body limit: archive uploads are arbitrarily large; the reverse proxy
+        // (nginx) enforces request-size limits. Mirrors Perl LRR (no small cap).
+        .route("/archives/upload", axum::routing::put(controller::archive::upload_archive)
+            .layer(DefaultBodyLimit::disable()))
         .route("/archives/{id}", axum::routing::get(controller::archive::get_archive))
         .route("/archives/{id}", axum::routing::delete(controller::archive::delete_archive))
         .route("/archives/{id}/metadata", axum::routing::get(controller::archive::get_archive_metadata))

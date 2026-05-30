@@ -4,7 +4,8 @@ use serde_json::{Value as JsonValue, json};
 
 use super::{Task, TaskFuture};
 
-pub const NAME: &str = "cover_thumbnail";
+// `thumbnail_task` per the queueMinionJob enum in openapi.yaml (cover thumbnail).
+pub const NAME: &str = "thumbnail_task";
 
 pub struct CoverThumbnail;
 

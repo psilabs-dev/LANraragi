@@ -109,3 +109,37 @@ pub mod test_tasks {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every externally-queueable task name must use the exact spelling from the
+    /// `queueMinionJob` `jobname` enum in tools/openapi.yaml — aio-lanraragi enforces
+    /// that contract, so a registry name that diverges makes the spec'd job type 400.
+    /// Internal-only tasks (driven by dedicated endpoints) are exempt.
+    #[test]
+    fn registry_job_names_conform_to_openapi_enum() {
+        const OPENAPI_JOBNAMES: &[&str] = &[
+            "thumbnail_task",
+            "tank_thumbnail_task",
+            "page_thumbnails",
+            "regen_all_thumbnails",
+            "find_duplicates",
+            "build_stat_hashes",
+            "handle_upload",
+            "download_url",
+            "run_plugin",
+        ];
+        const INTERNAL_ONLY: &[&str] = &["noop", "backup_json", "restore_backup"];
+
+        let registry = Registry::with_defaults();
+        for name in registry.by_name.keys().copied() {
+            assert!(
+                OPENAPI_JOBNAMES.contains(&name) || INTERNAL_ONLY.contains(&name),
+                "registered minion task `{name}` is neither a queueMinionJob enum value \
+                 nor a documented internal-only task (see tools/openapi.yaml)"
+            );
+        }
+    }
+}

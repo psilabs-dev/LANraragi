@@ -37,16 +37,28 @@ pub async fn list_all(pool: &PgPool) -> Result<Vec<ArchiveMetadataJson>, sqlx::E
     // Batch-fetch filemap paths and drop archives whose backing file is absent.
     // Mirrors PgArchive.pm list_archives file-existence check.
     let path_rows = db::archive::list_paths_for_arcids(pool, &arcids).await?;
-    let mut path_map: std::collections::HashMap<String, String> =
+    let path_map: std::collections::HashMap<String, String> =
         path_rows.into_iter().collect();
+
+    // Stat all backing files concurrently rather than one sequential await per archive.
+    let mut stat_set = tokio::task::JoinSet::new();
+    for (arcid, path) in &path_map {
+        let arcid = arcid.clone();
+        let path = path.clone();
+        stat_set.spawn(async move { (arcid, tokio::fs::try_exists(&path).await.unwrap_or(false)) });
+    }
+    let mut file_present: std::collections::HashMap<String, bool> =
+        std::collections::HashMap::with_capacity(path_map.len());
+    while let Some(res) = stat_set.join_next().await {
+        if let Ok((arcid, present)) = res {
+            file_present.insert(arcid, present);
+        }
+    }
 
     let mut result = Vec::with_capacity(rows.len());
     for r in rows {
-        let Some(path) = path_map.remove(&r.arcid) else {
-            // No filemap entry: treat as missing.
-            continue;
-        };
-        if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+        // Absent from the map (no filemap row) or false (backing file gone) → drop.
+        if !file_present.get(&r.arcid).copied().unwrap_or(false) {
             continue;
         }
         let toc = toc_map.remove(&r.arcid).unwrap_or_default();
@@ -222,15 +234,24 @@ pub async fn upload(
     db::filemap::insert(&mut *tx, &final_path_str, &input.arcid)
         .await
         .map_err(UploadError::Db)?;
-    if let Some(tags_str) = input.tags.as_deref().filter(|s| !s.is_empty()) {
-        db::archive::set_tags(&mut tx, &input.arcid, tags_str.trim())
-            .await
-            .map_err(UploadError::Db)?;
-    }
+    // Always stamp date_added:<epoch> (Perl add_timestamp_tag), merged with any
+    // user-supplied tags, unless the client already provided a date_added tag.
+    let now_epoch = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let tags_final = match input.tags.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(t) if t.contains("date_added:") => t.to_string(),
+        Some(t) => format!("{t}, date_added:{now_epoch}"),
+        None => format!("date_added:{now_epoch}"),
+    };
+    db::archive::set_tags(&mut tx, &input.arcid, &tags_final)
+        .await
+        .map_err(UploadError::Db)?;
     tx.commit().await.map_err(UploadError::Db)?;
 
     let enqueue_result =
-        db::jobs::insert(pool, "cover_thumbnail", &json!([&input.arcid]), 0).await;
+        db::jobs::insert(pool, crate::minion::tasks::cover_thumbnail::NAME, &json!([&input.arcid]), 0).await;
     if let Err(error) = enqueue_result {
         warn!(arcid = %input.arcid, ?error, "failed to enqueue cover thumbnail");
     }
@@ -523,7 +544,7 @@ pub async fn update_metadata(
 
 /// Deletes an archive from DB and filesystem.
 /// Returns the deleted file path string (empty if file was absent).
-pub async fn delete_archive(pool: &PgPool, arcid: &str) -> Result<String, ArchiveError> {
+pub async fn delete_archive(pool: &PgPool, thumb_dir: &Path, arcid: &str) -> Result<String, ArchiveError> {
     let file_path = db::archive::get_path(pool, arcid)
         .await
         .map_err(ArchiveError::Db)?;
@@ -552,6 +573,22 @@ pub async fn delete_archive(pool: &PgPool, arcid: &str) -> Result<String, Archiv
             if e.kind() != std::io::ErrorKind::NotFound {
                 warn!(arcid, path = %path_str, ?e, "failed to remove archive file");
             }
+        }
+    }
+
+    // Best-effort removal of the cover thumbnail and per-page thumbnail directory
+    // (mirrors Perl delete_archive; thumbs key on arcid so a re-upload would otherwise
+    // serve stale cached pages).
+    let cover = thumbnail::cover_thumb_path(thumb_dir, arcid);
+    if let Err(e) = tokio::fs::remove_file(&cover).await {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            warn!(arcid, ?e, "failed to remove cover thumbnail");
+        }
+    }
+    let page_dir = thumbnail::page_thumb_dir(thumb_dir, arcid);
+    if let Err(e) = tokio::fs::remove_dir_all(&page_dir).await {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            warn!(arcid, ?e, "failed to remove page-thumbnail directory");
         }
     }
 
@@ -649,7 +686,7 @@ pub async fn get_thumbnail(
             Some(n) if n >= 1 => {
                 db::jobs::insert(pool, "page_thumbnails", &json!([arcid, n, false]), 0).await
             }
-            _ => db::jobs::insert(pool, "cover_thumbnail", &json!([arcid]), 0).await,
+            _ => db::jobs::insert(pool, crate::minion::tasks::cover_thumbnail::NAME, &json!([arcid]), 0).await,
         }
         .map_err(ArchiveError::Db)?;
         return Ok(ThumbnailResult::Queued(job_id));
@@ -792,7 +829,7 @@ fn natural_sort_key(s: &str) -> String {
 //
 // Sorts `names` with natural ordering, then rotates cover pages to the front
 // and credit/note pages to the end, mirroring Perl's get_filelist behaviour.
-fn sort_filelist(names: &mut Vec<String>) {
+pub(crate) fn sort_filelist(names: &mut Vec<String>) {
     names.sort_by(|a, b| natural_sort_key(a).cmp(&natural_sort_key(b)));
 
     // Cover: matches /cover/i but NOT if path also matches back|end|rear|recover|discover.

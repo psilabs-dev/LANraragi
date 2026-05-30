@@ -14,6 +14,12 @@ pub fn page_thumb_path(thumb_dir: &Path, arcid: &str, page: u32) -> PathBuf {
     thumb_dir.join(sub).join(arcid).join(format!("{page}.webp"))
 }
 
+// Path layout: `thumb/<first-2-chars>/<arcid>/` — directory holding all per-page thumbnails.
+pub fn page_thumb_dir(thumb_dir: &Path, arcid: &str) -> PathBuf {
+    let sub = &arcid[..2];
+    thumb_dir.join(sub).join(arcid)
+}
+
 // Path layout: `thumb/TA/<tankid>.webp`
 pub fn tank_thumb_path(thumb_dir: &Path, tankid: &str) -> PathBuf {
     thumb_dir.join("TA").join(format!("{tankid}.webp"))

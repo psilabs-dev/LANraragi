@@ -319,7 +319,7 @@ pub async fn delete_archive(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, ApiError> {
-    let filename = service::archive::delete_archive(&state.db, &id)
+    let filename = service::archive::delete_archive(&state.db, &state.config.thumb_dir, &id)
         .await
         .tag_err("deleteArchive")?;
 
@@ -541,12 +541,20 @@ pub async fn upload_archive(
                     .await
                     .map_err(|e| ApiError::internal("uploadArchive", e.to_string()))?;
                 file_handle = Some(file);
+                // Perl compute_id hashes only the first 512000 bytes; match it so arcids
+                // agree across Perl/Rust (backup round-trip, dedup, client file_checksum).
+                const ID_HASH_BYTES: usize = 512_000;
+                let mut hashed_bytes: usize = 0;
                 while let Some(chunk) = field
                     .chunk()
                     .await
                     .map_err(|e| ApiError::bad_request("uploadArchive", e.to_string()))?
                 {
-                    hasher.update(&chunk);
+                    if hashed_bytes < ID_HASH_BYTES {
+                        let take = (ID_HASH_BYTES - hashed_bytes).min(chunk.len());
+                        hasher.update(&chunk[..take]);
+                        hashed_bytes += take;
+                    }
                     let chunk_len = i64::try_from(chunk.len())
                         .expect("multipart chunk exceeds i64::MAX bytes");
                     arcsize = arcsize
