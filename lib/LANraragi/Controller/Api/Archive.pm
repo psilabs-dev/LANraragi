@@ -12,10 +12,8 @@ use File::Temp qw(tempdir tmpnam);
 use File::Basename;
 
 use LANraragi::Utils::Generic  qw(render_api_response is_archive get_bytelength exec_with_lock);
-use LANraragi::Utils::Database qw();
 use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive_json set_isnew);
 use LANraragi::Utils::Logging  qw(get_logger);
-use LANraragi::Utils::Redis    qw(redis_encode);
 use LANraragi::Utils::Path     qw(compat_path get_archive_path move_path);
 use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Utils::PsilabsDev::PgPath;
@@ -24,7 +22,6 @@ use LANraragi::Utils::Login qw(is_logged_in_api);
 
 use LANraragi::Model::Archive;
 use LANraragi::Model::Config;
-use LANraragi::Model::Reader;
 use LANraragi::Model::PsilabsDev::PgArchive;
 use LANraragi::Model::PsilabsDev::PgCategory;
 use LANraragi::Model::PsilabsDev::PgReader;

@@ -164,7 +164,7 @@ sub serve_tankoubon_thumbnail {
 sub update_tankoubon_thumbnail {
     my $self    = shift->openapi->valid_input or return;
     my $tank_id = $self->stash('id');
-    LANraragi::Model::Tankoubon::update_tankoubon_thumbnail( $self, $tank_id );
+    LANraragi::Model::PsilabsDev::PgTankoubon::update_tankoubon_thumbnail( $self, $tank_id );
 }
 
 sub update_tank_progress {
@@ -198,7 +198,7 @@ sub update_tank_progress {
         return;
     }
 
-    my ( $result, $err ) = LANraragi::Model::Tankoubon::update_tank_progress( $tank_id, $page );
+    my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgTankoubon::update_tank_progress( $tank_id, $page );
 
     if ($result) {
         $self->render(

@@ -4,8 +4,13 @@ use strict;
 use warnings;
 use utf8;
 
+use File::Path qw(make_path);
+use File::Copy qw(copy);
+
 use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
+use LANraragi::Utils::PsilabsDev::PgArchive;
 use LANraragi::Utils::Logging qw(get_logger);
+use LANraragi::Utils::Generic qw(render_api_response);
 use LANraragi::Model::Config;
 
 # replaces LANraragi::Model::Tankoubon::get_tankoubon_list
@@ -19,7 +24,7 @@ sub get_tankoubon_list {
 
     # Get all tankoubons
     my $tank_sql = <<'SQL';
-        SELECT tankid, name, summary, tags
+        SELECT tankid, name, summary, tags, progress
         FROM lrr_tank
         ORDER BY tankid
 SQL
@@ -55,6 +60,7 @@ SQL
             name     => $tank_row->{name},
             summary  => $tank_row->{summary} // '',
             tags     => $tank_row->{tags} // '',
+            progress => int( $tank_row->{progress} // 0 ),
             archives => \@archives
         );
 
@@ -171,7 +177,7 @@ sub get_tankoubon {
     }
 
     # Check if tank exists and get metadata
-    my $tank_sql = 'SELECT tankid, name, summary, tags FROM lrr_tank WHERE tankid = ?';
+    my $tank_sql = 'SELECT tankid, name, summary, tags, progress FROM lrr_tank WHERE tankid = ?';
     my $tank_sth = $dbh->prepare($tank_sql);
     $tank_sth->execute($tank_id);
     my $tank_row = $tank_sth->fetchrow_hashref;
@@ -185,10 +191,11 @@ sub get_tankoubon {
 
     # Build base metadata hash
     my %tank = (
-        id      => $tank_id,
-        name    => $tank_row->{name},
-        summary => $tank_row->{summary} // '',
-        tags    => $tank_row->{tags} // ''
+        id       => $tank_id,
+        name     => $tank_row->{name},
+        summary  => $tank_row->{summary} // '',
+        tags     => $tank_row->{tags} // '',
+        progress => int( $tank_row->{progress} // 0 )
     );
 
     # Get total count of archives in this tankoubon
@@ -316,6 +323,121 @@ sub get_tankoubon {
 
     my $filtered = scalar(@archives);
     return ( $total, $filtered, %tank );
+}
+
+# replaces: LANraragi::Model::Tankoubon::update_tank_progress
+# update_tank_progress(tankoubonid, page)
+#   Saves the given page number as the Tankoubon's reading progress.
+#   Returns (1, "") on success, (0, error) if the tankoubon does not exist.
+sub update_tank_progress {
+    my ( $tank_id, $page ) = @_;
+
+    my $logger = get_logger("PgTankoubon", "lanraragi");
+    my $dbh = get_dbh();
+
+    my $update_sth = $dbh->prepare('UPDATE lrr_tank SET progress = ? WHERE tankid = ?');
+    my $rows = $update_sth->execute( int($page), $tank_id );
+    $update_sth->finish;
+
+    $dbh->disconnect();
+
+    unless ( $rows && $rows > 0 ) {
+        my $err = "$tank_id doesn't exist in the database!";
+        $logger->warn($err);
+        return ( 0, $err );
+    }
+
+    $logger->debug("Updated progress for tankoubon $tank_id to page $page");
+    return ( 1, "" );
+}
+
+# get_first_archive_of_tank(tankoubonid)
+#   Returns the arcid of the first archive (lowest position) in the Tankoubon, or undef if empty.
+sub get_first_archive_of_tank {
+    my ($tank_id) = @_;
+
+    my $dbh = get_dbh();
+    my $sth = $dbh->prepare('SELECT arcid FROM lrr_tank_to_archive_map WHERE tankid = ? ORDER BY position LIMIT 1');
+    $sth->execute($tank_id);
+    my $row = $sth->fetchrow_hashref;
+    $sth->finish;
+    $dbh->disconnect();
+
+    return $row ? $row->{arcid} : undef;
+}
+
+# replaces: LANraragi::Model::Tankoubon::translate_global_page
+# translate_global_page(tankoubonid, global_page)
+#   Translates a tank-global page number to (arcid, local_page) by walking member archives in order.
+#   Returns an empty list if the page is out of range or if member archives have no pagecount data.
+sub translate_global_page {
+    my ( $tank_id, $global_page ) = @_;
+
+    my $dbh = get_dbh();
+    my $sth = $dbh->prepare(
+        'SELECT m.arcid AS arcid, a.pagecount AS pagecount FROM lrr_tank_to_archive_map m '
+          . 'JOIN lrr_archive a ON a.arcid = m.arcid WHERE m.tankid = ? ORDER BY m.position' );
+    $sth->execute($tank_id);
+
+    my $offset = 0;
+    while ( my $row = $sth->fetchrow_hashref ) {
+        my $pagecount = $row->{pagecount} || 0;
+        if ( $global_page <= $offset + $pagecount ) {
+            $sth->finish;
+            $dbh->disconnect();
+            return ( $row->{arcid}, $global_page - $offset );
+        }
+        $offset += $pagecount;
+    }
+    $sth->finish;
+    $dbh->disconnect();
+
+    return ();
+}
+
+# replaces: LANraragi::Model::Tankoubon::update_tankoubon_thumbnail
+# update_tankoubon_thumbnail(self, tankoubonid)
+#   Sets the Tankoubon's cover thumbnail from a global page number (read from the request) spanning
+#   its member archives.
+sub update_tankoubon_thumbnail {
+    my ( $self, $tank_id ) = @_;
+
+    my $page = $self->req->param('page');
+    $page = 1 unless $page;
+
+    my $logger   = get_logger( "PgTankoubon", "lanraragi" );
+    my $thumbdir = LANraragi::Model::Config->get_thumbdir;
+    my $use_jxl  = LANraragi::Model::Config->get_jxlthumbpages;
+    my $format   = $use_jxl ? 'jxl' : 'jpg';
+
+    my ( $arc_id, $local_page ) = translate_global_page( $tank_id, $page );
+
+    unless ( defined $arc_id ) {
+        render_api_response( $self, "update_tankoubon_thumbnail", "Page $page is out of range for this tankoubon." );
+        return;
+    }
+
+    my $tank_thumb = "$thumbdir/TA/$tank_id.$format";
+
+    eval {
+        my $newthumb = LANraragi::Utils::PsilabsDev::PgArchive::extract_thumbnail( $thumbdir, $arc_id, $local_page, 0, 1 );
+        make_path("$thumbdir/TA") unless -d "$thumbdir/TA";
+        copy( $newthumb, $tank_thumb );
+    };
+    if ($@) {
+        render_api_response( $self, "update_tankoubon_thumbnail", $@ );
+        return;
+    }
+
+    $logger->debug("Set tank $tank_id thumbnail from archive $arc_id page $local_page");
+
+    $self->render(
+        openapi => {
+            operation     => "update_tankoubon_thumbnail",
+            new_thumbnail => $tank_thumb,
+            success       => 1
+        }
+    );
 }
 
 # replaces: LANraragi::Model::Tankoubon::update_metadata
