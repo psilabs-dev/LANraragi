@@ -1053,6 +1053,9 @@ sub drop_database {
         $dbh->do('DELETE FROM lrr_toc');
         $logger->debug("Cleared ToC entries");
 
+        $dbh->do('DELETE FROM lrr_stamp');
+        $logger->debug("Cleared stamps");
+
         # Then delete the main tables
         $dbh->do('DELETE FROM lrr_tag');
         $logger->debug("Cleared tags");
