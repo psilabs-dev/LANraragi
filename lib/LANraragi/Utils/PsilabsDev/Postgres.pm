@@ -101,7 +101,8 @@ CREATE TABLE IF NOT EXISTS lrr_tank (
     tankid          VARCHAR(255) PRIMARY KEY,
     name            VARCHAR(255) $collate_clause NOT NULL,
     summary         TEXT,
-    tags            TEXT
+    tags            TEXT,
+    progress        INTEGER NOT NULL DEFAULT 0
 )
 SQL
     $rv = $dbh->do($sql);
@@ -198,6 +199,24 @@ SQL
         die "Failed to create lrr_toc table: $errorcode - $errorstr";
     }
     $logger->info("Created table: lrr_toc");
+
+    $sql = <<'SQL';
+CREATE TABLE IF NOT EXISTS lrr_stamp (
+    stampid         VARCHAR(255) PRIMARY KEY,
+    arcid           VARCHAR(255) NOT NULL,
+    page            INTEGER NOT NULL,
+    content         TEXT,
+    position        TEXT,
+    FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid)
+)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create lrr_stamp table: $errorcode - $errorstr";
+    }
+    $logger->info("Created table: lrr_stamp");
 
     $sql = <<'SQL';
 CREATE EXTENSION IF NOT EXISTS pg_trgm
@@ -440,6 +459,19 @@ SQL
         die "Failed to create idx_lrr_archive_to_tag_namespace_arcid index: $errorcode - $errorstr";
     }
     $logger->info("Created index: idx_lrr_archive_to_tag_namespace_arcid");
+
+    # Stamp lookups are always scoped to an archive (get_stamps_by_page, get_stamped_pages); archive
+    # delete in PgArchive also filters by arcid.
+    $sql = <<'SQL';
+CREATE INDEX IF NOT EXISTS idx_lrr_stamp_arcid_page ON lrr_stamp (arcid, page)
+SQL
+    $rv = $dbh->do($sql);
+    unless ( defined $rv ) {
+        my $errorcode   = $dbh->err // '';
+        my $errorstr    = $dbh->errstr // '';
+        die "Failed to create idx_lrr_stamp_arcid_page index: $errorcode - $errorstr";
+    }
+    $logger->info("Created index: idx_lrr_stamp_arcid_page");
 
     $logger->info("PostgreSQL database initialized successfully");
 }

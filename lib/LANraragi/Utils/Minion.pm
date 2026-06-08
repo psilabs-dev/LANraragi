@@ -24,10 +24,10 @@ use LANraragi::Utils::PsilabsDev::PgArchive qw(extract_thumbnail extract_thumbna
 
 use LANraragi::Model::Upload;
 use LANraragi::Model::Config;
-use LANraragi::Model::Stats;
-use LANraragi::Model::Backup;
+use LANraragi::Model::PsilabsDev::PgBackup;
 use LANraragi::Model::PsilabsDev::PgStats;
 use LANraragi::Model::PsilabsDev::PgUpload;
+use LANraragi::Model::PsilabsDev::PgTankoubon;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 use constant INSTALL_LOCK_TTL => 300;
@@ -67,17 +67,13 @@ sub add_tasks {
 
             my $logger = get_logger( "Minion", "minion" );
 
-            my $redis    = LANraragi::Model::Config->get_redis;
-            my @archives = $redis->zrangebyscore( $tank_id, 1, "+inf", "LIMIT", 0, 1 );
-            $redis->quit;
+            my $first_arc = LANraragi::Model::PsilabsDev::PgTankoubon::get_first_archive_of_tank($tank_id);
 
-            unless (@archives) {
+            unless ($first_arc) {
                 $logger->info("Tank $tank_id has no archives, skipping thumbnail generation.");
                 $job->finish("No archives in tank.");
                 return;
             }
-
-            my $first_arc = $archives[0];
             my $thumbname = "";
 
             eval {
@@ -276,13 +272,12 @@ sub add_tasks {
             }
 
             # Regen thumbnails for all tankoubons (sequential - fewer items than archives)
-            my $redis_tank = LANraragi::Model::Config->get_redis;
-            my @tank_keys  = $redis_tank->keys('TANK_??????????');
-            $redis_tank->quit();
+            my ( $tank_total, $tank_filtered, @tanks ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon_list(-1);
 
-            $logger->info("Regenerating thumbnails for " . scalar(@tank_keys) . " tankoubons...");
+            $logger->info("Regenerating thumbnails for " . scalar(@tanks) . " tankoubons...");
 
-            foreach my $tank_id (@tank_keys) {
+            foreach my $tank (@tanks) {
+                my $tank_id   = $tank->{id};
                 my $use_jxl   = LANraragi::Model::Config->get_jxlthumbpages;
                 my $format    = $use_jxl ? 'jxl' : 'jpg';
                 my $subfolder = substr( $tank_id, 0, 2 );
@@ -292,12 +287,10 @@ sub add_tasks {
                     eval {
                         $logger->debug("Regenerating tank thumbnail for $tank_id...");
 
-                        my $redis_t  = LANraragi::Model::Config->get_redis;
-                        my @archives = $redis_t->zrangebyscore( $tank_id, 1, "+inf", "LIMIT", 0, 1 );
-                        $redis_t->quit;
+                        my $first_arc = $tank->{archives}[0];
 
-                        if (@archives) {
-                            my $src = extract_thumbnail( $thumbdir, $archives[0], 0, 0, 1 );
+                        if ($first_arc) {
+                            my $src = extract_thumbnail( $thumbdir, $first_arc, 0, 0, 1 );
                             make_path("$thumbdir/$subfolder");
                             copy( $src, $thumbname ) or die "Could not copy tank thumbnail: $!";
                         }
@@ -677,7 +670,7 @@ sub add_tasks {
 
             eval {
                 # Generate the backup JSON with progress reporting
-                my $json = LANraragi::Model::Backup::build_backup_JSON($job);
+                my $json = LANraragi::Model::PsilabsDev::PgBackup::build_backup_JSON();
 
                 # Write JSON to temp file
                 my $tempdir  = get_temp();
@@ -717,7 +710,7 @@ sub add_tasks {
 
             eval {
                 # Restore from JSON with progress reporting
-                LANraragi::Model::Backup::restore_from_JSON( $json_data, $job );
+                LANraragi::Model::PsilabsDev::PgBackup::restore_from_JSON($json_data);
 
                 $logger->info("Backup restored successfully");
 

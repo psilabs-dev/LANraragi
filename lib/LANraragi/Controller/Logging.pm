@@ -1,7 +1,6 @@
 package LANraragi::Controller::Logging;
 use Mojo::Base 'Mojolicious::Controller';
 
-use Redis;
 use Encode;
 
 use LANraragi::Utils::Generic qw(generate_themes_header);

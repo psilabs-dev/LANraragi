@@ -1,11 +1,8 @@
 package LANraragi::Controller::Api::Database;
 use Mojo::Base 'Mojolicious::Controller';
 
-use Redis;
 use Mojo::JSON qw(decode_json);
-use File::Temp qw(tempfile);
 
-use LANraragi::Model::Backup;
 use LANraragi::Model::PsilabsDev::PgBackup;
 use LANraragi::Model::PsilabsDev::PgStats;
 use LANraragi::Utils::Generic qw(render_api_response);

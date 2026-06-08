@@ -7,7 +7,7 @@ use Template;
 
 use LANraragi::Utils::Generic qw(generate_themes_header);
 use LANraragi::Utils::Plugins qw(get_plugins);
-use LANraragi::Model::Tankoubon;
+use LANraragi::Model::PsilabsDev::PgTankoubon;
 use LANraragi::Utils::PsilabsDev::PgDatabase qw(get_archive);
 
 sub index {
@@ -53,22 +53,21 @@ sub index {
 sub edit_tankoubon {
     my ( $self, $id ) = @_;
 
-    my %metadata = LANraragi::Model::Tankoubon::fetch_metadata_fields($id);
+    # full_data is used to get the archive titles for the edit page. get_tankoubon also returns the
+    # tank's own name/summary/tags, so a separate metadata fetch is unnecessary on the Postgres side.
+    my ( $total, $filtered, %tank ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon( $id, 1 );
 
-    unless (%metadata) {
+    unless (%tank) {
         $self->redirect_to('index');
         return;
     }
 
-    # Note: We only use full_data here to get the archive titles. If this proves to be too slow for large tanks,
-    # we could discard this and do separate API calls to get the titles in the client. 
-    my %tank = LANraragi::Model::Tankoubon::get_tankoubon( $id, 1 );
     my @archives   = @{ $tank{archives}  // [] };
     my @full_data  = @{ $tank{full_data} // [] };
 
-    my $name    = $metadata{name}    // "";
-    my $tags    = $metadata{tags}    // "";
-    my $summary = $metadata{summary} // "";
+    my $name    = $tank{name}    // "";
+    my $tags    = $tank{tags}    // "";
+    my $summary = $tank{summary} // "";
 
     $self->render(
         template      => "edit",

@@ -643,6 +643,12 @@ sub delete_archive ($id) {
         $del_toc_sth->finish;
         $logger->debug("Deleted ToC entries for archive $id");
 
+        # Delete stamps (no CASCADE -- must precede the archive row delete)
+        my $del_stamp_sth = $dbh->prepare('DELETE FROM lrr_stamp WHERE arcid = ?');
+        $del_stamp_sth->execute($id);
+        $del_stamp_sth->finish;
+        $logger->debug("Deleted stamps for archive $id");
+
         # Finally, delete the archive itself
         my $del_arc_sql = 'DELETE FROM lrr_archive WHERE arcid = ?';
         my $del_arc_sth = $dbh->prepare($del_arc_sql);
