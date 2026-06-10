@@ -6,12 +6,6 @@ use utf8;
 
 use Mojo::JSON                 qw(decode_json);
 use LANraragi::Utils::Logging  qw(get_logger);
-use LANraragi::Utils::PluginState qw(
-    plugin_needs_reload
-    record_load_failure
-    record_load_success
-    should_skip_reload
-);
 use LANraragi::Utils::Path     qw(path_to_package);
 use LANraragi::Utils::Redis    qw(redis_decode);
 
@@ -34,26 +28,15 @@ sub get_plugins {
     my %registered = read_registered_plugins($redis);
     my @validplugins;
 
-    # Skip plugins which are not registered by Redis.
     foreach my $ns_uc ( sort keys %registered ) {
         my $installed_path = $registered{$ns_uc};
         my $plugin         = path_to_package($installed_path);
 
-        if ( plugin_needs_reload( $redis, $ns_uc ) && !should_skip_reload( $redis, $ns_uc ) ) {
-            delete $INC{$installed_path};
-        }
-
-        my $loaded = eval {
-            no warnings 'redefine';
-            require $installed_path;
-            1;
-        };
+        my $loaded = eval { require $installed_path; 1; };
         unless ($loaded) {
-            record_load_failure( $redis, $ns_uc );
             $logger->warn("Skipping plugin '$plugin' while listing type '$type': require '$installed_path' failed: $@");
             next;
         }
-        record_load_success( $redis, $ns_uc );
 
         # Check that the metadata sub is there before invoking it
         if ( $plugin->can('plugin_info') ) {
@@ -115,14 +98,13 @@ sub get_enabled_plugins {
     return @enabled;
 }
 
-# Look for (and optionally reloads) a registered plugin by uc-normalized namespace for invokation.
+# Look up an installed plugin by namespace for invocation.
 sub get_plugin {
 
     my $name    = shift;
-    my $name_uc = uc($name);
     my $logger  = get_logger( "Plugin System", "lanraragi" );
 
-    # Plugin must have a discovered installed_path to be callable.
+    # Plugin must have a recorded installed_path to be callable.
     # Uninstall hdels installed_path while preserving user config; gating on
     # key-existence alone would let uninstalled namespaces remain callable.
     my $redis          = LANraragi::Model::Config->get_redis_config;
@@ -132,26 +114,13 @@ sub get_plugin {
         return 0;
     }
 
-    # Check if plugin needs (re)loading.
-    if ( plugin_needs_reload( $redis, $name_uc ) && !should_skip_reload( $redis, $name_uc ) ) {
-        delete $INC{$installed_path};
-        my $ok = eval {
-            no warnings 'redefine';
-            require $installed_path;
-            1;
-        };
-        if ($ok) {
-            record_load_success( $redis, $name_uc );
-            $logger->info("Reloaded plugin '$name' in worker $$");
-        } else {
-            record_load_failure( $redis, $name_uc );
-            $logger->warn("Failed to reload plugin '$name': $@");
-            $redis->quit();
-            return 0;
-        }
+    my $loaded = eval { require $installed_path; 1; };
+    $redis->quit();
+    unless ($loaded) {
+        $logger->warn("Failed to load plugin '$name': $@");
+        return 0;
     }
 
-    $redis->quit();
     return path_to_package($installed_path);
 }
 

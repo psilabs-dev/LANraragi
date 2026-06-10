@@ -24,6 +24,7 @@ use LANraragi::Utils::I18NInitializer;
 use LANraragi::Model::Search;
 use LANraragi::Model::Config;
 use LANraragi::Model::Plugins;
+use LANraragi::Model::Server;
 use LANraragi::Model::Setup      qw(first_install_actions);
 use LANraragi::Model::Metrics;
 
@@ -138,6 +139,9 @@ sub startup {
     # Reconcile discovered plugins with Redis state.
     my $redis_config = $self->LRR_CONF->get_redis_config;
     LANraragi::Model::Plugins::scan_plugins($redis_config);
+
+    # Reset restart flag.
+    LANraragi::Model::Server::clear_restart_pending($redis_config);
     $redis_config->quit();
 
     #Plugin listing
