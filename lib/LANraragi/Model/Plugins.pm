@@ -24,7 +24,7 @@ use LANraragi::Utils::Generic  qw(exec_with_lock_pure);
 use LANraragi::Utils::Archive  qw(extract_thumbnail);
 use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Tags     qw(rewrite_tags split_tags_to_array);
-use LANraragi::Utils::Plugins  qw(get_plugin_parameters get_plugin register_plugin unregister_plugin);
+use LANraragi::Utils::Plugins  qw(get_plugin_parameters get_plugin register_plugin unregister_plugin validate_plugin);
 use LANraragi::Utils::Redis    qw(redis_decode);
 use LANraragi::Utils::Path     qw(create_path package_to_path);
 use LANraragi::Utils::Registry qw(
@@ -525,6 +525,15 @@ sub install_plugin {
             $@ ? "$@" : undef;
         },
     ];
+
+    # Validate the artifact loads
+    my ( $loads, $validate_error ) = validate_plugin($install_relpath);
+    unless ($loads) {
+        if ( my @resp = $do_rollback->("Plugin '$namespace' failed to load: $validate_error") ) {
+            return @resp;
+        }
+        return ( 422, undef, "Plugin '$namespace' failed to load: $validate_error" );
+    }
 
     if ( $backup_path && -e $backup_path ) {
         unlink $backup_path or $logger->warn("Could not remove rollback backup at $backup_path: $!");

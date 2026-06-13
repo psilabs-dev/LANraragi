@@ -5,6 +5,8 @@ use warnings;
 use utf8;
 
 use Mojo::JSON                 qw(decode_json);
+use Cwd                        qw(getcwd);
+use IPC::Cmd                   qw(run);
 use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Path     qw(path_to_package);
 use LANraragi::Utils::Redis    qw(redis_decode);
@@ -17,7 +19,7 @@ use Module::Pluggable require => 1, search_path => ['LANraragi::Plugin'];
 # This mostly contains the glue for parameters w/ Redis, the meat of Plugin execution is in Model::Plugins.
 use Exporter 'import';
 our @EXPORT_OK =
-  qw(get_plugins get_downloader_for_url get_plugin get_enabled_plugins get_plugin_parameters is_plugin_enabled use_plugin register_plugin unregister_plugin read_registered_plugins);
+  qw(get_plugins get_downloader_for_url get_plugin get_enabled_plugins get_plugin_parameters is_plugin_enabled use_plugin register_plugin unregister_plugin read_registered_plugins validate_plugin);
 
 # Get metadata of all registered plugins with the defined type. Returns an array of hashes.
 sub get_plugins {
@@ -122,6 +124,23 @@ sub get_plugin {
     }
 
     return path_to_package($installed_path);
+}
+
+sub validate_plugin {
+    my ($install_relpath) = @_;
+    my $script = getcwd() . "/script/validate_plugin.pl";
+
+    my ( $ok, $err, undef, undef, $stderr_buf ) = run(
+        command => [ $^X, $script, $install_relpath ],
+        timeout => 20,
+        verbose => 0,
+    );
+    return ( 1, undef ) if $ok;
+
+    my $detail = join( "", @{ $stderr_buf // [] } );
+    $detail =~ s/\s+\z//;
+    $detail ||= ( $err // "validation failed" );
+    return ( 0, $detail );
 }
 
 # Get the parameters for the specified plugin, either default values or input by the user in the settings page.
