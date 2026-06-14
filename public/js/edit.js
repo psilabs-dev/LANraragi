@@ -2,8 +2,8 @@
  * JS functions meant for use in the Edit page.
  * Mostly dealing with plugins.
  */
-import * as Server from "mod/server";
-import * as LRR from "mod/common";
+import * as Server from "./mod/server.js";
+import * as LRR from "./mod/common.js";
 import I18N from "i18n";
 
 const Edit = {};
@@ -95,7 +95,7 @@ Edit.addArchiveToTank = function () {
         (data) => {
             const li = $(`<li data-id="${arcId}">
                 <i class="fas fa-grip-vertical drag-handle"></i>
-                <span class="arc-title" onmouseover="IndexTable.buildImageTooltip(this)">${data.title}</span>
+                <span class="arc-title" onmouseover="IndexTable.buildImageTooltip(this)">${LRR.encodeHTML(data.title)}</span>
                 <div class="caption" style="display: none;">
                     <img style="height:300px" src='${new LRR.ApiURL("/api/archives/"+arcId+"/thumbnail")}'
                         onerror="this.src='${new LRR.ApiURL("/img/noThumb.png")}'">
@@ -242,9 +242,9 @@ Edit.saveMetadata = function () {
             tags: $("#tagText").val(),
         };
         const archives = $("#tank-archive-list li").map((_, el) => $(el).data("id")).get();
-        Server.callAPIBody(`api/tankoubons/${id}`, "PUT", JSON.stringify({ metadata, archives }),
+        return Server.callAPIBody(`api/tankoubons/${id}`, "PUT", JSON.stringify({ metadata, archives }),
             I18N.EditMetadataSaved,
-            I18N.TankoubonEditError, null)
+            I18N.TankoubonEditError, null, "application/json")
             .finally(() => {
                 Edit.showTags();
             });
@@ -254,7 +254,7 @@ Edit.saveMetadata = function () {
         formData.append("tags", $("#tagText").val());
         formData.append("title", $("#title").val());
         formData.append("summary", $("#summary").val());
-        Server.callAPIBody(`api/archives/${id}/metadata`, "PUT", formData,
+        return Server.callAPIBody(`api/archives/${id}/metadata`, "PUT", formData,
             I18N.EditMetadataSaved,
             I18N.EditMetadataError, null)
             .finally(() => {

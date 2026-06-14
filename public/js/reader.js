@@ -2,8 +2,8 @@
  * Functions to navigate in reader with the keyboard.
  * Also handles the thumbnail archive explorer.
  */
-import * as Server from "mod/server";
-import * as LRR from "mod/common";
+import * as Server from "./mod/server.js";
+import * as LRR from "./mod/common.js";
 import I18N from "i18n";
 import fscreen from "fscreen";
 
@@ -367,7 +367,7 @@ export function loadContentData() {
     // If the ID is a Tank ID (TANK_xxxx), use the Tankoubon API for metadata
     if (id.startsWith("TANK_")) {
 
-        return fetch(new LRR.ApiURL(`/api/tankoubons/${id}?include_full_data=true&page=-1`))
+        return fetch(new LRR.ApiURL(`/api/tankoubons/${id}/full`))
             .then(r => r.ok ? r.json() : Promise.reject(new Error(I18N.ServerInfoError)))
             .then(data => {
                 const tank = data.result;
@@ -1799,7 +1799,7 @@ function generateThumbnails() {
             if (Object.hasOwn(notes, i) && notes[i] === "processed") {
 
                 const startPage = id.startsWith("TANK_") ?
-                    content.chapters.find(ch => ch.arcId === notes.id).startPage :
+                    content.chapters.find(ch => ch.id === notes.id).startPage :
                     1;
 
                 const index = startPage + i - 2; // 0-based global

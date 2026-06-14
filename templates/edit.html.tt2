@@ -32,7 +32,7 @@
 	<script src="[% c.url_for("/js/edit.js?$version") %]" type="module"></script>
 
 	<script type="module">
-		import * as IndexTable from "mod/index_datatables";
+		import * as IndexTable from "[% c.url_for("/js/$version/mod/index_datatables.js") %]";
 
 		jQuery(() => {
 			window.IndexTable = IndexTable;
@@ -145,7 +145,7 @@
 								<li data-id="[% archive.arcid %]">
 									<i class="fas fa-grip-vertical drag-handle"></i>
 									<span class="arc-title" onmouseover="IndexTable.buildImageTooltip(this)">
-										[% archive.title %]
+										[% archive.title | html %]
 									</span>
 									<div class="caption" style="display: none;">
 										<img style="height:300px" src='[% c.url_for("/api/archives/$archive.arcid/thumbnail") %]'
