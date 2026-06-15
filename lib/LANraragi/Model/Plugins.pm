@@ -24,7 +24,7 @@ use LANraragi::Utils::Generic  qw(exec_with_lock_pure);
 use LANraragi::Utils::Archive  qw(extract_thumbnail);
 use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Tags     qw(rewrite_tags split_tags_to_array);
-use LANraragi::Utils::Plugins  qw(get_plugin_parameters get_plugin register_plugin unregister_plugin validate_plugin);
+use LANraragi::Utils::Plugins  qw(get_plugin_parameters get_plugin register_plugin unregister_plugin check_plugin_loads);
 use LANraragi::Utils::Redis    qw(redis_decode);
 use LANraragi::Utils::Path     qw(create_path package_to_path);
 use LANraragi::Utils::Registry qw(
@@ -526,13 +526,17 @@ sub install_plugin {
         },
     ];
 
-    # Validate the artifact loads
-    my ( $loads, $validate_error ) = validate_plugin($install_relpath);
-    unless ($loads) {
-        if ( my @resp = $do_rollback->("Plugin '$namespace' failed to load: $validate_error") ) {
+    # Check the artifact loads
+    my ( $check_status, $check_error ) = check_plugin_loads($install_relpath);
+    if ( $check_status ne 'ok' ) {
+        my ( $code, $reason ) =
+            $check_status eq 'invalid'
+            ? ( 422, "Plugin '$namespace' failed to load: $check_error" )
+            : ( 500, "Plugin '$namespace' load check failed: $check_error" );
+        if ( my @resp = $do_rollback->($reason) ) {
             return @resp;
         }
-        return ( 422, undef, "Plugin '$namespace' failed to load: $validate_error" );
+        return ( $code, undef, $reason );
     }
 
     if ( $backup_path && -e $backup_path ) {

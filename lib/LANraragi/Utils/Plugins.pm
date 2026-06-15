@@ -19,7 +19,7 @@ use Module::Pluggable require => 1, search_path => ['LANraragi::Plugin'];
 # This mostly contains the glue for parameters w/ Redis, the meat of Plugin execution is in Model::Plugins.
 use Exporter 'import';
 our @EXPORT_OK =
-  qw(get_plugins get_downloader_for_url get_plugin get_enabled_plugins get_plugin_parameters is_plugin_enabled use_plugin register_plugin unregister_plugin read_registered_plugins validate_plugin);
+  qw(get_plugins get_downloader_for_url get_plugin get_enabled_plugins get_plugin_parameters is_plugin_enabled use_plugin register_plugin unregister_plugin read_registered_plugins check_plugin_loads);
 
 # Get metadata of all registered plugins with the defined type. Returns an array of hashes.
 sub get_plugins {
@@ -126,21 +126,32 @@ sub get_plugin {
     return path_to_package($installed_path);
 }
 
-sub validate_plugin {
-    my ($install_relpath) = @_;
-    my $script = getcwd() . "/script/validate_plugin.pl";
+sub check_plugin_loads {
+    my ($install_relpath)   = @_;
+    my $script              = getcwd() . "/script/check_plugin_loads.pl";
+    my $timeout             = 20;
 
-    my ( $ok, $err, undef, undef, $stderr_buf ) = run(
+    my ( $ok, $err, undef, $stdout_buf, $stderr_buf ) = run(
         command => [ $^X, $script, $install_relpath ],
-        timeout => 20,
+        timeout => $timeout,
         verbose => 0,
     );
-    return ( 1, undef ) if $ok;
+    return ( 'ok', undef ) if $ok;
 
+    my $stdout = join( "", @{ $stdout_buf // [] } );
     my $detail = join( "", @{ $stderr_buf // [] } );
     $detail =~ s/\s+\z//;
-    $detail ||= ( $err // "validation failed" );
-    return ( 0, $detail );
+
+    if ( $stdout =~ /^PLUGIN_INVALID$/m ) {
+        $detail ||= "plugin failed to load";
+        return ( 'invalid', $detail );
+    }
+
+    if ( defined $err && $err =~ /\bIPC::Cmd::TimeOut\b/ ) {
+        return ( 'error', "timed out after " . $timeout . "s: " . $err );
+    }
+    $detail ||= ( $err // "no diagnostic output" );
+    return ( 'error', $detail );
 }
 
 # Get the parameters for the specified plugin, either default values or input by the user in the settings page.
