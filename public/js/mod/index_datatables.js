@@ -400,7 +400,7 @@ export function consumeURLParameters() {
 
     // Resolve the sort sName to a column index.
     // Unresolvable values (an old numeric bookmark, or a namespace with no column) fall back to title (0).
-    const sortName;
+    let sortName;
     if (params.has("sort")) {
         sortName = params.get("sort");
     } else {
