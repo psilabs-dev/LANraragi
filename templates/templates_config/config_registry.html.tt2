@@ -1,0 +1,81 @@
+<tr id="registry-none" style="display:none">
+	<td class="option-td" colspan="2">
+		[% c.lh("No plugin registry configured.") %]
+	</td>
+</tr>
+
+<tr id="registry-view" style="display:none">
+	<td class="option-td">
+		<h2 class="ih" id="registry-name"></h2>
+	</td>
+	<td class="config-td">
+		<span id="registry-details"></span>
+		<br><br>
+		<input id="registry-edit-btn" class="stdbtn" type="button" value="[% c.lh("Edit") %]" />
+		<input id="registry-remove-btn" class="stdbtn" type="button" value="[% c.lh("Remove Registry") %]" />
+	</td>
+</tr>
+
+<tr class="registry-form" style="display:none">
+	<td class="option-td">
+		<h2 class="ih"> [% c.lh("Name") %] </h2>
+	</td>
+	<td class="config-td">
+		<input id="reg-name" class="stdinput" style="width:100%" maxlength="255" size="20" type="text">
+	</td>
+</tr>
+
+<tr class="registry-form" style="display:none">
+	<td class="option-td">
+		<h2 class="ih"> [% c.lh("Provider") %] </h2>
+	</td>
+	<td class="config-td">
+		<select id="reg-provider" class="stdinput" style="width:100%">
+			<option value="github">GitHub</option>
+			<option value="gitlab">GitLab</option>
+			<option value="gitea">Gitea</option>
+			<option value="cdn">CDN</option>
+			<option value="local">Local</option>
+		</select>
+	</td>
+</tr>
+
+<tr class="registry-form reg-url-fields" style="display:none">
+	<td class="option-td">
+		<h2 class="ih"> [% c.lh("Repository URL") %] </h2>
+	</td>
+	<td class="config-td">
+		<input id="reg-url" class="stdinput" style="width:100%" maxlength="500" size="20" type="text"
+			placeholder="https://github.com/owner/repo.git">
+	</td>
+</tr>
+
+<tr class="registry-form reg-git-ref-fields" style="display:none">
+	<td class="option-td">
+		<h2 class="ih"> [% c.lh("Git Ref") %] </h2>
+	</td>
+	<td class="config-td">
+		<input id="reg-ref" class="stdinput" style="width:100%" maxlength="255" size="20" type="text"
+			placeholder="main">
+		<br>[% c.lh("Branch, tag, or commit hash.") %]
+	</td>
+</tr>
+
+<tr class="registry-form reg-local-fields" style="display:none">
+	<td class="option-td">
+		<h2 class="ih"> [% c.lh("Path") %] </h2>
+	</td>
+	<td class="config-td">
+		<input id="reg-path" class="stdinput" style="width:100%" maxlength="500" size="20" type="text"
+			placeholder="/path/to/registry">
+	</td>
+</tr>
+
+<tr class="registry-form" style="display:none">
+	<td class="option-td">
+		<input id="registry-save-btn" class="stdbtn" type="button" value="[% c.lh("Save") %]" />
+	</td>
+	<td class="config-td">
+		<input id="registry-cancel-btn" class="stdbtn" type="button" value="[% c.lh("Cancel") %]" />
+	</td>
+</tr>

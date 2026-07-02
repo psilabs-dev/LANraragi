@@ -50,6 +50,38 @@ export function callAPI(endpoint, method, successMessage, errorMessage, successC
         .catch((error) => LRR.showErrorToast(errorMessage, error));
 }
 
+export function callAPIJSON(endpoint, method, jsonBody, successMessage, errorMessage, successCallback) {
+    let endpointUrl = new LRR.ApiURL(endpoint);
+    return fetch(endpointUrl, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(jsonBody),
+    })
+        .then((response) => response.json().catch(() => ({ success: 0, error: I18N.GenericReponseError })))
+        .then((data) => {
+            if (Object.prototype.hasOwnProperty.call(data, "success") && !data.success) {
+                throw new Error(data.error);
+            } else {
+                let message = successMessage;
+                if ("successMessage" in data && data.successMessage) {
+                    message = data.successMessage;
+                }
+                if (message !== null) {
+                    LRR.toast({
+                        heading: message,
+                        icon: "success",
+                        hideAfter: 7000,
+                    });
+                }
+
+                if (successCallback !== null) return successCallback(data);
+
+                return null;
+            }
+        })
+        .catch((error) => LRR.showErrorToast(errorMessage, error));
+}
+
 /**
  *
  * @param {*} endpoint URL endpoint

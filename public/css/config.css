@@ -33,10 +33,15 @@ input[type='checkbox']:checked::after {
     content: "ON";
 }
 
+input[type='checkbox'].manage-install-cb::after,
+input[type='checkbox'].manage-install-cb:checked::after {
+    content: attr(data-state-label);
+}
+
 .config-panel {
-    float:left; 
-    margin-left: 5% !important; 
-    text-align: left; 
+    float:left;
+    margin-left: 5% !important;
+    text-align: left;
     width:90%;
     margin-bottom: 10px;
 }
@@ -54,4 +59,193 @@ input[type='checkbox']:checked::after {
     vertical-align: middle;
     text-align: left;
     padding-bottom: 10px;
+}
+
+/*** Plugin page: content width constraint ***/
+.plugin-content {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/*** Plugin page: page subtitle ***/
+.plugin-subtitle {
+    color: #888;
+    font-size: 9pt;
+    margin: 0 0 12px;
+}
+
+/*** Plugin page: source badges ***/
+.plugin-badge {
+    font-size: 8pt;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.plugin-badge--builtin { color: #bbb; border: 1px solid #888; }
+.plugin-badge--managed { color: #3b97ea; border: 1px solid #3b97ea; }
+
+/*** Plugin page: tab bar ***/
+.plugin-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+.plugin-tab {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 10pt;
+    padding: 8px 24px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+.plugin-tab:hover { color: #ccc; }
+.plugin-tab.active {
+    color: #3b97ea;
+    border-bottom-color: #3b97ea;
+    font-weight: 600;
+}
+.plugin-tab-panel { display: none; }
+.plugin-tab-panel.active { display: block; }
+
+/*** Plugin page: plugin description color (shared) ***/
+.plugin-description { color: #aaa; }
+
+/*** Plugin page: universal content containment ***/
+.pluginlist-item {
+    overflow: hidden;
+}
+.pluginlist-item input,
+.pluginlist-item pre {
+    box-sizing: border-box;
+}
+
+/*** Plugin page: settings tables ***/
+.pluginlist-item table {
+    width: 100%;
+}
+.pluginlist-item table td:last-child {
+    text-align: right;
+}
+@media (max-width: 480px) {
+    .pluginlist-item input,
+    .pluginlist-item pre {
+        max-width: 100% !important;
+    }
+    .pluginlist-item table {
+        width: 100%;
+        table-layout: fixed;
+    }
+    .pluginlist-item table td {
+        display: block;
+        width: 100%;
+        text-align: left;
+    }
+    .pluginlist-item table td:last-child {
+        text-align: right;
+        width: 100%;
+        padding-top: 4px;
+    }
+}
+
+.plugin-description-toggle {
+    font-size: 8pt;
+    color: #3b97ea;
+    cursor: pointer;
+    margin-top: 2px;
+    display: none;
+}
+
+.pool-empty-msg {
+    color: #888;
+    font-size: 9pt;
+    text-align: center;
+    padding: 12px 8px;
+}
+.pool-empty-msg i.pool-empty-icon {
+    display: block;
+    font-size: 20px;
+    margin-bottom: 4px;
+    opacity: 0.4;
+}
+.pool-empty-msg a {
+    color: #3b97ea;
+    font-size: 9pt;
+}
+/*** Plugin page: non-metadata plugin list items ***/
+.pluginlist-item {
+    display: block;
+    text-align: left;
+    border-bottom: 1px solid currentColor;
+    padding: 12px 20px 14px 20px;
+    margin-bottom: 4px;
+}
+.pluginlist-item:last-of-type { border-bottom: none; }
+.pluginlist-item .plugin-description {
+    font-size: 9pt;
+    line-height: 1.4;
+    margin-top: 2px;
+}
+
+/*** Plugin page: Available tab ***/
+.registry-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: 9pt;
+    color: #999;
+}
+.registry-refresh-link {
+    color: #3b97ea;
+    font-size: 9pt;
+    cursor: pointer;
+    text-decoration: none;
+    padding: 2px 8px;
+    border: 1px solid rgba(59, 151, 234, 0.3);
+    border-radius: 3px;
+}
+.registry-refresh-link:hover {
+    background: rgba(59, 151, 234, 0.1);
+}
+
+/*** Plugin page: Manage tab separator ***/
+.manage-available {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+}
+
+/*** Plugin page: Manage tab checkbox states ***/
+.manage-plugin-row.manage-row--available {
+    opacity: 0.6;
+}
+.manage-plugin-row.manage-row--pending-install {
+    border-left: 3px solid #3a9;
+    padding-left: 17px;
+    background: rgba(51, 170, 102, 0.04);
+    opacity: 1;
+}
+.manage-plugin-row.manage-row--pending-uninstall {
+    border-left: 3px solid #d33;
+    padding-left: 17px;
+    background: rgba(221, 51, 51, 0.04);
+    opacity: 0.75;
+}
+.manage-plugin-row.manage-row--pending-uninstall h2.ih {
+    text-decoration: line-through;
+}
+.manage-plugin-row.manage-row--locked {
+    cursor: default;
+}
+#manage-apply-bar {
+    display: none;
+    text-align: center;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.15);
 }

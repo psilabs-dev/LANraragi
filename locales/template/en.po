@@ -622,6 +622,43 @@ msgstr "Click on a theme to preview it before saving!"
 
 # ------End of Config_Theme.html.tt2------
 
+# ------Start of Config_Registry.html.tt2------
+
+msgid "Plugin Registry"
+msgstr "Plugin Registry"
+
+msgid "No plugin registry configured."
+msgstr "No plugin registry configured."
+
+msgid "Edit"
+msgstr "Edit"
+
+msgid "Remove Registry"
+msgstr "Remove Registry"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Provider"
+msgstr "Provider"
+
+msgid "Repository URL"
+msgstr "Repository URL"
+
+msgid "Git Ref"
+msgstr "Git Ref"
+
+msgid "Branch, tag, or commit hash."
+msgstr "Branch, tag, or commit hash."
+
+msgid "Path"
+msgstr "Path"
+
+msgid "Save"
+msgstr "Save"
+
+# ------End of Config_Registry.html.tt2------
+
 # ------Start of Edit.html.tt2------
 
 msgid "Editing %1 by %2"
@@ -990,6 +1027,36 @@ msgstr "Run Automatically"
 
 msgid "Plugin Settings"
 msgstr "Plugin Settings"
+
+msgid "Show more"
+msgstr "Show more"
+
+msgid "Depends on"
+msgstr "Depends on"
+
+msgid "Manage installed plugins and browse available plugins from registries."
+msgstr "Manage installed plugins and browse available plugins from registries."
+
+msgid "Configure"
+msgstr "Configure"
+
+msgid "Manage"
+msgstr "Manage"
+
+msgid "Browse available plugins"
+msgstr "Browse available plugins"
+
+msgid "Apply Changes"
+msgstr "Apply Changes"
+
+msgid "No plugins installed."
+msgstr "No plugins installed."
+
+msgid "No registry configured."
+msgstr "No registry configured."
+
+msgid "Add one in Settings."
+msgstr "Add one in Settings."
 
 # ------End of Plugins.html.tt2------
 
@@ -1687,6 +1754,21 @@ msgstr "The plugin ${name} has been successfully added. Refresh the page to see 
 
 msgid "Error uploading plugin"
 msgstr "Error uploading plugin"
+
+msgid "Refresh Index"
+msgstr "Refresh Index"
+
+msgid "Registry index refreshed."
+msgstr "Registry index refreshed."
+
+msgid "Error refreshing registry"
+msgstr "Error refreshing registry"
+
+msgid "Error loading registries"
+msgstr "Error loading registries"
+
+msgid "Show less"
+msgstr "Show less"
 
 msgid "Successfully set page \${page} as the thumbnail!"
 msgstr "Successfully set page ${page} as the thumbnail!"

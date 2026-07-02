@@ -126,6 +126,18 @@
 						</table>
 					</div>
 				</li>
+				<li class="option-flyout">
+					<div class="collapsible-title caret-right">
+						<i class="fa fa-box-open" aria-hidden="true"></i> [% c.lh("Plugin Registry") %]
+					</div>
+					<div class="collapsible-body">
+						<table style="margin:auto; font-size:9pt;">
+							<tbody>
+								[% INCLUDE templates_config/config_registry %]
+							</tbody>
+						</table>
+					</div>
+				</li>
 			</ul>
 		</form>
 	</div>

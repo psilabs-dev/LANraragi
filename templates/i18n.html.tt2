@@ -163,6 +163,13 @@ I18N.LocalProgressionCompleteDesc = "[% c.lh("You'll have to reopen archives in 
 I18N.PluginUploadSuccess = "[% c.lh("Plugin uploaded successfully!") %]";
 I18N.PluginUploadDesc = (name) => `[% c.lh("The plugin \${name} has been successfully added. Refresh the page to see it.") %]`;
 I18N.PluginUploadError = "[% c.lh("Error uploading plugin") %]";
+I18N.RegistryRefreshBtn = "[% c.lh("Refresh Index") %]";
+I18N.RegistryRefreshed = "[% c.lh("Registry index refreshed.") %]";
+I18N.RegistryRefreshError = "[% c.lh("Error refreshing registry") %]";
+I18N.RegistryLoadError = "[% c.lh("Error loading registries") %]";
+I18N.ShowMore = "[% c.lh("Show more") %]";
+I18N.ShowLess = "[% c.lh("Show less") %]";
+I18N.ApplyChanges = "[% c.lh("Apply Changes") %]";
 
 I18N.ReaderSetPageAsThumbnail = "[% c.lh("Set this Page as Thumbnail") %]";
 I18N.ReaderUpdateThumbnail = (page) => `[% c.lh("Successfully set page \${page} as the thumbnail!") %]`;
