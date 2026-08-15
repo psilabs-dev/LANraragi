@@ -1090,7 +1090,7 @@ export function toggleCategory(button) {
         button.classList.remove("toggled");
         clearCategoryFilter();
     } else {
-        selectedCategory = categoryId;
+        setSelectedCategory(categoryId);
         button.classList.add("toggled");
         IndexTable.doSearch();
     }
@@ -1112,7 +1112,7 @@ export function loadCategories() {
                             type='button' id='NEW_ONLY' value='🆕 ${I18N.NewArchives}' 
                             onclick='window.Index.toggleCategory(this)' title='${I18N.NewArchiveDesc}'/>
                         </div><div style='display:inline-block'>
-                            <input class='favtag-btn ${(("UNTAGGED_ONLY" === window.Index.selectedCategory) ? "toggled" : "")}' 
+                            <input class='favtag-btn ${(("UNTAGGED_ONLY" === selectedCategory) ? "toggled" : "")}' 
                             type='button' id='UNTAGGED_ONLY' value='🏷️ ${I18N.UntaggedArchives}' 
                             onclick='window.Index.toggleCategory(this)' title='${I18N.UntaggedArcDesc}'/>
                         </div>`;
@@ -1180,7 +1180,7 @@ function refreshBookmarkedArchives(categories) {
  * Clear active category filter and redo the search
  */
 export function clearCategoryFilter() {
-    selectedCategory = "";
+    setSelectedCategory("");
     IndexTable.doSearch();
 }
 
