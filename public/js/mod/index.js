@@ -1076,9 +1076,9 @@ export function toggleCategory(button) {
     const categoryId = button.id;
     if (selectedCategory === categoryId) {
         button.classList.remove("toggled");
-        selectedCategory = "";
+        setSelectedCategory("");
     } else {
-        selectedCategory = categoryId;
+        setSelectedCategory(categoryId);
         button.classList.add("toggled");
     }
 
@@ -1102,7 +1102,7 @@ export function loadCategories() {
                             type='button' id='NEW_ONLY' value='🆕 ${I18N.NewArchives}' 
                             onclick='window.Index.toggleCategory(this)' title='${I18N.NewArchiveDesc}'/>
                         </div><div style='display:inline-block'>
-                            <input class='favtag-btn ${(("UNTAGGED_ONLY" === window.Index.selectedCategory) ? "toggled" : "")}' 
+                            <input class='favtag-btn ${(("UNTAGGED_ONLY" === selectedCategory) ? "toggled" : "")}' 
                             type='button' id='UNTAGGED_ONLY' value='🏷️ ${I18N.UntaggedArchives}' 
                             onclick='window.Index.toggleCategory(this)' title='${I18N.UntaggedArcDesc}'/>
                         </div>`;
