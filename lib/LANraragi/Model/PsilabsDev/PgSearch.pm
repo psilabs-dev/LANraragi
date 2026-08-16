@@ -16,10 +16,126 @@ use LANraragi::Utils::PsilabsDev::Database qw(get_dbh);
 use LANraragi::Model::Config;
 use LANraragi::Model::PsilabsDev::PgCategory;
 
+# ---------------------------------------------------------------------------
+# API facade
+#
+# Every public search runs through do_clause_search: a plain search is the
+# collapsed single-clause case, a composite search is several OR-composed
+# clauses. Existing endpoints therefore exercise the same statement builders
+# and query paths as the composite API.
+# ---------------------------------------------------------------------------
+
 # replaces LANraragi::Model::Search::do_search
-# Performs a search on the Postgres database.
 # Returns ($total, $filtered, @ids)
 sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks, $hidecompleted ) {
+
+    my @tokens = compute_search_filter($filter);
+    my $clause = {
+        tokens        => \@tokens,
+        categories    => ( $category_id && $category_id ne "" ) ? [ { id => $category_id, mode => "include" } ] : [],
+        newonly       => $newonly       ? 1 : 0,
+        untaggedonly  => $untaggedonly  ? 1 : 0,
+        hidecompleted => $hidecompleted ? 1 : 0,
+    };
+    return do_clause_search( [$clause], $start, $sortkey, $sortorder, $grouptanks );
+}
+
+# replaces LANraragi::Model::Search::do_composite_search
+# Clause descriptors follow the composite API shape:
+#   { filter => "...", categories => [ { id => ..., mode => "include"|"exclude" } ], newonly => ..., ... }
+# Returns ($total, $filtered, @ids)
+sub do_composite_search ( $clause_descriptors, $start, $sortkey, $sortorder, $grouptanks ) {
+
+    my $descriptors = $clause_descriptors // [];
+
+    # Normalize each descriptor with canonical token/category keys so
+    # reduce_clauses can compare them. newonly/untaggedonly are tri-state
+    # (1 = only, -1 = exclude, 0 = off), matching the Redis contract.
+    my @normed;
+    foreach my $desc (@$descriptors) {
+        my @tokens       = compute_search_filter( $desc->{filter} // "" );
+        my @canon_tokens = sort map { join( "|", $_->{tag}, $_->{isneg}, $_->{isexact} ) } @tokens;
+        my @canon_cats   = sort map { ( $_->{id} // "" ) . ":" . ( $_->{mode} // "include" ) } @{ $desc->{categories} // [] };
+        push @normed,
+          {
+            categories    => $desc->{categories} // [],
+            tokens        => \@tokens,
+            canon_tokens  => \@canon_tokens,
+            canon_cats    => \@canon_cats,
+            newonly       => 0 + ( $desc->{newonly}      // 0 ),
+            untaggedonly  => 0 + ( $desc->{untaggedonly} // 0 ),
+            hidecompleted => $desc->{hidecompleted} ? 1 : 0,
+          };
+    }
+
+    return do_clause_search( reduce_clauses( \@normed ), $start, $sortkey, $sortorder, $grouptanks );
+}
+
+# Drop clauses subsumed by a less-restrictive clause (DNF absorption), so a
+# redundant OR arm never reaches SQL. Same semantics as dev-search's
+# Utils::Search::reduce_clauses, keyed on this module's own token parse.
+sub reduce_clauses ($normed) {
+
+    return $normed if scalar @$normed <= 1;
+
+    # Pairwise absorption: if A subsumes B, remove B.
+    # A subsumes B when A's predicates are a subset of B's (A is less restrictive).
+    # Identical clauses mutually subsume, so dedup is handled implicitly.
+    my @keep = (1) x scalar @$normed;
+    for my $i ( 0 .. $#$normed ) {
+        next unless $keep[$i];
+        for my $j ( 0 .. $#$normed ) {
+            next if $i == $j;
+            next unless $keep[$j];
+
+            my ( $a, $b ) = ( $normed->[$i], $normed->[$j] );
+
+            # Flag subsumption: 0 (off) subsumes any value; set flags must match.
+            my $subsumes = 1;
+            for my $flag (qw(newonly untaggedonly hidecompleted)) {
+                unless ( $a->{$flag} == 0 || $a->{$flag} == $b->{$flag} ) {
+                    $subsumes = 0;
+                    last;
+                }
+            }
+
+            # A's tokens must be a subset of B's tokens
+            if ($subsumes) {
+                my %b_tokens = map { $_ => 1 } @{ $b->{canon_tokens} };
+                for my $t ( @{ $a->{canon_tokens} } ) {
+                    unless ( $b_tokens{$t} ) {
+                        $subsumes = 0;
+                        last;
+                    }
+                }
+            }
+
+            # A's categories must be a subset of B's categories
+            if ($subsumes) {
+                my %b_cats = map { $_ => 1 } @{ $b->{canon_cats} };
+                for my $c ( @{ $a->{canon_cats} } ) {
+                    unless ( $b_cats{$c} ) {
+                        $subsumes = 0;
+                        last;
+                    }
+                }
+            }
+
+            $keep[$j] = 0 if $subsumes;
+        }
+    }
+
+    return [ map { $normed->[$_] } grep { $keep[$_] } 0 .. $#$normed ];
+}
+
+# ---------------------------------------------------------------------------
+# Core
+# ---------------------------------------------------------------------------
+
+# Run a clause set as one archive statement (plus one tank statement when
+# grouping): each clause is an AND-group of predicates, clauses OR together.
+# Returns ($total, $filtered, @ids); ( -1, -1 ) on error.
+sub do_clause_search ( $clauses, $start, $sortkey, $sortorder, $grouptanks ) {
 
     my $logger = get_logger( "PgSearch Engine", "lanraragi" );
     my $dbh = get_dbh();
@@ -57,20 +173,60 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
         my $count_time = (time() - $count_start) * 1000;
         $logger->debug(sprintf("[PERF] Total count: %.2fms (grouptanks: %s)", $count_time, $grouptanks ? 'true' : 'false'));
 
+        # An empty clause set matches nothing (parity with the Redis composite
+        # implementation, which unions zero clauses into an empty result).
+        unless (@$clauses) {
+            $filtered = 0;
+            return;
+        }
+
         # Determine pagination parameters
         my $keysperpage = LANraragi::Model::Config->get_pagesize;
         my $use_pagination = ( $start != -1 );
+        my $q_start = $use_pagination ? $start       : undef;
+        my $q_limit = $use_pagination ? $keysperpage : undef;
 
-        # Perform the search with SQL-level pagination
+        # Resolved inside the eval: DB errors return ( -1, -1 ); an unknown
+        # category resolves to no constraint.
+        my @resolved;
+        foreach my $clause (@$clauses) {
+            my @constraints;
+            foreach my $cat_entry ( @{ $clause->{categories} // [] } ) {
+                my $constraint = category_entry_to_constraint( $cat_entry->{id}, $cat_entry->{mode} // "include" );
+                push @constraints, $constraint if $constraint;
+            }
+            push @resolved, { %$clause, constraints => \@constraints };
+        }
+
+        # Prep and run the archive statement
+        my ( $where_sql, @params ) = compose_where_sql(
+            map { [ build_archive_where_clauses( $_->{tokens}, $_->{constraints}, $_->{newonly}, $_->{untaggedonly}, $_->{hidecompleted}, $grouptanks ) ] } @resolved );
+
         my $search_start = time();
-        ( $filtered, @ids ) = search_postgres_with_dbh(
-            $dbh, $category_id, $filter, $sortkey, $sortorder,
-            $newonly, $untaggedonly, $grouptanks, $hidecompleted,
-            $use_pagination ? $start : undef,
-            $use_pagination ? $keysperpage : undef
-        );
+        my $archive_filtered;
+        ( $archive_filtered, @ids ) = search_archives_with_dbh( $dbh, $where_sql, \@params, $sortkey, $sortorder, $q_start, $q_limit );
         my $search_time = (time() - $search_start) * 1000;
-        $logger->debug(sprintf("[PERF] search_postgres total: %.2fms", $search_time));
+        $logger->debug(sprintf("[PERF] Archive search: %.2fms", $search_time));
+        $filtered = $archive_filtered;
+
+        # When grouptanks=true, we also need to fetch tank IDs that match the search
+        # criteria and prepend them to the results (tanks typically come first)
+        if ($grouptanks) {
+            my ( $tank_where_sql, @tank_params ) = compose_where_sql(
+                map { [ build_tank_where_clauses( $_->{tokens}, $_->{constraints} ) ] } @resolved );
+
+            my $tank_start = time();
+            my ( $tank_filtered, @tank_ids ) = search_tanks_with_dbh( $dbh, $tank_where_sql, \@tank_params, $sortkey, $sortorder, $q_start, $q_limit );
+            my $tank_time = (time() - $tank_start) * 1000;
+            $logger->debug(sprintf("[PERF] Tank search: %.2fms", $tank_time));
+            $filtered += $tank_filtered;
+            if (@tank_ids) {
+                $logger->debug( "Found " . scalar @tank_ids . " tank results (paginated)" );
+                unshift @ids, @tank_ids;
+            }
+        }
+
+        $logger->debug( "Found $filtered total filtered results, returning " . scalar @ids . " paginated results" );
     };
 
     if ( my $error = $@ ) {
@@ -82,27 +238,60 @@ sub do_search ( $filter, $category_id, $start, $sortkey, $sortorder, $newonly, $
     $dbh->disconnect();
 
     my $total_time = (time() - $start_time) * 1000;
-    $logger->debug(sprintf("[PERF] do_search total: %.2fms", $total_time));
+    $logger->debug(sprintf("[PERF] do_clause_search total: %.2fms", $total_time));
 
     return ( $total, $filtered, @ids );
 }
 
-# Main search logic using Postgres
-# Returns ($filtered_count, @ids)
-sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder, $newonly, $untaggedonly, $grouptanks, $hidecompleted, $start, $keysperpage ) {
+# ---------------------------------------------------------------------------
+# Statement prep
+# ---------------------------------------------------------------------------
+
+# Compose per-clause fragment groups into one WHERE clause: fragments AND
+# within a clause, clauses OR together. A clause with no predicates matches
+# everything, which collapses the whole statement to an empty WHERE.
+sub compose_where_sql (@groups) {
+
+    my @clause_sql;
+    my @params;
+    foreach my $group (@groups) {
+        my ( $where, $group_params ) = @$group;
+        return ( "", () ) unless @$where;
+        push @clause_sql, $where;
+        push @params, @$group_params;
+    }
+    return ( "", () ) unless @clause_sql;
+
+    if ( scalar @clause_sql == 1 ) {
+        return ( "WHERE " . join( " AND ", @{ $clause_sql[0] } ), @params );
+    }
+    return ( "WHERE " . join( " OR ", map { "(" . join( " AND ", @$_ ) . ")" } @clause_sql ), @params );
+}
+
+# Resolve one category reference + mode into a constraint descriptor: static
+# categories constrain by membership map, dynamic categories by the tokens of
+# their stored search predicate.
+sub category_entry_to_constraint ( $category_id, $mode ) {
+
+    return undef unless $category_id && $category_id ne "";
+    my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($category_id);
+    return undef unless %category;
+
+    if ( $category{search} && $category{search} ne "" ) {
+        my @cat_tokens = compute_search_filter( $category{search} );
+        return { mode => $mode, tokens => \@cat_tokens };
+    }
+    return { mode => $mode, id => $category_id };
+}
+
+# Translate one clause (tokens + category constraints + flags) into WHERE
+# fragments and bind parameters for the archive table (alias "a").
+sub build_archive_where_clauses ( $tokens_in, $constraints, $newonly, $untaggedonly, $hidecompleted, $grouptanks ) {
 
     my $logger = get_logger( "PgSearch Core", "lanraragi" );
-
-    # Compute search filters
-    my $token_start = time();
-    my @tokens = compute_search_filter($filter);
-    my $token_time = (time() - $token_start) * 1000;
-    $logger->debug(sprintf("[PERF] Token computation: %.2fms (token_count: %d)", $token_time, scalar @tokens));
-
-    # Build the SQL query
+    my @tokens = @$tokens_in;
     my @where_clauses = ();
     my @params = ();
-    my @lateral_params = ();  # Separate array for LATERAL JOIN parameters
 
     # Tank grouping: When grouptanks=true, we want to return tank IDs and standalone archives.
     # When grouptanks=false, we want to return individual archives excluding those in tanks.
@@ -111,28 +300,32 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
         push @where_clauses, "NOT EXISTS (SELECT 1 FROM lrr_tank_to_archive_map WHERE arcid = a.arcid)";
     }
 
-    # Category filter
-    if ( $category_id && $category_id ne "" ) {
-        my $cat_start = time();
-        my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($category_id);
-        my $cat_time = (time() - $cat_start) * 1000;
-        $logger->debug(sprintf("[PERF] Category lookup: %.2fms", $cat_time));
-
-        if (%category) {
-            if ( $category{search} && $category{search} ne "" ) {
-                # Dynamic category - add its search predicate to tokens
-                my @cat_tokens = compute_search_filter( $category{search} );
-                push @tokens, @cat_tokens;
+    # Category constraints
+    foreach my $constraint (@$constraints) {
+        my $exclude = ( $constraint->{mode} // "include" ) eq "exclude";
+        if ( $constraint->{tokens} ) {
+            if ($exclude) {
+                # Dynamic exclude: negate the category's whole token conjunction.
+                my ( $sub_where, $sub_params ) = build_archive_where_clauses( $constraint->{tokens}, [], 0, 0, 0, 0 );
+                next unless @$sub_where;
+                push @where_clauses, "NOT (" . join( " AND ", @$sub_where ) . ")";
+                push @params, @$sub_params;
             } else {
-                # Static category - filter by category membership
-                push @where_clauses, "EXISTS (SELECT 1 FROM lrr_category_to_archive_map WHERE catid = ? AND arcid = a.arcid)";
-                push @params, $category_id;
+                # Dynamic include: the category's tokens join the clause's own.
+                push @tokens, @{ $constraint->{tokens} };
             }
+        } else {
+            # Static category - filter by category membership
+            my $membership = "EXISTS (SELECT 1 FROM lrr_category_to_archive_map WHERE catid = ? AND arcid = a.arcid)";
+            push @where_clauses, $exclude ? "NOT $membership" : $membership;
+            push @params, $constraint->{id};
         }
     }
 
-    # New filter
-    if ($newonly) {
+    # New filter (tri-state: 1 = only new, -1 = exclude new, 0 = off)
+    if ( $newonly && $newonly == -1 ) {
+        push @where_clauses, "a.isnew = FALSE";
+    } elsif ($newonly) {
         push @where_clauses, "a.isnew = TRUE";
     }
 
@@ -144,12 +337,14 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
     # Untagged filter - archives with no "meaningful" tags
     # Excludes basic metadata namespaces that don't count as "tagged"
     # Uses denormalized namespace on tag map — no join to lrr_tag needed.
+    # (tri-state: 1 = only untagged, -1 = exclude untagged, 0 = off)
     if ($untaggedonly) {
-        push @where_clauses, "NOT EXISTS (
+        my $has_tags = "EXISTS (
         SELECT 1 FROM lrr_archive_to_tag_map atm
         WHERE atm.arcid = a.arcid
         AND atm.namespace NOT IN ('artist', 'parody', 'series', 'language', 'event', 'group', 'date_added', 'timestamp', 'source')
     )";
+        push @where_clauses, ( $untaggedonly == -1 ) ? $has_tags : "NOT $has_tags";
     }
 
     # Process search tokens
@@ -356,11 +551,159 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
         }
     }
 
-    # Build WHERE clause
-    my $where_sql = "";
-    if (@where_clauses) {
-        $where_sql = "WHERE " . join( " AND ", @where_clauses );
+    return ( \@where_clauses, \@params );
+}
+
+# Translate one clause into WHERE fragments and bind parameters for the tank
+# table (alias "t"). Tanks store tags as a flat text column, so the token
+# predicates differ from the archive builder's.
+sub build_tank_where_clauses ( $tokens_in, $constraints ) {
+
+    my $logger = get_logger( "PgSearch Tank", "lanraragi" );
+    my @tokens = @$tokens_in;
+    my @where_clauses = ();
+    my @params = ();
+
+    # Category constraints
+    # Note: Tanks can be in categories through lrr_category_to_archive_map using their tankid
+    foreach my $constraint (@$constraints) {
+        my $exclude = ( $constraint->{mode} // "include" ) eq "exclude";
+        if ( $constraint->{tokens} ) {
+            if ($exclude) {
+                # Dynamic exclude: negate the category's whole token conjunction.
+                my ( $sub_where, $sub_params ) = build_tank_where_clauses( $constraint->{tokens}, [] );
+                next unless @$sub_where;
+                push @where_clauses, "NOT (" . join( " AND ", @$sub_where ) . ")";
+                push @params, @$sub_params;
+            } else {
+                # Dynamic include: the category's tokens join the clause's own.
+                push @tokens, @{ $constraint->{tokens} };
+            }
+        } else {
+            # Static category - filter by category membership
+            # Tanks can be in categories directly
+            my $membership = "EXISTS (SELECT 1 FROM lrr_category_to_archive_map WHERE catid = ? AND arcid = t.tankid)";
+            push @where_clauses, $exclude ? "NOT $membership" : $membership;
+            push @params, $constraint->{id};
+        }
     }
+
+    # Process search tokens for tanks
+    foreach my $token (@tokens) {
+        my $tag     = $token->{tag};
+        my $isneg   = $token->{isneg};
+        my $isexact = $token->{isexact};
+
+        $logger->debug("Tank search for $tag, isneg=$isneg, isexact=$isexact");
+
+        # Skip page/read count searches for tanks (they don't have pagecount/progress)
+        if ( $tag =~ /^(read|pages):/ ) {
+            next;
+        }
+
+        # Tag-based search for tanks
+        my ($namespace, $value);
+        if ( $tag =~ /^([^:]+):(.*)$/ ) {
+            $namespace = $1;
+            $value = $2;
+        } else {
+            $namespace = undef;
+            $value = $tag;
+        }
+
+        # Convert wildcards: ? to _, * to %
+        if (defined $namespace) {
+            $namespace =~ s/\?/_/g;
+            $namespace =~ s/\*/%/g;
+        }
+        $value =~ s/\?/_/g;
+        $value =~ s/\*/%/g;
+
+        my $tag_clause;
+        if ($isexact) {
+            # Exact match - search in tank name or tags field
+            if (defined $namespace) {
+                # For tanks, tags are stored as a text field, so we search within it
+                # Handle namespace-only search (e.g., "date_uploaded:")
+                if ($value eq "") {
+                    # Search for ANY tag with this namespace
+                    $tag_clause = "t.tags LIKE ?";
+                    if ($isneg) {
+                        $tag_clause = "NOT ($tag_clause)";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace:%";
+                } else {
+                    # Search for specific namespace:value
+                    $tag_clause = "t.tags LIKE ?";
+                    if ($isneg) {
+                        $tag_clause = "NOT ($tag_clause)";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace:$value%";
+                }
+            } else {
+                # No namespace - match in name or tags (tank IDs searchable via partial search)
+                $tag_clause = "(t.name = ? OR t.tags LIKE ?)";
+                if ($isneg) {
+                    $tag_clause = "NOT $tag_clause";
+                }
+                push @where_clauses, $tag_clause;
+                push @params, $value, "%$value%";
+            }
+        } else {
+            # Partial match using ILIKE
+            if (defined $namespace) {
+                # Handle namespace-only search (e.g., "date_uploaded:")
+                if ($value eq "") {
+                    # Search for ANY tag with this namespace (partial namespace match)
+                    $tag_clause = "t.tags ILIKE ?";
+                    if ($isneg) {
+                        $tag_clause = "NOT ($tag_clause)";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace:%";
+                } else {
+                    # Search for namespace and value (both partial match)
+                    $tag_clause = "t.tags ILIKE ?";
+                    if ($isneg) {
+                        $tag_clause = "NOT ($tag_clause)";
+                    }
+                    push @where_clauses, $tag_clause;
+                    push @params, "%$namespace%$value%";
+                }
+            } else {
+                # No namespace - search in tank ID, name, summary, or tags
+                $tag_clause = "(
+                    t.tankid ILIKE ?
+                    OR t.name ILIKE ?
+                    OR t.summary ILIKE ?
+                    OR t.tags ILIKE ?
+                )";
+                if ($isneg) {
+                    $tag_clause = "NOT $tag_clause";
+                }
+                push @where_clauses, $tag_clause;
+                push @params, "%$value%", "%$value%", "%$value%", "%$value%";
+            }
+        }
+    }
+
+    return ( \@where_clauses, \@params );
+}
+
+# ---------------------------------------------------------------------------
+# Query layer
+# ---------------------------------------------------------------------------
+
+# Run the prepared archive statement: sort (including tag-namespace lateral
+# sort), pagination, filtered count via window function, EXPLAIN diagnostics.
+# Returns ($filtered_count, @ids)
+sub search_archives_with_dbh ( $dbh, $where_sql, $params_in, $sortkey, $sortorder, $start, $keysperpage ) {
+
+    my $logger = get_logger( "PgSearch Core", "lanraragi" );
+    my @params = @$params_in;
+    my @lateral_params = ();  # Separate array for LATERAL JOIN parameters
 
     # Build JOIN for tag-based sorting
     # Using DISTINCT ON to efficiently get one tag value per archive
@@ -482,166 +825,15 @@ sub search_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder
         }
     }
 
-    # When grouptanks=true, we also need to fetch tank IDs that match the search criteria
-    # and prepend them to the results (tanks typically come first)
-    my $tank_filtered_count = 0;
-    if ($grouptanks) {
-        my $tank_start = time();
-        my ( $tank_count, @tank_ids ) = search_tanks_postgres_with_dbh($dbh, $category_id, $filter, $sortkey, $sortorder, $start, $keysperpage);
-        my $tank_time = (time() - $tank_start) * 1000;
-        $logger->debug(sprintf("[PERF] Tank search: %.2fms", $tank_time));
-        $tank_filtered_count = $tank_count;
-        if (@tank_ids) {
-            $logger->debug( "Found " . scalar @tank_ids . " tank results (paginated)" );
-            # Prepend tank IDs to archive IDs
-            unshift @ids, @tank_ids;
-        }
-    }
-
-    my $total_filtered = $archive_filtered_count + $tank_filtered_count;
-    $logger->debug( "Found $total_filtered total filtered results, returning " . scalar @ids . " paginated results" );
-
-    return ( $total_filtered, @ids );
+    return ( $archive_filtered_count, @ids );
 }
 
-# Search for tanks matching the given criteria
+# Run the prepared tank statement.
 # Returns ($filtered_count, @tank_ids)
-sub search_tanks_postgres_with_dbh ( $dbh, $category_id, $filter, $sortkey, $sortorder, $start, $keysperpage ) {
+sub search_tanks_with_dbh ( $dbh, $where_sql, $params_in, $sortkey, $sortorder, $start, $keysperpage ) {
 
     my $logger = get_logger( "PgSearch Tank", "lanraragi" );
-
-    # Compute search filters
-    my @tokens = compute_search_filter($filter);
-
-    # Build the SQL query for tanks
-    my @where_clauses = ();
-    my @params = ();
-
-    # Category filter for tanks
-    # Note: Tanks can be in categories through lrr_category_to_archive_map using their tankid
-    if ( $category_id && $category_id ne "" ) {
-        my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($category_id);
-
-        if (%category) {
-            if ( $category{search} && $category{search} ne "" ) {
-                # Dynamic category - add its search predicate to tokens
-                my @cat_tokens = compute_search_filter( $category{search} );
-                push @tokens, @cat_tokens;
-            } else {
-                # Static category - filter by category membership
-                # Tanks can be in categories directly
-                push @where_clauses, "EXISTS (SELECT 1 FROM lrr_category_to_archive_map WHERE catid = ? AND arcid = t.tankid)";
-                push @params, $category_id;
-            }
-        }
-    }
-
-    # Process search tokens for tanks
-    foreach my $token (@tokens) {
-        my $tag     = $token->{tag};
-        my $isneg   = $token->{isneg};
-        my $isexact = $token->{isexact};
-
-        $logger->debug("Tank search for $tag, isneg=$isneg, isexact=$isexact");
-
-        # Skip page/read count searches for tanks (they don't have pagecount/progress)
-        if ( $tag =~ /^(read|pages):/ ) {
-            next;
-        }
-
-        # Tag-based search for tanks
-        my ($namespace, $value);
-        if ( $tag =~ /^([^:]+):(.*)$/ ) {
-            $namespace = $1;
-            $value = $2;
-        } else {
-            $namespace = undef;
-            $value = $tag;
-        }
-
-        # Convert wildcards: ? to _, * to %
-        if (defined $namespace) {
-            $namespace =~ s/\?/_/g;
-            $namespace =~ s/\*/%/g;
-        }
-        $value =~ s/\?/_/g;
-        $value =~ s/\*/%/g;
-
-        my $tag_clause;
-        if ($isexact) {
-            # Exact match - search in tank name or tags field
-            if (defined $namespace) {
-                # For tanks, tags are stored as a text field, so we search within it
-                # Handle namespace-only search (e.g., "date_uploaded:")
-                if ($value eq "") {
-                    # Search for ANY tag with this namespace
-                    $tag_clause = "t.tags LIKE ?";
-                    if ($isneg) {
-                        $tag_clause = "NOT ($tag_clause)";
-                    }
-                    push @where_clauses, $tag_clause;
-                    push @params, "%$namespace:%";
-                } else {
-                    # Search for specific namespace:value
-                    $tag_clause = "t.tags LIKE ?";
-                    if ($isneg) {
-                        $tag_clause = "NOT ($tag_clause)";
-                    }
-                    push @where_clauses, $tag_clause;
-                    push @params, "%$namespace:$value%";
-                }
-            } else {
-                # No namespace - match in name or tags (tank IDs searchable via partial search)
-                $tag_clause = "(t.name = ? OR t.tags LIKE ?)";
-                if ($isneg) {
-                    $tag_clause = "NOT $tag_clause";
-                }
-                push @where_clauses, $tag_clause;
-                push @params, $value, "%$value%";
-            }
-        } else {
-            # Partial match using ILIKE
-            if (defined $namespace) {
-                # Handle namespace-only search (e.g., "date_uploaded:")
-                if ($value eq "") {
-                    # Search for ANY tag with this namespace (partial namespace match)
-                    $tag_clause = "t.tags ILIKE ?";
-                    if ($isneg) {
-                        $tag_clause = "NOT ($tag_clause)";
-                    }
-                    push @where_clauses, $tag_clause;
-                    push @params, "%$namespace:%";
-                } else {
-                    # Search for namespace and value (both partial match)
-                    $tag_clause = "t.tags ILIKE ?";
-                    if ($isneg) {
-                        $tag_clause = "NOT ($tag_clause)";
-                    }
-                    push @where_clauses, $tag_clause;
-                    push @params, "%$namespace%$value%";
-                }
-            } else {
-                # No namespace - search in tank ID, name, summary, or tags
-                $tag_clause = "(
-                    t.tankid ILIKE ?
-                    OR t.name ILIKE ?
-                    OR t.summary ILIKE ?
-                    OR t.tags ILIKE ?
-                )";
-                if ($isneg) {
-                    $tag_clause = "NOT $tag_clause";
-                }
-                push @where_clauses, $tag_clause;
-                push @params, "%$value%", "%$value%", "%$value%", "%$value%";
-            }
-        }
-    }
-
-    # Build WHERE clause
-    my $where_sql = "";
-    if (@where_clauses) {
-        $where_sql = "WHERE " . join( " AND ", @where_clauses );
-    }
+    my @params = @$params_in;
 
     # Build ORDER BY clause for tanks
     my $order_sql = "";
