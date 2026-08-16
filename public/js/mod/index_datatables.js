@@ -10,6 +10,9 @@ let originalTitle = document.title;
 let isComingFromPopstate = false;
 export let currentSearch = "";
 
+const SEARCH_INIT_RETRY_DELAY_MS = 1500;
+const SEARCH_INIT_MAX_RETRIES = 10;
+
 /**
  * Initialize DataTables.
  */
@@ -192,7 +195,7 @@ export function buildCompositeRandomBody(count) {
  * @param {object} data DataTables request data (draw, start, length, order, etc.)
  * @param {function} callback DataTables callback to provide response data
  */
-export function compositeAjax(data, callback) {
+export async function compositeAjax(data, callback) {
     const body = buildCompositeBody(data.start);
 
     // Override sort from DataTables' own request data for reliable initialization
@@ -202,23 +205,39 @@ export function compositeAjax(data, callback) {
         body.sortby = data.columns[colIdx].name;
     }
 
-    fetch(new LRR.ApiURL("/api/search/composite"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-    })
-        .then((response) => (response.ok && response.status !== 204) ? response.json() : { recordsTotal: 0, recordsFiltered: 0, data: [] })
-        .then((result) => {
+    try {
+        for (let attempt = 0; attempt <= SEARCH_INIT_MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+                await new Promise((resolve) => setTimeout(resolve, SEARCH_INIT_RETRY_DELAY_MS));
+            }
+
+            const response = await fetch(new LRR.ApiURL("/api/search/composite"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+
+            // Search engine still initializing: back off and retry
+            if (response.status === 204) { continue; }
+            if (!response.ok) {
+                throw new Error(`${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
             callback({
                 draw: data.draw,
                 recordsTotal: result.recordsTotal,
                 recordsFiltered: result.recordsFiltered,
                 data: result.data,
             });
-        })
-        .catch(() => {
-            callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
-        });
+            return;
+        }
+
+        throw new Error(`Search engine not initialized after ${SEARCH_INIT_MAX_RETRIES * SEARCH_INIT_RETRY_DELAY_MS}ms`);
+    } catch (error) {
+        LRR.showErrorToast(I18N.ArchiveListLoadFailure, error);
+        callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
+    }
 }
 
 // #region Compact View
