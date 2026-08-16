@@ -493,8 +493,9 @@ export function updateCarousel(e) {
             $("#carousel-icon")[0].classList = "fas fa-book-reader";
             $("#carousel-title").text(I18N.CarouselOnDeck);
             // hidecompleted always true here by design
-            body.clauses.forEach((c) => { c.hidecompleted = true; });
             for (const clause of body.clauses) {
+                clause.hidecompleted = true;
+                clause.categories = [];
                 clause.filter = clause.filter ? `lastread:>0, ${clause.filter}` : "lastread:>0";
             }
             body.sortby = "lastread";
