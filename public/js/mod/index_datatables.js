@@ -10,9 +10,6 @@ let originalTitle = document.title;
 let isComingFromPopstate = false;
 export let currentSearch = "";
 
-const SEARCH_INIT_RETRY_DELAY_MS = 1500;
-const SEARCH_INIT_MAX_RETRIES = 10;
-
 /**
  * Initialize DataTables.
  */
@@ -206,9 +203,9 @@ export async function compositeAjax(data, callback) {
     }
 
     try {
-        for (let attempt = 0; attempt <= SEARCH_INIT_MAX_RETRIES; attempt++) {
+        for (let attempt = 0; attempt <= LRR.SEARCH_INIT_MAX_RETRIES; attempt++) {
             if (attempt > 0) {
-                await new Promise((resolve) => setTimeout(resolve, SEARCH_INIT_RETRY_DELAY_MS));
+                await new Promise((resolve) => setTimeout(resolve, LRR.SEARCH_INIT_RETRY_DELAY_MS));
             }
 
             const response = await fetch(new LRR.ApiURL("/api/search/composite"), {
@@ -233,7 +230,7 @@ export async function compositeAjax(data, callback) {
             return;
         }
 
-        throw new Error(`Search engine not initialized after ${SEARCH_INIT_MAX_RETRIES * SEARCH_INIT_RETRY_DELAY_MS}ms`);
+        throw new Error(`Search engine not initialized after ${LRR.SEARCH_INIT_MAX_RETRIES * LRR.SEARCH_INIT_RETRY_DELAY_MS}ms`);
     } catch (error) {
         LRR.showErrorToast(I18N.ArchiveListLoadFailure, error);
         callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
