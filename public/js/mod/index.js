@@ -452,73 +452,71 @@ export function updateCarousel(e) {
     $("#reload-carousel").addClass("fa-spin");
 
     // Hit a different API endpoint depending on the requested localStorage carousel type
-    // TODO: replace endpoint building with IndexTable.buildCompositeBody
-    let endpoint;
-    const filter = IndexTable.currentSearch ? `&filter=${IndexTable.currentSearch}` : "";
-
-    // See LANraragi::Controller::Api::Search::handle_databases
-    const isBuiltinSelector = selectedCategory === "NEW_ONLY" || selectedCategory === "UNTAGGED_ONLY";
-    const category = (selectedCategory && !isBuiltinSelector) ? `&category=${selectedCategory}` : "";
-
-    // Mirror index setting toggles and special categories so carousels respect them too (when relevant)
-    const groupTanks = localStorage.grouptanks === "false" ? "&groupby_tanks=false" : "";
-    const hideCompleted = localStorage.hidecompleted === "true" ? "&hidecompleted=true" : "";
-    const newOnly = selectedCategory === "NEW_ONLY" ? "&newonly=true" : "";
-    const untaggedOnly = selectedCategory === "UNTAGGED_ONLY" ? "&untaggedonly=true" : "";
+    let url = "/api/search/composite";
+    let body = IndexTable.buildCompositeBody();
 
     switch (localStorage.carouselType) {
         case "random":
             $("#carousel-icon")[0].classList = "fas fa-random";
             $("#carousel-title").text(I18N.CarouselRandom);
-            // TODO: replace with IndexTable.buildCompositeRandomBody
-            endpoint = `/api/search/random?count=15${filter}${category}${groupTanks}${hideCompleted}${newOnly}${untaggedOnly}`;
-
+            url = "/api/search/composite/random";
+            body = IndexTable.buildCompositeRandomBody(15);
             break;
         case "inbox":
             $("#carousel-icon")[0].classList = "fas fa-envelope-open-text";
             $("#carousel-title").text(I18N.NewArchives);
             // newonly always true here by design
-            endpoint = `/api/search?newonly=true&sortby=date_added&order=desc&start=-1${filter}${category}${groupTanks}${hideCompleted}${untaggedOnly}`;
+            body.clauses.forEach((c) => { c.newonly = 1; });
+            body.sortby = "date_added";
+            body.order = "desc";
+            body.start = -1;
             break;
         case "untagged":
             $("#carousel-icon")[0].classList = "fas fa-edit";
             $("#carousel-title").text(I18N.UntaggedArchives);
             // untaggedonly always true here by design
-            endpoint = `/api/search?untaggedonly=true&sortby=date_added&order=desc&start=-1${filter}${category}${groupTanks}${hideCompleted}${newOnly}`;
+            body.clauses.forEach((c) => { c.untaggedonly = 1; });
+            body.sortby = "date_added";
+            body.order = "desc";
+            body.start = -1;
             break;
         case "ondeck":
             $("#carousel-icon")[0].classList = "fas fa-book-reader";
             $("#carousel-title").text(I18N.CarouselOnDeck);
             // hidecompleted always true here by design
-            endpoint = `/api/search?sortby=lastread&hidecompleted=true${filter}${groupTanks}${untaggedOnly}${newOnly}`;
+            body.clauses.forEach((c) => { c.hidecompleted = true; });
+            body.sortby = "lastread";
             break;
         default:
             $("#carousel-icon")[0].classList = "fas fa-pastafarianism";
             $("#carousel-title").text("What???");
-            endpoint = `/api/search?${filter}${category}`.replace(/\?$/, "");
             break;
     }
 
     if (carouselInitialized) {
         carouselGeneration += 1;
-        loadCarousel(endpoint, carouselGeneration);
+        loadCarousel(url, body, carouselGeneration);
     }
 }
 
 /**
  * Fetch and render the carousel, retry nonblock while search engine initializes
- * @param {string} endpoint Search API endpoint for the current carousel type
+ * @param {string} url  Composite search endpoint for the current carousel type
+ * @param {object} body Composite search request body
  * @param {number} generation token identifying this carousel refresh
  */
-async function loadCarousel(endpoint, generation) {
+async function loadCarousel(url, body, generation) {
     try {
         for (let attempt = 0; attempt <= CAROUSEL_MAX_RETRIES; attempt++) {
             if (attempt > 0) {
                 await new Promise((resolve) => setTimeout(resolve, CAROUSEL_RETRY_DELAY_MS));
             }
 
-            // TODO: replace GET endpoint with POST /api/search/composite
-            const response = await fetch(new LRR.ApiURL(endpoint), { method: "GET" });
+            const response = await fetch(new LRR.ApiURL(url), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
 
             // Search engine still initializing: back off and retry
             if (response.status === 204) { continue; }
@@ -1073,17 +1071,17 @@ export function migrateProgress() {
 
 /**
  * Toggles a category filter.
- * Sets the internal selectedCategory variable and changes the button's class.
+ * Sets the internal selectedCategories variable and changes the button's class.
  * @param {*} button Button matching the category.
  */
 export function toggleCategory(button) {
     // Add/remove class to button depending on the state
     const categoryId = button.id;
-    if (selectedCategory === categoryId) {
+    if (selectedCategories.has(categoryId)) {
         button.classList.remove("toggled");
-        setSelectedCategory("");
+        selectedCategories.delete(categoryId);
     } else {
-        setSelectedCategory(categoryId);
+        selectedCategories.add(categoryId);
         button.classList.add("toggled");
     }
 
@@ -1103,11 +1101,11 @@ export function loadCategories() {
             data.sort((a, b) => b.pinned - a.pinned);
             // Queue some hardcoded categories at the beginning - those are special-cased in the DataTables variant of the search endpoint. 
             let html = `<div style='display:inline-block'>
-                            <input class='favtag-btn ${(("NEW_ONLY" === selectedCategory) ? "toggled" : "")}' 
+                            <input class='favtag-btn ${(selectedCategories.has("NEW_ONLY") ? "toggled" : "")}' 
                             type='button' id='NEW_ONLY' value='🆕 ${I18N.NewArchives}' 
                             onclick='window.Index.toggleCategory(this)' title='${I18N.NewArchiveDesc}'/>
                         </div><div style='display:inline-block'>
-                            <input class='favtag-btn ${(("UNTAGGED_ONLY" === selectedCategory) ? "toggled" : "")}' 
+                            <input class='favtag-btn ${(selectedCategories.has("UNTAGGED_ONLY") ? "toggled" : "")}' 
                             type='button' id='UNTAGGED_ONLY' value='🏷️ ${I18N.UntaggedArchives}' 
                             onclick='window.Index.toggleCategory(this)' title='${I18N.UntaggedArcDesc}'/>
                         </div>`;
@@ -1122,7 +1120,7 @@ export function loadCategories() {
                 catName = LRR.encodeHTML(catName);
 
                 const div = `<div style='display:inline-block'>
-                    <input class='favtag-btn ${((category.id === selectedCategory) ? "toggled" : "")}' 
+                    <input class='favtag-btn ${(selectedCategories.has(category.id) ? "toggled" : "")}' 
                             type='button' id='${category.id}' value='${catName}' 
                             onclick='window.Index.toggleCategory(this)' title='${I18N.CategoryDesc}'/>
                 </div>`;
