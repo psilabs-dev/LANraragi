@@ -187,13 +187,13 @@ sub handle_composite {
     my $sortorder   = ( $body->{order} && $body->{order} eq 'desc' ) ? 1 : 0;
     my $grouptanks  = $body->{groupby_tanks} // 1;
 
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_composite_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_composite_search(
         $clauses_raw, $start, $sortkey, $sortorder, $grouptanks ? 1 : 0
     );
 
     if ( $total eq -1 && $filtered eq -1 ) {
 
-        # Search engine not initialized
+        # Composite search failed (see PgSearch error log)
         $self->render(
             openapi => {
                 recordsTotal    => 0,
@@ -219,13 +219,13 @@ sub handle_composite_ids {
     my $sortorder   = ( $body->{order} && $body->{order} eq 'desc' ) ? 1 : 0;
     my $grouptanks  = $body->{groupby_tanks} // 1;
 
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_composite_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_composite_search(
         $clauses_raw, $start, $sortkey, $sortorder, $grouptanks ? 1 : 0
     );
 
     if ( $total eq -1 && $filtered eq -1 ) {
 
-        # Search engine not initialized
+        # Composite search failed (see PgSearch error log)
         $self->render(
             openapi => {
                 recordsTotal    => 0,
@@ -302,13 +302,13 @@ sub get_random_archives_composite {
     my $random_count = $body->{count}           // 5;
 
     # Use the search engine to get IDs matching the clause set, with start=-1 to get all data
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_composite_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_composite_search(
         $clauses_raw, -1, "title", 0, $grouptanks ? 1 : 0
     );
 
     if ( $total eq -1 && $filtered eq -1 ) {
 
-        # Search engine not initialized
+        # Composite search failed (see PgSearch error log)
         $self->render(
             openapi => {
                 data         => [],
