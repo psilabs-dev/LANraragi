@@ -475,7 +475,11 @@ export function buildURLParameters() {
 export function consumeURLParameters() {
     const params = new URLSearchParams(window.location.search);
 
-    Index.setSelectedCategories(params.getAll("c"));
+    Index.setSelectedCategories(params.getAll("c").filter((catId) => {
+        if (catId === "NEW_ONLY" || catId === "UNTAGGED_ONLY" || /^SET_[0-9]{10}$/.test(catId)) return true;
+        console.warn(`Dropping unknown category "${catId}".`);
+        return false;
+    }));
 
     if (params.has("q")) { currentSearch = decodeURIComponent(params.get("q")); }
 
