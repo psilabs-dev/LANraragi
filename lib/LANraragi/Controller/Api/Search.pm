@@ -147,7 +147,7 @@ sub handle_api_ids {
 
     $sortorder = ( $sortorder && $sortorder eq 'desc' ) ? 1 : 0;
 
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
         $filter,    $category,            $start,               $sortkey,
         $sortorder, $newfilter eq "true", $untaggedf eq "true", $grouptanks eq "true",
         $hidecompleted eq "true"
