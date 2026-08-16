@@ -84,6 +84,7 @@ export function initializeAll() {
     dataTable = $(".datatables").DataTable({
         serverSide: true,
         processing: true,
+        // TODO: replace with compositeAjax.
         ajax: {
             url: "search",
             cache: true,
@@ -127,14 +128,17 @@ export function initializeAll() {
 export function doSearch(page) {
     // Add the selected category to the tags column so it's picked up by the search engine
     // This allows for the regular search bar to be used in conjunction with categories.
+    // TODO: remove, compositeAjax reads Index.selectedCategories directly
     dataTable.column(".tags.itd").search(Index.selectedCategory);
 
     // Store search parameters in localStorage for archive navigation
     localStorage.setItem("currentSearch", currentSearch);
+    // TODO: deprecate for a selectedCategories serialization; reader_common.js reads this key
     localStorage.setItem("selectedCategory", Index.selectedCategory);
 
     // Update search input field
     $("#search-input").val(currentSearch);
+    // TODO: remove together with the dataTable.search() read in buildURLParameters
     dataTable.search(currentSearch);
 
     // Add the current search terms to the title tab
@@ -154,6 +158,92 @@ export function doSearch(page) {
 
     // Re-load carousel
     Index.updateCarousel();
+}
+
+/**
+ * Builds the composite search clauses from the current UI state.
+ * Selected categories are AND-ed within a single clause.
+ * Pseudo-categories are applied as dedicated flags.
+ * @returns {Array<object>} Composite search clauses
+ */
+export function buildCompositeClauses() {
+    const categories = [];
+    for (const catId of Index.selectedCategories) {
+        if (catId === "NEW_ONLY" || catId === "UNTAGGED_ONLY") continue;
+        categories.push({ id: catId, mode: "include" });
+    }
+
+    const newonly = Index.selectedCategories.has("NEW_ONLY") ? 1 : 0;
+    const untaggedonly = Index.selectedCategories.has("UNTAGGED_ONLY") ? 1 : 0;
+    const hidecompleted = localStorage.hidecompleted === "true";
+
+    return [{ filter: currentSearch.trim(), categories, newonly, untaggedonly, hidecompleted }];
+}
+
+/**
+ * Builds the composite search request body from the current UI state.
+ * @param {number} start Pagination offset (-1 for all results)
+ * @returns {object} Composite search request body
+ */
+export function buildCompositeBody(start) {
+    return {
+        clauses: buildCompositeClauses(),
+        start: start !== undefined ? start : 0,
+        sortby: "title",
+        order: "asc",
+        groupby_tanks: localStorage.grouptanks !== "false",
+    };
+}
+
+/**
+ * Builds the composite random search request body from the current UI state.
+ * @param {number} count How many archives to sample
+ * @returns {object} Composite random search request body
+ */
+export function buildCompositeRandomBody(count) {
+    return {
+        clauses: buildCompositeClauses(),
+        count,
+        groupby_tanks: localStorage.grouptanks !== "false",
+    };
+}
+
+/**
+ * Custom DataTables ajax function that POSTs to /api/search/composite.
+ * @param {object} data DataTables request data (draw, start, length, order, etc.)
+ * @param {function} callback DataTables callback to provide response data
+ */
+export function compositeAjax(data, callback) {
+    const body = buildCompositeBody(data.start);
+
+    // Override sort from DataTables' own request data for reliable initialization
+    if (data.order && data.order.length > 0) {
+        const colIdx = data.order[0].column;
+        body.order = data.order[0].dir;
+        if (colIdx === 0) {
+            body.sortby = "title";
+        } else if (colIdx >= 1 && colIdx <= Index.getColumnCount()) {
+            body.sortby = localStorage.getItem(`customColumn${colIdx}`) || "title";
+        }
+    }
+
+    fetch(new LRR.ApiURL("/api/search/composite"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    })
+        .then((response) => (response.ok && response.status !== 204) ? response.json() : { recordsTotal: 0, recordsFiltered: 0, data: [] })
+        .then((result) => {
+            callback({
+                draw: data.draw,
+                recordsTotal: result.recordsTotal,
+                recordsFiltered: result.recordsFiltered,
+                data: result.data,
+            });
+        })
+        .catch(() => {
+            callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
+        });
 }
 
 // #region Compact View
@@ -369,6 +459,7 @@ export function drawCallback() {
 }
 
 export function buildURLParameters() {
+    // TODO: replace with one c= entry per Index.selectedCategories member
     const cat = dataTable.column(".tags.itd").search();
     const page = dataTable.page.info().page + 1;
     const sortby = dataTable.order()[0][0];
@@ -393,6 +484,7 @@ export function buildURLParameters() {
 export function consumeURLParameters() {
     const params = new URLSearchParams(window.location.search);
 
+    // TODO: replace with Index.setSelectedCategories(params.getAll("c"))
     if (params.has("c")) Index.setSelectedCategory(params.get("c"));
     else Index.setSelectedCategory("");
 

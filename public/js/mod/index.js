@@ -10,7 +10,9 @@ import * as marked from "marked";
 import DOMPurify from "dompurify";
 import Swiper from "swiper";
 
+// TODO: deprecate selectedCategory for selectedCategories
 export let selectedCategory = "";
+export let selectedCategories = new Set();
 let carouselInitialized = false;
 let carouselGeneration = 0;
 let swiper = {};
@@ -450,6 +452,7 @@ export function updateCarousel(e) {
     $("#reload-carousel").addClass("fa-spin");
 
     // Hit a different API endpoint depending on the requested localStorage carousel type
+    // TODO: replace endpoint building with IndexTable.buildCompositeBody
     let endpoint;
     const filter = IndexTable.currentSearch ? `&filter=${IndexTable.currentSearch}` : "";
 
@@ -467,6 +470,7 @@ export function updateCarousel(e) {
         case "random":
             $("#carousel-icon")[0].classList = "fas fa-random";
             $("#carousel-title").text(I18N.CarouselRandom);
+            // TODO: replace with IndexTable.buildCompositeRandomBody
             endpoint = `/api/search/random?count=15${filter}${category}${groupTanks}${hideCompleted}${newOnly}${untaggedOnly}`;
 
             break;
@@ -513,6 +517,7 @@ async function loadCarousel(endpoint, generation) {
                 await new Promise((resolve) => setTimeout(resolve, CAROUSEL_RETRY_DELAY_MS));
             }
 
+            // TODO: replace GET endpoint with POST /api/search/composite
             const response = await fetch(new LRR.ApiURL(endpoint), { method: "GET" });
 
             // Search engine still initializing: back off and retry
@@ -1393,8 +1398,16 @@ export function getColumnCount() {
 // #endregion
 
 /**
+ * TODO: replace with setSelectedCategories
  * @param {string} newCategory
  */
 export function setSelectedCategory(newCategory) {
     selectedCategory = newCategory;
+}
+
+/**
+ * @param {Iterable<string>} ids
+ */
+export function setSelectedCategories(ids) {
+    selectedCategories = new Set(ids);
 }
