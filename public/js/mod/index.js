@@ -22,9 +22,6 @@ export let pageSize = 100;
 export let isMultiSelectMode = false;
 export let selectedArchives = new Set();
 
-const CAROUSEL_RETRY_DELAY_MS = 1500;
-const CAROUSEL_MAX_RETRIES = 10;
-
 /**
  * Initialize the Archive Index.
  */
@@ -507,9 +504,9 @@ export function updateCarousel(e) {
  */
 async function loadCarousel(url, body, generation) {
     try {
-        for (let attempt = 0; attempt <= CAROUSEL_MAX_RETRIES; attempt++) {
+        for (let attempt = 0; attempt <= LRR.SEARCH_INIT_MAX_RETRIES; attempt++) {
             if (attempt > 0) {
-                await new Promise((resolve) => setTimeout(resolve, CAROUSEL_RETRY_DELAY_MS));
+                await new Promise((resolve) => setTimeout(resolve, LRR.SEARCH_INIT_RETRY_DELAY_MS));
             }
 
             const response = await fetch(new LRR.ApiURL(url), {
@@ -531,7 +528,7 @@ async function loadCarousel(url, body, generation) {
             return;
         }
 
-        throw new Error(`Search engine not initialized after ${CAROUSEL_MAX_RETRIES * CAROUSEL_RETRY_DELAY_MS}ms`);
+        throw new Error(`Search engine not initialized after ${LRR.SEARCH_INIT_MAX_RETRIES * LRR.SEARCH_INIT_RETRY_DELAY_MS}ms`);
     } catch (error) {
         if (generation !== carouselGeneration) { return; }
         LRR.showErrorToast(I18N.CarouselError, error);
