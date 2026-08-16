@@ -84,20 +84,7 @@ export function initializeAll() {
     dataTable = $(".datatables").DataTable({
         serverSide: true,
         processing: true,
-        // TODO: replace with compositeAjax.
-        ajax: {
-            url: "search",
-            cache: true,
-            data: (d) => {
-                if (localStorage.hidecompleted === "true") {
-                    d.hidecompleted = "true";
-                }
-                if (localStorage.grouptanks === "false") {
-                    d.grouptanks = "false";
-                }
-                return d;
-            },
-        },
+        ajax: compositeAjax,
         deferRender: true,
         lengthChange: false,
         pageLength: Index.pageSize,
@@ -126,20 +113,12 @@ export function initializeAll() {
  * @param {number} page Page to load
  */
 export function doSearch(page) {
-    // Add the selected category to the tags column so it's picked up by the search engine
-    // This allows for the regular search bar to be used in conjunction with categories.
-    // TODO: remove, compositeAjax reads Index.selectedCategories directly
-    dataTable.column(".tags.itd").search(Index.selectedCategory);
-
     // Store search parameters in localStorage for archive navigation
     localStorage.setItem("currentSearch", currentSearch);
-    // TODO: deprecate for a selectedCategories serialization; reader_common.js reads this key
-    localStorage.setItem("selectedCategory", Index.selectedCategory);
+    localStorage.setItem("selectedCategories", [...Index.selectedCategories].join(","));
 
     // Update search input field
     $("#search-input").val(currentSearch);
-    // TODO: remove together with the dataTable.search() read in buildURLParameters
-    dataTable.search(currentSearch);
 
     // Add the current search terms to the title tab
     document.title = originalTitle + ((currentSearch !== "") ? ` - ${currentSearch}` : "");
@@ -220,11 +199,7 @@ export function compositeAjax(data, callback) {
     if (data.order && data.order.length > 0) {
         const colIdx = data.order[0].column;
         body.order = data.order[0].dir;
-        if (colIdx === 0) {
-            body.sortby = "title";
-        } else if (colIdx >= 1 && colIdx <= Index.getColumnCount()) {
-            body.sortby = localStorage.getItem(`customColumn${colIdx}`) || "title";
-        }
+        body.sortby = data.columns[colIdx].name;
     }
 
     fetch(new LRR.ApiURL("/api/search/composite"), {
@@ -459,13 +434,11 @@ export function drawCallback() {
 }
 
 export function buildURLParameters() {
-    // TODO: replace with one c= entry per Index.selectedCategories member
-    const cat = dataTable.column(".tags.itd").search();
     const page = dataTable.page.info().page + 1;
     const sortby = dataTable.order()[0][0];
     const sortorder = dataTable.order()[0][1];
 
-    const encodedSearch = encodeURIComponent(dataTable.search());
+    const encodedSearch = encodeURIComponent(currentSearch);
 
     // Check each parameter and append them to the URL if they exist
     let params = "?";
@@ -476,7 +449,9 @@ export function buildURLParameters() {
     }
     if (sortorder !== "asc") params += `sortdir=${sortorder}&`;
     if (encodedSearch !== "") params += `q=${encodedSearch}&`;
-    if (cat !== "") params += `c=${cat}&`;
+    for (const catId of Index.selectedCategories) {
+        params += `c=${encodeURIComponent(catId)}&`;
+    }
 
     return params;
 }
@@ -484,9 +459,7 @@ export function buildURLParameters() {
 export function consumeURLParameters() {
     const params = new URLSearchParams(window.location.search);
 
-    // TODO: replace with Index.setSelectedCategories(params.getAll("c"))
-    if (params.has("c")) Index.setSelectedCategory(params.get("c"));
-    else Index.setSelectedCategory("");
+    Index.setSelectedCategories(params.getAll("c"));
 
     if (params.has("q")) { currentSearch = decodeURIComponent(params.get("q")); }
 
