@@ -273,9 +273,9 @@ sub compose_where_sql (@groups) {
 # their stored search predicate.
 sub category_entry_to_constraint ( $category_id, $mode ) {
 
-    return undef unless $category_id && $category_id ne "";
+    return unless $category_id && $category_id ne "";
     my %category = LANraragi::Model::PsilabsDev::PgCategory::get_category($category_id);
-    return undef unless %category;
+    return unless %category;
 
     if ( $category{search} && $category{search} ne "" ) {
         my @cat_tokens = compute_search_filter( $category{search} );
