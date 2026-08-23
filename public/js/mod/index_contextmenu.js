@@ -104,7 +104,7 @@ function handleCategoryContextMenu(option, cat) {
                 if (result.isConfirmed) {
                     Server.callAPI(`/api/categories/${cat.id}`, "DELETE", I18N.CategoryDeleted, I18N.CategoryDeleteError,
                         () => {
-                            if (Index.selectedCategory === cat.id) {
+                            if (Index.selectedCategories.has(cat.id)) {
                                 Index.clearCategoryFilter();
                             }
                             if (localStorage.getItem("bookmarkCategoryId") === cat.id) {
