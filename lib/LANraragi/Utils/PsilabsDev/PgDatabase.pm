@@ -38,6 +38,7 @@ our @EXPORT_OK = qw(
 sub get_archive ($id) {
     my $logger = get_logger( "PgDatabase", "lanraragi" );
     my $dbh = get_dbh();
+    my %hash;
 
     eval {
         # Get archive data
@@ -52,7 +53,7 @@ sub get_archive ($id) {
 
         unless ($row) {
             $dbh->disconnect();
-            return ();
+            return;
         }
 
         # Get tags as a comma-separated string
@@ -79,7 +80,7 @@ sub get_archive ($id) {
         my ( $name, $path, $suffix ) = fileparse( $row->{filename}, qr/\.[^.]*/ );
 
         # Build hash compatible with Redis version
-        my %hash = (
+        %hash = (
             name      => $name,
             title     => $row->{title} // "",
             tags      => $tags,
@@ -87,8 +88,6 @@ sub get_archive ($id) {
             file      => $row->{filename},
             thumbhash => $row->{thumbhash} // ""
         );
-
-        return %hash;
     };
 
     if ( my $error = $@ ) {
@@ -96,6 +95,8 @@ sub get_archive ($id) {
         $dbh->disconnect();
         return ();
     }
+
+    return %hash;
 }
 
 # Returns the comma-separated tag string for the given archive ID.
