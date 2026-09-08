@@ -146,12 +146,12 @@ SQL
     }
     $logger->info("Created table: lrr_category_to_archive_map");
 
-    $sql = <<'SQL';
+    $sql = <<"SQL";
 CREATE TABLE IF NOT EXISTS lrr_archive_to_tag_map (
     arcid           VARCHAR(255) NOT NULL,
     tagid           INTEGER NOT NULL,
     namespace       VARCHAR(255) NOT NULL DEFAULT '',
-    value           VARCHAR(255) NOT NULL DEFAULT '',
+    value           VARCHAR(255) $collate_clause NOT NULL DEFAULT '',
     update_date     DATE,
     FOREIGN KEY (arcid) REFERENCES lrr_archive (arcid),
     FOREIGN KEY (tagid) REFERENCES lrr_tag (tagid)
