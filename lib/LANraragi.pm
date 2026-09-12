@@ -27,8 +27,10 @@ use LANraragi::Model::Config;
 use LANraragi::Model::Plugins;
 use LANraragi::Model::Registry;
 use LANraragi::Model::Server;
-use LANraragi::Model::Setup      qw(first_install_actions);
+use LANraragi::Model::PsilabsDev::PgSetup qw(first_install_actions);
 use LANraragi::Model::Metrics;
+
+use LANraragi::Utils::PsilabsDev::Database;
 
 use constant IS_UNIX => ( $Config{osname} ne 'MSWin32' );
 
@@ -119,6 +121,16 @@ sub startup {
 
     # Initialize cache
     LANraragi::Utils::PageCache::initialize();
+
+    # Initialize database schema
+    eval {
+        LANraragi::Utils::PsilabsDev::Database::initialize();
+        $self->LRR_LOGGER->info("Initialized database schema.");
+    } or do {
+        my $error = $@;
+        $self->LRR_LOGGER->error("Failed to initialize database schema: $error");
+        die "Failed to initialize database schema: $error";
+    };
 
     # Load i18n
     LANraragi::Utils::I18NInitializer::initialize($self);

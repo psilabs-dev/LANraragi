@@ -1,14 +1,13 @@
 package LANraragi::Controller::Api::Tankoubon;
 use Mojo::Base 'Mojolicious::Controller';
 
-use Redis;
-use Encode;
 use Scalar::Util qw(looks_like_number);
 
-use LANraragi::Model::Archive;
 use LANraragi::Model::Config;
 use LANraragi::Model::Tankoubon;
-use LANraragi::Utils::Generic qw(render_api_response exec_with_lock);
+use LANraragi::Model::PsilabsDev::PgTankoubon;
+use LANraragi::Model::PsilabsDev::PgArchive;
+use LANraragi::Utils::Generic qw(render_api_response);
 use LANraragi::Utils::Login   qw(is_logged_in_api);
 
 sub get_tankoubon_list {
@@ -18,7 +17,7 @@ sub get_tankoubon_list {
 
     my $page = $req->param('page');
 
-    my ( $total, $filtered, @rgs ) = LANraragi::Model::Tankoubon::get_tankoubon_list($page);
+    my ( $total, $filtered, @rgs ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon_list($page);
     $self->render( openapi => { result => \@rgs, total => $total, filtered => $filtered } );
 
 }
@@ -28,7 +27,7 @@ sub get_tankoubon {
     my $self    = shift->openapi->valid_input or return;
     my $tank_id = $self->stash('id');
 
-    my %tankoubon = LANraragi::Model::Tankoubon::get_tankoubon($tank_id);
+    my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon($tank_id);
 
     unless (%tankoubon) {
         render_api_response( $self, "get_tankoubon", "The given tankoubon does not exist." );
@@ -47,18 +46,10 @@ sub get_tankoubon_full {
     my $fulldata = 1;
     my $page     = $req->param('page') // -1;
 
-    my ( $total, $filtered, %tankoubon );
-    if ( $page < 0 ) {
-        %tankoubon = LANraragi::Model::Tankoubon::get_tankoubon( $tank_id, $fulldata, $page );
-        $total    = scalar @{ $tankoubon{archives} // [] };
-        $filtered = $total;
-    } else {
-        ( $total, $filtered, %tankoubon ) = LANraragi::Model::Tankoubon::get_tankoubon( $tank_id, $fulldata, $page );
-    }
+    my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon( $tank_id, $fulldata, $page );
 
     unless (%tankoubon) {
-        render_api_response( $self, "get_tankoubon", "The given tankoubon does not exist." );
-        return;
+        return render_api_response( $self, "get_tankoubon", "The given tankoubon does not exist." );
     }
 
     $self->render( openapi => { result => \%tankoubon, total => $total, filtered => $filtered } );
@@ -75,7 +66,7 @@ sub create_tankoubon {
         return;
     }
 
-    my $created_id = LANraragi::Model::Tankoubon::create_tankoubon( $name, $tankid );
+    my $created_id = LANraragi::Model::PsilabsDev::PgTankoubon::create_tankoubon( $name, $tankid );
     $self->render(
         openapi => {
             operation    => "create_tankoubon",
@@ -91,21 +82,13 @@ sub delete_tankoubon {
     my $self   = shift->openapi->valid_input or return;
     my $tankid = $self->stash('id');
 
-    return unless exec_with_lock(
-        $self,
-        "tankoubon-write:$tankid",
-        "delete_tankoubon",
-        $tankid,
-        sub {
-            my $result = LANraragi::Model::Tankoubon::delete_tankoubon($tankid);
+    my $result = LANraragi::Model::PsilabsDev::PgTankoubon::delete_tankoubon($tankid);
 
-            if ($result) {
-                render_api_response( $self, "delete_tankoubon" );
-            } else {
-                render_api_response( $self, "delete_tankoubon", "The given tankoubon does not exist." );
-            }
-        }
-    );
+    if ($result) {
+        render_api_response( $self, "delete_tankoubon" );
+    } else {
+        render_api_response( $self, "delete_tankoubon", "The given tankoubon does not exist." );
+    }
 }
 
 sub update_tankoubon {
@@ -114,30 +97,16 @@ sub update_tankoubon {
     my $tankid = $self->stash('id');
     my $data   = $self->req->json;
 
-    return unless exec_with_lock(
-        $self,
-        "tankoubon-write:$tankid",
-        "update_tankoubon",
-        $tankid,
-        sub {
-            my ( $result, $err ) = LANraragi::Model::Tankoubon::update_tankoubon( $tankid, $data );
+    my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgTankoubon::update_tankoubon( $tankid, $data );
 
-            if ($result) {
-                my %tankoubon      = LANraragi::Model::Tankoubon::get_tankoubon($tankid);
-                my $successMessage = "Updated tankoubon \"$tankoubon{name}\"!";
+    if ($result) {
+        my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon($tankid);
+        my $successMessage = "Updated tankoubon \"$tankoubon{name}\"!";
 
-                render_api_response( $self, "update_tankoubon", undef, $successMessage );
-
-                # Queue thumbnail regeneration if the archive list changed
-                if ( defined $data->{"archives"} ) {
-                    my $thumbdir = LANraragi::Model::Config->get_thumbdir;
-                    $self->minion->enqueue( tank_thumbnail_task => [ $thumbdir, $tankid ] => { priority => 0, attempts => 3 } );
-                }
-            } else {
-                render_api_response( $self, "update_tankoubon", $err );
-            }
-        }
-    );
+        render_api_response( $self, "update_tankoubon", undef, $successMessage );
+    } else {
+        render_api_response( $self, "update_tankoubon", $err );
+    }
 }
 
 sub add_to_tankoubon {
@@ -146,29 +115,21 @@ sub add_to_tankoubon {
     my $tankid = $self->stash('id');
     my $arcid  = $self->stash('archive');
 
-    return unless exec_with_lock(
-        $self,
-        "tankoubon-write:$tankid",
-        "add_to_tankoubon",
-        $tankid,
-        sub {
-            my ( $result, $err ) = LANraragi::Model::Tankoubon::add_to_tankoubon( $tankid, $arcid );
+    my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgTankoubon::add_to_tankoubon( $tankid, $arcid );
 
-            if ($result) {
-                my $successMessage = "Added $arcid to tankoubon $tankid!";
-                my %tankoubon      = LANraragi::Model::Tankoubon::get_tankoubon($tankid);
-                my $title          = LANraragi::Model::Archive::get_title($arcid);
+    if ($result) {
+        my $successMessage = "Added $arcid to tankoubon $tankid!";
+        my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon($tankid);
+        my $title = LANraragi::Model::PsilabsDev::PgArchive::get_title($arcid);
 
-                if ( %tankoubon && defined($title) ) {
-                    $successMessage = "Added \"$title\" to tankoubon \"$tankoubon{name}\"!";
-                }
-
-                render_api_response( $self, "add_to_tankoubon", undef, $successMessage );
-            } else {
-                render_api_response( $self, "add_to_tankoubon", $err );
-            }
+        if ( %tankoubon && defined($title) ) {
+            $successMessage = "Added \"$title\" to tankoubon \"$tankoubon{name}\"!";
         }
-    );
+
+        render_api_response( $self, "add_to_tankoubon", undef, $successMessage );
+    } else {
+        render_api_response( $self, "add_to_tankoubon", $err );
+    }
 }
 
 sub remove_from_tankoubon {
@@ -177,36 +138,21 @@ sub remove_from_tankoubon {
     my $tankid = $self->stash('id');
     my $arcid  = $self->stash('archive');
 
-    return unless exec_with_lock(
-        $self,
-        "tankoubon-write:$tankid",
-        "remove_from_tankoubon",
-        $tankid,
-        sub {
-            my ( $result, $err ) = LANraragi::Model::Tankoubon::remove_from_tankoubon( $tankid, $arcid );
+    my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgTankoubon::remove_from_tankoubon( $tankid, $arcid );
 
-            if ($result) {
-                my $successMessage = "Removed $arcid from tankoubon $tankid!";
-                my %tankoubon      = LANraragi::Model::Tankoubon::get_tankoubon($tankid);
-                my $title          = LANraragi::Model::Archive::get_title($arcid);
+    if ($result) {
+        my $successMessage = "Removed $arcid from tankoubon $tankid!";
+        my ( $total, $filtered, %tankoubon ) = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubon($tankid);
+        my $title = LANraragi::Model::PsilabsDev::PgArchive::get_title($arcid);
 
-                if ( %tankoubon && defined($title) ) {
-                    $successMessage = "Removed \"$title\" from tankoubon \"$tankoubon{name}\"!";
-                }
-
-                render_api_response( $self, "remove_from_tankoubon", undef, $successMessage );
-
-                # Queue thumbnail regeneration for the tankoubon if we removed the first archive
-                # (This technically messes up custom user thumbnails if they set one up, but we don't have a way to differentiate at the moment)
-                if ( $result == 1 ) {
-                    my $thumbdir = LANraragi::Model::Config->get_thumbdir;
-                    $self->minion->enqueue( tank_thumbnail_task => [ $thumbdir, $tankid ] => { priority => 0, attempts => 3 } );
-                }
-            } else {
-                render_api_response( $self, "remove_from_tankoubon", $err );
-            }
+        if ( %tankoubon && defined($title) ) {
+            $successMessage = "Removed \"$title\" from tankoubon \"$tankoubon{name}\"!";
         }
-    );
+
+        render_api_response( $self, "remove_from_tankoubon", undef, $successMessage );
+    } else {
+        render_api_response( $self, "remove_from_tankoubon", $err );
+    }
 }
 
 sub serve_tankoubon_thumbnail {
@@ -218,7 +164,7 @@ sub serve_tankoubon_thumbnail {
 sub update_tankoubon_thumbnail {
     my $self    = shift->openapi->valid_input or return;
     my $tank_id = $self->stash('id');
-    LANraragi::Model::Tankoubon::update_tankoubon_thumbnail( $self, $tank_id );
+    LANraragi::Model::PsilabsDev::PgTankoubon::update_tankoubon_thumbnail( $self, $tank_id );
 }
 
 sub update_tank_progress {
@@ -252,7 +198,7 @@ sub update_tank_progress {
         return;
     }
 
-    my ( $result, $err ) = LANraragi::Model::Tankoubon::update_tank_progress( $tank_id, $page );
+    my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgTankoubon::update_tank_progress( $tank_id, $page );
 
     if ($result) {
         $self->render(
@@ -279,7 +225,7 @@ sub get_tankoubons_file {
         return;
     }
 
-    my @tanks = LANraragi::Model::Tankoubon::get_tankoubons_containing_archive($arcid);
+    my @tanks = LANraragi::Model::PsilabsDev::PgTankoubon::get_tankoubons_containing_archive($arcid);
 
     $self->render(
         openapi => {
