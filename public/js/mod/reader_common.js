@@ -1499,37 +1499,44 @@ function readNextArchive() {
  */
 async function loadDatatablesArchives(datatablesPage) {
     const indexSearchQuery = localStorage.getItem("currentSearch") || "";
-    const indexSelectedCategory = localStorage.getItem("selectedCategory") || "";
+    const indexSelectedCategories = (localStorage.getItem("selectedCategories") || "").split(",").filter((id) => id !== "");
     const datatablesPageSize = parseInt(localStorage.getItem("datatablesPageSize") || "100", 10);
     const indexSort = localStorage.getItem("indexSort") || "title";
     const indexOrder = localStorage.getItem("indexOrder") || "asc";
-    let searchUrlStr = `/api/search/ids?start=${(datatablesPage - 1) * datatablesPageSize}`;
-    if (indexSearchQuery) searchUrlStr += `&filter=${encodeURIComponent(indexSearchQuery)}`;
-    
+
     // See Index.updateCarousel
-    if (indexSelectedCategory === "NEW_ONLY") {
-        searchUrlStr += `&newonly=true`;
-    } else if (indexSelectedCategory === "UNTAGGED_ONLY") {
-        searchUrlStr += `&untaggedonly=true`;
-    } else if (indexSelectedCategory) {
-        searchUrlStr += `&category=${encodeURIComponent(indexSelectedCategory)}`;
+    const categories = [];
+    for (const catId of indexSelectedCategories) {
+        if (catId === "NEW_ONLY" || catId === "UNTAGGED_ONLY") continue;
+        categories.push({ id: catId, mode: "include" });
     }
+
+    const searchBody = {
+        clauses: [{
+            filter: indexSearchQuery.trim(),
+            categories,
+            newonly: indexSelectedCategories.includes("NEW_ONLY") ? 1 : 0,
+            untaggedonly: indexSelectedCategories.includes("UNTAGGED_ONLY") ? 1 : 0,
+
+            // Carry over the index hide-completed setting so the prefetched
+            // neighbor page matches the lineup the user is viewing.
+            hidecompleted: localStorage.getItem("hidecompleted") === "true",
+        }],
+        start: (datatablesPage - 1) * datatablesPageSize,
+        groupby_tanks: localStorage.getItem("grouptanks") !== "false",
+    };
     if (indexSort && indexSort !== "title") {
-        searchUrlStr += `&sortby=${encodeURIComponent(indexSort)}`;
-        searchUrlStr += `&order=${indexOrder}`;
+        searchBody.sortby = indexSort;
+        searchBody.order = indexOrder;
     }
 
-    // Carry over the index tank-grouping and hide-completed settings so the prefetched
-    // neighbor page matches the lineup the user is viewing.
-    if (localStorage.getItem("grouptanks") === "false") searchUrlStr += `&groupby_tanks=false`;
-    if (localStorage.getItem("hidecompleted") === "true") searchUrlStr += `&hidecompleted=true`;
-
-    const searchUrl = new LRR.ApiURL(searchUrlStr);
+    const searchUrl = new LRR.ApiURL("/api/search/composite/ids");
 
     try {
         const response = await fetch(searchUrl.toString(), {
-            method: "GET",
-            headers: { Accept: "application/json" },
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify(searchBody),
         });
         if (!response.ok) {
             console.error("Failed to fetch archive list:", response.status, response.statusText);
@@ -1553,14 +1560,14 @@ async function loadDatatablesArchives(datatablesPage) {
  */
 function returnToIndex() {
     const indexSearchQuery = localStorage.getItem("currentSearch") || "";
-    const indexSelectedCategory = localStorage.getItem("selectedCategory") || "";
+    const indexSelectedCategories = (localStorage.getItem("selectedCategories") || "").split(",").filter((id) => id !== "");
     const indexSort = localStorage.getItem("indexSort") || "title";
     const indexOrder = localStorage.getItem("indexOrder") || "asc";
     const currentDTPage = localStorage.getItem("currDatatablesPage") || "1";
     let returnUrl = "/";
     const params = new URLSearchParams();
     if (indexSearchQuery) params.append("q", indexSearchQuery);
-    if (indexSelectedCategory) params.append("c", indexSelectedCategory);
+    for (const catId of indexSelectedCategories) params.append("c", catId);
     // indexSort is the column's tag-namespace name (sName); the index reads ?sort= by name,
     // so pass it straight through. Title is the default and is omitted, matching buildURLParameters.
     if (indexSort && indexSort !== "title") {
