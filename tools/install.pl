@@ -13,6 +13,9 @@ use File::Path qw(make_path);
 
 use constant IS_UNIX => ( $Config{osname} ne "MSWin32" );
 
+use constant INCLUDE_POSTGRESQL => ( $ENV{INCLUDE_POSTGRESQL} );
+use constant INCLUDE_SQLITE     => ( $ENV{INCLUDE_SQLITE});
+
 #Vendor dependencies
 my @vendor_css = (
     "/blueimp-file-upload/css/jquery.fileupload.css",
@@ -192,6 +195,19 @@ if ( $back || $full ) {
     }
 
     install_package( "Net::IDN::Encode", $cpanopt, "ETHER/Net-IDN-Encode-2.501-TRIAL.tar.gz" );
+
+    # Build and install SQL dependencies.
+    if ( INCLUDE_POSTGRESQL ) {
+        say("Installing dependencies for PostgreSQL... (This will do nothing if the package is there already)");
+        install_package( "DBD::Pg", $cpanopt );
+        install_package( "DBI", $cpanopt );
+
+    }
+    if ( INCLUDE_SQLITE ) {
+        say("Installing dependencies for Sqlite... (This will do nothing if the package is there already)");
+        install_package( "DBD::Sqlite", $cpanopt );
+        install_package( "DBI", $cpanopt );
+    }
 
     if ( system( "cpanm --installdeps ./tools/. --notest" . $cpanopt ) != 0 ) {
         die "Something went wrong while installing Perl modules - Bailing out.";

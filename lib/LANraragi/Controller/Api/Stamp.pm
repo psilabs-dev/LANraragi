@@ -1,10 +1,7 @@
 package LANraragi::Controller::Api::Stamp;
 use Mojo::Base 'Mojolicious::Controller';
 
-use Redis;
-use Encode;
-
-use LANraragi::Model::Stamp;
+use LANraragi::Model::PsilabsDev::PgStamp;
 use LANraragi::Utils::Generic qw(render_api_response exec_with_lock exec_with_lock_pure);
 
 
@@ -13,7 +10,7 @@ sub get_stamp {
     my $self        = shift->openapi->valid_input or return;
     my $stamp_id    = $self->stash('id');
 
-    my ( $stamp, $err ) = LANraragi::Model::Stamp::get_stamp($stamp_id);
+    my ( $stamp, $err ) = LANraragi::Model::PsilabsDev::PgStamp::get_stamp($stamp_id);
 
     unless ($stamp) {
         render_api_response($self, "get_stamp", "The given stamp does not exist.");
@@ -29,7 +26,7 @@ sub get_stamps_by_page {
     my $id      = $self->stash('id');
     my $index    = $self->stash('index');
 
-    my ( $stamps, $err ) = LANraragi::Model::Stamp::get_stamps_by_page($id, $index);
+    my ( $stamps, $err ) = LANraragi::Model::PsilabsDev::PgStamp::get_stamps_by_page($id, $index);
 
     $self->render( openapi => { result => $stamps } );
 }
@@ -39,7 +36,7 @@ sub get_stamped_pages {
     my $self    = shift->openapi->valid_input or return;
     my $id      = $self->stash('id');
 
-    my ( $indexes, $err ) = LANraragi::Model::Stamp::get_stamped_pages( $id );
+    my ( $indexes, $err ) = LANraragi::Model::PsilabsDev::PgStamp::get_stamped_pages( $id );
 
     $self->render( openapi => { result => $indexes } );
 }
@@ -62,7 +59,7 @@ sub add_stamp {
         "update_archive",
         $id,
         sub {
-            my ( $created_id, $err ) = LANraragi::Model::Stamp::add_stamp( $id, $index, $content, $position );
+            my ( $created_id, $err ) = LANraragi::Model::PsilabsDev::PgStamp::add_stamp( $id, $index, $content, $position );
 
             if ($created_id) {
                 $self->render(
@@ -99,10 +96,10 @@ sub update_stamp {
         "update_stamp",
         $stamp_id,
         sub {
-            my ( $result, $err ) = LANraragi::Model::Stamp::update_stamp( $stamp_id, $content, $position );
+            my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgStamp::update_stamp( $stamp_id, $content, $position );
 
             if ($result) {
-                my %stamp      = LANraragi::Model::Stamp::get_stamp( $stamp_id );
+                my %stamp      = LANraragi::Model::PsilabsDev::PgStamp::get_stamp( $stamp_id );
                 my $successMessage = "Updated stamp \"$stamp_id\"!";
 
                 render_api_response( $self, "update_stamp", undef, $successMessage );
@@ -119,13 +116,13 @@ sub delete_stamp {
     my $self        = shift->openapi->valid_input or return;
     my $stamp_id    = $self->stash('id');
 
-    my ( $result, $id ) = LANraragi::Model::Stamp::get_stamp_archive_id($stamp_id);
+    my ( $result, $id ) = LANraragi::Model::PsilabsDev::PgStamp::get_stamp_archive_id($stamp_id);
 
     if ( $result ) {
         my ( $acquired, $response ) = exec_with_lock_pure(
             [ "archive-write:$id", "stamp-write:$stamp_id" ],
             sub { 
-                my ( $result, $err ) = LANraragi::Model::Stamp::remove_stamp($stamp_id);
+                my ( $result, $err ) = LANraragi::Model::PsilabsDev::PgStamp::remove_stamp($stamp_id);
 
                 if ( $result ) {
                     render_api_response( $self, "delete_stamp" );
