@@ -181,7 +181,7 @@ export async function initializeAll(trackProgressLocally, authenticateProgress) 
         }
 
         $("#tagContainer").append(`<div class="archive-summary"/>`);
-        $(".archive-summary").text(state.content.summary);
+        $(".archive-summary").html(state.content.summary);
 
         // Get the chapter for the current page (if any)
         state.currentChapter = getCurrentChapter();
