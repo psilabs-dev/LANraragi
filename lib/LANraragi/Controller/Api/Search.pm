@@ -5,16 +5,23 @@ use feature qw(say signatures);
 no warnings 'experimental::signatures';
 
 use List::Util qw(min);
+use Time::HiRes qw(time);
 
-use LANraragi::Model::Search;
+use LANraragi::Model::PsilabsDev::PgSearch;
 use LANraragi::Utils::Generic  qw(render_api_response);
-use LANraragi::Utils::Database qw(invalidate_cache get_archive_json_multi);
+use LANraragi::Utils::Logging qw(get_logger);
+use LANraragi::Utils::PsilabsDev::PgDatabase qw(invalidate_cache get_archive_json_multi);
 
 # Undocumented API matching the Datatables spec.
 sub handle_datatables ($self) {
 
     my $req = $self->req;
+    my $logger = get_logger( "Search API", "lanraragi" );
 
+    my $request_start = time();
+
+    # Request parsing phase
+    my $parse_start = time();
     my $draw   = $req->param('draw');
     my $start  = $req->param('start');
     my $length = $req->param('length');
@@ -58,13 +65,26 @@ sub handle_datatables ($self) {
     }
 
     $sortorder = ( $sortorder && $sortorder eq 'desc' ) ? 1 : 0;
+    my $parse_time = (time() - $parse_start) * 1000;
+    $logger->debug(sprintf("[PERF] Request parsing: %.2fms", $parse_time));
 
+    # TODO add a parameter to datatables for grouptanks? Not really essential rn tho
+    my $search_start = time();
     my ( $total, $filtered, @ids ) =
-      LANraragi::Model::Search::do_search( $filter, $categoryfilter, $start, $sortkey, $sortorder, $newfilter, $untaggedfilter, 
-        $grouptanks eq "true",
-        $hidecompleted eq "true" );
+      LANraragi::Model::PsilabsDev::PgSearch::do_search( $filter, $categoryfilter, $start, $sortkey, $sortorder, $newfilter, $untaggedfilter, 0,
+        0 );
+    my $search_time = (time() - $search_start) * 1000;
+    $logger->debug(sprintf("[PERF] Search execution (do_search): %.2fms", $search_time));
 
-    $self->render( json => get_datatables_object( $draw, $total, $filtered, @ids ) );
+    my $format_start = time();
+    my $response = get_datatables_object( $draw, $total, $filtered, @ids );
+    my $format_time = (time() - $format_start) * 1000;
+    $logger->debug(sprintf("[PERF] Response formatting (get_datatables_object): %.2fms", $format_time));
+
+    my $total_time = (time() - $request_start) * 1000;
+    $logger->debug(sprintf("[PERF] Total request time (handle_datatables): %.2fms", $total_time));
+
+    $self->render( json => $response );
 }
 
 # Public search API with saner parameters.
@@ -76,7 +96,7 @@ sub handle_api {
     my $filter        = $req->param('filter');
     my $category      = $req->param('category') || "";
     my $start         = $req->param('start')    || 0;
-    my $sortkey       = $req->param('sortby');
+    my $sortkey       = $req->param('sortby')   || "title";
     my $sortorder     = $req->param('order');
     my $newfilter     = $req->param('newonly')       // "false";
     my $untaggedf     = $req->param('untaggedonly')  // "false";
@@ -85,9 +105,11 @@ sub handle_api {
 
     $sortorder = ( $sortorder && $sortorder eq 'desc' ) ? 1 : 0;
 
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_search(
-        $filter,    $category,            $start,               $sortkey,
-        $sortorder, $newfilter eq "true", $untaggedf eq "true", $grouptanks eq "true",
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
+        $filter, $category, $start, $sortkey, $sortorder,
+        $newfilter eq "true",
+        $untaggedf eq "true",
+        $grouptanks eq "true",
         $hidecompleted eq "true"
     );
 
@@ -107,7 +129,7 @@ sub handle_api {
     }
 }
 
-# Search endpoint returning only archive IDs for a query.
+# handle_api but only return archive IDs
 sub handle_api_ids {
 
     my $self = shift->openapi->valid_input or return;
@@ -116,7 +138,7 @@ sub handle_api_ids {
     my $filter        = $req->param('filter');
     my $category      = $req->param('category') || "";
     my $start         = $req->param('start')    || 0;
-    my $sortkey       = $req->param('sortby');
+    my $sortkey       = $req->param('sortby')   || "title";
     my $sortorder     = $req->param('order');
     my $newfilter     = $req->param('newonly')       // "false";
     my $untaggedf     = $req->param('untaggedonly')  // "false";
@@ -125,7 +147,7 @@ sub handle_api_ids {
 
     $sortorder = ( $sortorder && $sortorder eq 'desc' ) ? 1 : 0;
 
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
         $filter,    $category,            $start,               $sortkey,
         $sortorder, $newfilter eq "true", $untaggedf eq "true", $grouptanks eq "true",
         $hidecompleted eq "true"
@@ -134,6 +156,76 @@ sub handle_api_ids {
     if ( $total eq -1 && $filtered eq -1 ) {
 
         # Search engine not initialized
+        $self->render(
+            openapi => {
+                recordsTotal    => 0,
+                recordsFiltered => 0,
+                data            => []
+            },
+            status => 204
+        );
+    } else {
+        $self->render(
+            openapi => {
+                recordsTotal    => $total,
+                recordsFiltered => $filtered,
+                data            => \@ids
+            }
+        );
+    }
+}
+
+# Composite search API with multi-clause OR support.
+sub handle_composite {
+
+    my $self = shift->openapi->valid_input or return;
+    my $body = $self->req->json;
+
+    my $clauses_raw = $body->{clauses};
+    my $start       = $body->{start}    // 0;
+    my $sortkey     = $body->{sortby}   || "title";
+    my $sortorder   = ( $body->{order} && $body->{order} eq 'desc' ) ? 1 : 0;
+    my $grouptanks  = $body->{groupby_tanks} // 1;
+
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_composite_search(
+        $clauses_raw, $start, $sortkey, $sortorder, $grouptanks ? 1 : 0
+    );
+
+    if ( $total eq -1 && $filtered eq -1 ) {
+
+        # Composite search failed (see PgSearch error log)
+        $self->render(
+            openapi => {
+                recordsTotal    => 0,
+                recordsFiltered => 0,
+                data            => []
+            },
+            status => 204
+        );
+    } else {
+        $self->render( openapi => get_api_object( $total, $filtered, @ids ) );
+    }
+}
+
+# handle_composite but only return archive IDs
+sub handle_composite_ids {
+
+    my $self = shift->openapi->valid_input or return;
+    my $body = $self->req->json;
+
+    my $clauses_raw = $body->{clauses};
+    my $start       = $body->{start}    // 0;
+    my $sortkey     = $body->{sortby}   || "title";
+    my $sortorder   = ( $body->{order} && $body->{order} eq 'desc' ) ? 1 : 0;
+    my $grouptanks  = $body->{groupby_tanks} // 1;
+
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_composite_search(
+        $clauses_raw, $start, $sortkey, $sortorder, $grouptanks ? 1 : 0
+    );
+
+    if ( $total eq -1 && $filtered eq -1 ) {
+
+        # Composite search failed (see PgSearch error log)
         $self->render(
             openapi => {
                 recordsTotal    => 0,
@@ -173,7 +265,7 @@ sub get_random_archives {
     my $random_count  = $req->param('count')         || 5;
 
     # Use the search engine to get IDs matching the filter/category selection, with start=-1 to get all data
-    my ( $total, $filtered, @ids ) = LANraragi::Model::Search::do_search(
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_search(
         $filter, $category, -1, "title", 0,
         $newfilter eq "true",
         $untaggedf eq "true",
@@ -199,11 +291,63 @@ sub get_random_archives {
     );
 }
 
+# Pull random archives out of a given composite search
+sub get_random_archives_composite {
+
+    my $self = shift->openapi->valid_input or return;
+    my $body = $self->req->json;
+
+    my $clauses_raw  = $body->{clauses};
+    my $grouptanks   = $body->{groupby_tanks}   // 1;
+    my $random_count = $body->{count}           // 5;
+
+    # Use the search engine to get IDs matching the clause set, with start=-1 to get all data
+    my ( $total, $filtered, @ids ) = LANraragi::Model::PsilabsDev::PgSearch::do_composite_search(
+        $clauses_raw, -1, "title", 0, $grouptanks ? 1 : 0
+    );
+
+    if ( $total eq -1 && $filtered eq -1 ) {
+
+        # Composite search failed (see PgSearch error log)
+        $self->render(
+            openapi => {
+                data         => [],
+                recordsTotal => 0
+            },
+            status => 204
+        );
+        return;
+    }
+
+    my @random_ids;
+
+    $random_count = min( $random_count, scalar(@ids) );
+
+    # Get random IDs out of the array
+    for ( 1 .. $random_count ) {
+        my $random_index = int( rand( scalar(@ids) ) );
+        push( @random_ids, splice( @ids, $random_index, 1 ) );
+    }
+
+    my @data = get_archive_json_multi(@random_ids);
+    $self->render(
+        openapi => {
+            data         => \@data,
+            recordsTotal => $random_count
+        }
+    );
+}
+
 # Creates a Datatables-compatible json from the given data.
 sub get_datatables_object ( $draw, $total, $totalsearched, @ids ) {
 
+    my $logger = get_logger( "Search API", "lanraragi" );
+
     # Get archive data
+    my $json_start = time();
     my @data = get_archive_json_multi(@ids);
+    my $json_time = (time() - $json_start) * 1000;
+    $logger->debug(sprintf("[PERF] get_archive_json_multi: %.2fms (id_count: %d)", $json_time, scalar @ids));
 
     # Create json object matching the datatables structure
     return {
