@@ -2,23 +2,24 @@ package LANraragi::Controller::Api::Other;
 use Mojo::Base 'Mojolicious::Controller';
 
 use Mojo::JSON qw(encode_json decode_json);
-use Redis;
 
-use LANraragi::Model::Stats;
-use LANraragi::Model::Opds;
+use LANraragi::Model::PsilabsDev::PgStats;
+use LANraragi::Model::PsilabsDev::PgOpds;
 use LANraragi::Model::Server     qw(is_restart_pending);
 use LANraragi::Utils::Generic    qw(render_api_response);
 use LANraragi::Utils::Logging    qw(get_logger);
-use LANraragi::Utils::Plugins    qw(get_plugin get_plugins use_plugin);
+use LANraragi::Utils::Plugins    qw(get_plugin get_plugins);
+use LANraragi::Utils::PsilabsDev::PgPlugins qw(use_plugin);
 
 sub serve_serverinfo {
     my $self = shift;
 
-    my $redis      = $self->LRR_CONF->get_redis_config;
-    my $last_clear = $redis->hget( "LRR_SEARCHCACHE", "created" ) || time;
-    my $restart    = is_restart_pending($redis);
-    my $arc_stat   = LANraragi::Model::Stats::get_archive_count;
-    my $page_stat  = LANraragi::Model::Stats::get_page_stat;
+    # Use Postgres implementations for stats
+    my $arc_stat   = LANraragi::Model::PsilabsDev::PgStats::get_archive_count();
+    my $page_stat  = LANraragi::Model::PsilabsDev::PgStats::get_page_stat();
+
+    my $redis   = $self->LRR_CONF->get_redis_config;
+    my $restart = is_restart_pending($redis);
     $redis->quit();
 
     # A simple endpoint that forwards some info from LRR_CONF.
@@ -41,7 +42,7 @@ sub serve_serverinfo {
             authenticated_progress => $self->LRR_CONF->enable_authprogress ? \1 : \0,
             total_pages_read       => $page_stat,
             total_archives         => $arc_stat,
-            cache_last_cleared     => $last_clear,
+            cache_last_cleared     => time,  # Postgres doesn't need search cache, always return current time
             restart_required       => $restart ? \1 : \0,
             excluded_namespaces    => [
                 split( /\s*,\s*/, $self->LRR_CONF->get_excludednamespaces )
@@ -53,13 +54,13 @@ sub serve_serverinfo {
 # Basic OPDS catalog
 sub serve_opds_catalog {
     my $self = shift->openapi->valid_input or return;
-    $self->render( text => LANraragi::Model::Opds::generate_opds_catalog($self), format => 'xml' );
+    $self->render( text => LANraragi::Model::PsilabsDev::PgOpds::generate_opds_catalog($self), format => 'xml' );
 }
 
 sub serve_opds_item {
     my $self = shift->openapi->valid_input or return;
     my $id   = $self->stash('id');
-    $self->render( text => LANraragi::Model::Opds::generate_opds_item( $self, $id ), format => 'xml' );
+    $self->render( text => LANraragi::Model::PsilabsDev::PgOpds::generate_opds_item( $self, $id ), format => 'xml' );
 }
 
 # OPDS-PSE specific endpoint
@@ -68,7 +69,7 @@ sub serve_opds_page {
     my $id   = $self->stash('id');
     my $page = $self->req->param('page') || 1;
 
-    LANraragi::Model::Opds::render_archive_page( $self, $id, $page );
+    LANraragi::Model::PsilabsDev::PgOpds::render_archive_page( $self, $id, $page );
 }
 
 #Remove temp dir.
