@@ -1,7 +1,6 @@
 package LANraragi::Controller::Upload;
 use Mojo::Base 'Mojolicious::Controller';
 
-use Redis;
 use Encode;
 use File::Temp qw(tempdir tmpnam);
 use File::Find;
@@ -9,6 +8,7 @@ use File::Basename;
 
 use LANraragi::Utils::Generic qw(generate_themes_header is_archive get_bytelength);
 use LANraragi::Utils::Path    qw(move_path);
+use LANraragi::Model::PsilabsDev::PgCategory;
 
 sub process_upload {
     my $self = shift;
@@ -81,7 +81,7 @@ sub index {
     my $self = shift;
 
     # Allow adding to category on direct uploads
-    my @categories = LANraragi::Model::Category->get_static_category_list;
+    my @categories = LANraragi::Model::PsilabsDev::PgCategory::get_static_category_list();
 
     $self->render(
         template   => "upload",
