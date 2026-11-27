@@ -70,7 +70,8 @@ sub index {
         categories   => \@categories,
         motd         => $self->LRR_CONF->get_motd,
         csshead      => generate_themes_header($self),
-        usingdefpass => $passcheck
+        usingdefpass => $passcheck,
+        browserprobe => ( $self->LRR_CONF->enable_nofun && $self->session('is_logged') )
     );
 }
 
