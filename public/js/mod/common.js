@@ -10,6 +10,10 @@ import I18N from "i18n";
 
 const html = htm.bind(h);
 
+// Search endpoint retry/backoff policy configuration
+export const SEARCH_INIT_RETRY_DELAY_MS     = 1500;
+export const SEARCH_INIT_MAX_RETRIES        = 10;
+
 let toastsInitialized = false;
 export let isProgressLocal = true;          // Whether to use local (localStorage) progress tracking
 export let isProgressAuthenticated = true;  // Whether progress requires authentication

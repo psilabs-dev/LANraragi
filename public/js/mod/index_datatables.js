@@ -84,19 +84,7 @@ export function initializeAll() {
     dataTable = $(".datatables").DataTable({
         serverSide: true,
         processing: true,
-        ajax: {
-            url: "search",
-            cache: true,
-            data: (d) => {
-                if (localStorage.hidecompleted === "true") {
-                    d.hidecompleted = "true";
-                }
-                if (localStorage.grouptanks === "false") {
-                    d.grouptanks = "false";
-                }
-                return d;
-            },
-        },
+        ajax: compositeAjax,
         deferRender: true,
         lengthChange: false,
         pageLength: Index.pageSize,
@@ -125,17 +113,12 @@ export function initializeAll() {
  * @param {number} page Page to load
  */
 export function doSearch(page) {
-    // Add the selected category to the tags column so it's picked up by the search engine
-    // This allows for the regular search bar to be used in conjunction with categories.
-    dataTable.column(".tags.itd").search(Index.selectedCategory);
-
     // Store search parameters in localStorage for archive navigation
     localStorage.setItem("currentSearch", currentSearch);
-    localStorage.setItem("selectedCategory", Index.selectedCategory);
+    localStorage.setItem("selectedCategories", [...Index.selectedCategories].join(","));
 
     // Update search input field
     $("#search-input").val(currentSearch);
-    dataTable.search(currentSearch);
 
     // Add the current search terms to the title tab
     document.title = originalTitle + ((currentSearch !== "") ? ` - ${currentSearch}` : "");
@@ -154,6 +137,104 @@ export function doSearch(page) {
 
     // Re-load carousel
     Index.updateCarousel();
+}
+
+/**
+ * Builds the composite search clauses from the current UI state.
+ * Selected categories are AND-ed within a single clause.
+ * Pseudo-categories are applied as dedicated flags.
+ * @returns {Array<object>} Composite search clauses
+ */
+export function buildCompositeClauses() {
+    const categories = [];
+    for (const catId of Index.selectedCategories) {
+        if (catId === "NEW_ONLY" || catId === "UNTAGGED_ONLY") continue;
+        categories.push({ id: catId, mode: "include" });
+    }
+
+    const newonly = Index.selectedCategories.has("NEW_ONLY") ? 1 : 0;
+    const untaggedonly = Index.selectedCategories.has("UNTAGGED_ONLY") ? 1 : 0;
+    const hidecompleted = localStorage.hidecompleted === "true";
+
+    return [{ filter: currentSearch.trim(), categories, newonly, untaggedonly, hidecompleted }];
+}
+
+/**
+ * Builds the composite search request body from the current UI state.
+ * @param {number} start Pagination offset (-1 for all results)
+ * @returns {object} Composite search request body
+ */
+export function buildCompositeBody(start) {
+    return {
+        clauses: buildCompositeClauses(),
+        start: start !== undefined ? start : 0,
+        sortby: "title",
+        order: "asc",
+        groupby_tanks: localStorage.grouptanks !== "false",
+    };
+}
+
+/**
+ * Builds the composite random search request body from the current UI state.
+ * @param {number} count How many archives to sample
+ * @returns {object} Composite random search request body
+ */
+export function buildCompositeRandomBody(count) {
+    return {
+        clauses: buildCompositeClauses(),
+        count,
+        groupby_tanks: localStorage.grouptanks !== "false",
+    };
+}
+
+/**
+ * Custom DataTables ajax function that POSTs to /api/search/composite.
+ * @param {object} data DataTables request data (draw, start, length, order, etc.)
+ * @param {function} callback DataTables callback to provide response data
+ */
+export async function compositeAjax(data, callback) {
+    const body = buildCompositeBody(data.start);
+
+    // Override sort from DataTables' own request data for reliable initialization
+    if (data.order && data.order.length > 0) {
+        const colIdx = data.order[0].column;
+        body.order = data.order[0].dir;
+        body.sortby = data.columns[colIdx].name;
+    }
+
+    try {
+        for (let attempt = 0; attempt <= LRR.SEARCH_INIT_MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+                await new Promise((resolve) => setTimeout(resolve, LRR.SEARCH_INIT_RETRY_DELAY_MS));
+            }
+
+            const response = await fetch(new LRR.ApiURL("/api/search/composite"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+
+            // Search engine still initializing: back off and retry
+            if (response.status === 204) { continue; }
+            if (!response.ok) {
+                throw new Error(`${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            callback({
+                draw: data.draw,
+                recordsTotal: result.recordsTotal,
+                recordsFiltered: result.recordsFiltered,
+                data: result.data,
+            });
+            return;
+        }
+
+        throw new Error(`Search engine not initialized after ${LRR.SEARCH_INIT_MAX_RETRIES * LRR.SEARCH_INIT_RETRY_DELAY_MS}ms`);
+    } catch (error) {
+        LRR.showErrorToast(I18N.ArchiveListLoadFailure, error);
+        callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
+    }
 }
 
 // #region Compact View
@@ -369,12 +450,11 @@ export function drawCallback() {
 }
 
 export function buildURLParameters() {
-    const cat = dataTable.column(".tags.itd").search();
     const page = dataTable.page.info().page + 1;
     const sortby = dataTable.order()[0][0];
     const sortorder = dataTable.order()[0][1];
 
-    const encodedSearch = encodeURIComponent(dataTable.search());
+    const encodedSearch = encodeURIComponent(currentSearch);
 
     // Check each parameter and append them to the URL if they exist
     let params = "?";
@@ -385,7 +465,9 @@ export function buildURLParameters() {
     }
     if (sortorder !== "asc") params += `sortdir=${sortorder}&`;
     if (encodedSearch !== "") params += `q=${encodedSearch}&`;
-    if (cat !== "") params += `c=${cat}&`;
+    for (const catId of Index.selectedCategories) {
+        params += `c=${encodeURIComponent(catId)}&`;
+    }
 
     return params;
 }
@@ -393,8 +475,11 @@ export function buildURLParameters() {
 export function consumeURLParameters() {
     const params = new URLSearchParams(window.location.search);
 
-    if (params.has("c")) Index.setSelectedCategory(params.get("c"));
-    else Index.setSelectedCategory("");
+    Index.setSelectedCategories(params.getAll("c").filter((catId) => {
+        if (catId === "NEW_ONLY" || catId === "UNTAGGED_ONLY" || /^SET_[0-9]{10}$/.test(catId)) return true;
+        console.warn(`Dropping unknown category "${catId}".`);
+        return false;
+    }));
 
     if (params.has("q")) { currentSearch = decodeURIComponent(params.get("q")); }
 
