@@ -9,6 +9,7 @@ use Config;
 use Encode;
 use URI::Escape;
 
+use Mojo::IOLoop;
 use Mojolicious::Plugin::Minion::Admin;
 
 use LANraragi::Utils::Login      qw(is_logged_in_api);
@@ -136,6 +137,18 @@ sub apply_routes {
     $logged_in->websocket('/batch/socket')->to('batch#socket');
 
     $logged_in->get('/edit')->to('edit#index');
+
+    $logged_in->get('/playwright-diagnostics-probe')->to(
+        cb => sub {
+            my $c = shift;
+            $c->inactivity_timeout(60);
+            $c->res->code(200);
+            $c->res->headers->content_type('text/plain');
+            $c->write_chunk("pending\n");
+            my $timer = Mojo::IOLoop->timer(45 => sub { $c->finish });
+            $c->tx->once(finish => sub { Mojo::IOLoop->remove($timer) });
+        }
+    );
 
     $logged_in->get('/backup')->to('backup#index');
 

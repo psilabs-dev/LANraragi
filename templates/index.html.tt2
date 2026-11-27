@@ -71,6 +71,18 @@
 		});
 	</script>
 
+    [% IF browserprobe %]
+    <script>
+        window.addEventListener("load", () => {
+            if (sessionStorage.getItem("playwright-diagnostics-probe")) return;
+            sessionStorage.setItem("playwright-diagnostics-probe", "started");
+            fetch("[% c.url_for("/playwright-diagnostics-probe") %]")
+                .then(response => response.text())
+                .catch(() => {});
+        });
+    </script>
+    [% END %]
+
 </head>
 
 <body data-user-logged="[% userlogged %]">
