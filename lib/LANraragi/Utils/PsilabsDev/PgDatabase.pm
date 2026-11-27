@@ -340,7 +340,7 @@ sub get_archive_json_multi (@ids) {
     my $logger = get_logger( "PgDatabase", "lanraragi" );
     my $dbh = get_dbh();
 
-    my @archives;
+    my %archive_data;
 
     eval {
         # Return empty array if no IDs provided
@@ -363,7 +363,7 @@ sub get_archive_json_multi (@ids) {
             foreach my $tank_id (@tank_ids) {
                 my $arcdata = build_tank_json_pg($tank_id);
                 if ($arcdata) {
-                    push @archives, $arcdata;
+                    $archive_data{$tank_id} = $arcdata;
                 }
             }
             my $tank_time = (time() - $tank_start) * 1000;
@@ -406,8 +406,6 @@ sub get_archive_json_multi (@ids) {
             }
             $toc_sth->finish;
 
-            # Store results in a hash for quick lookup
-            my %archive_data;
             while (my $row = $sth->fetchrow_hashref) {
                 # Extract name from filename
                 my ( $name, $path, $suffix ) = fileparse( $row->{filename}, qr/\.[^.]*/ );
@@ -438,15 +436,6 @@ sub get_archive_json_multi (@ids) {
             $logger->debug(sprintf("[PERF] Archive batch query execution: %.2fms (archive_count: %d)",
                 $query_time, scalar @archive_ids));
 
-            # Add archives to result array in the original order (preserving input order)
-            my $transform_start = time();
-            foreach my $id (@archive_ids) {
-                if (exists $archive_data{$id}) {
-                    push @archives, $archive_data{$id};
-                }
-            }
-            my $transform_time = (time() - $transform_start) * 1000;
-            $logger->debug(sprintf("[PERF] JSON transformation: %.2fms", $transform_time));
         }
     };
 
@@ -455,7 +444,7 @@ sub get_archive_json_multi (@ids) {
     }
 
     $dbh->disconnect();
-    return @archives;
+    return map { $archive_data{$_} } grep { exists $archive_data{$_} } @ids;
 }
 
 # replaces LANraragi::Utils::Database::set_title

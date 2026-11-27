@@ -21,7 +21,7 @@ use LANraragi::Utils::Generic  qw(array_difference filter_hash_by_keys render_ap
 use LANraragi::Utils::Logging  qw(get_logger);
 use LANraragi::Utils::Redis    qw(redis_decode redis_encode);
 use LANraragi::Utils::String   qw(trim trim_CRLF);
-use LANraragi::Utils::Tags     qw(join_tags_to_string split_tags_to_array);
+use LANraragi::Utils::Tags     qw(join_tags_to_string split_tags_to_array merge_tank_tags);
 
 my %TANK_METADATA = ( "name", 0, "summary", -1, "tags", -2, "progress", -3 );
 
@@ -687,9 +687,6 @@ sub get_tank_unified_tags ( $tank_id, $archive_tags_list = undef ) {
         $tank_tags_str = redis_decode($1) // "";
     }
 
-    # Parse and trim tank's own tags
-    my @own_tags = split_tags_to_array($tank_tags_str);
-
     # Get archive tags if not provided
     if ( !defined $archive_tags_list ) {
         my @archives = $redis->zrangebyscore( $tank_id, 1, "+inf" );
@@ -703,53 +700,7 @@ sub get_tank_unified_tags ( $tank_id, $archive_tags_list = undef ) {
 
     $redis->quit;
 
-    # Build set of own tags for deduplication (case-insensitive)
-    my %own_tags_lc = map { lc($_) => 1 } @own_tags;
-
-    # Track date-type tags for coalescing (date_added and timestamp)
-    my %own_date_tags;
-    my %max_imputed_dates;
-
-    # Check if tank has its own date_added or timestamp tags
-    foreach my $t (@own_tags) {
-        if ( $t =~ /^(date_added|timestamp):(\d+)$/i ) {
-            $own_date_tags{ lc($1) } = 1;
-        }
-    }
-
-    # Parse archive tags, deduplicate, exclude own_tags
-    my %seen;
-    my @imputed_tags;
-    foreach my $tags_str (@$archive_tags_list) {
-        next unless defined $tags_str && $tags_str ne "";
-        foreach my $t ( split( /,/, $tags_str ) ) {
-            $t = trim($t);
-            next if $t eq "";
-            my $t_lc = lc($t);
-
-            # Handle date-type tags specially - track max value per namespace
-            if ( $t =~ /^(date_added|timestamp):(\d+)$/i ) {
-                my ( $ns, $val ) = ( lc($1), $2 );
-                if ( !exists $max_imputed_dates{$ns} || $val > $max_imputed_dates{$ns}{value} ) {
-                    $max_imputed_dates{$ns} = { value => $val, tag => $t };
-                }
-                next;
-            }
-
-            next if $seen{$t_lc}++;
-            next if $own_tags_lc{$t_lc};
-            push @imputed_tags, $t;
-        }
-    }
-
-    # Add winning imputed date tags (only if tank has no own tag for that namespace)
-    foreach my $ns ( keys %max_imputed_dates ) {
-        if ( !exists $own_date_tags{$ns} ) {
-            push @imputed_tags, $max_imputed_dates{$ns}{tag};
-        }
-    }
-
-    return { own_tags => \@own_tags, imputed_tags => \@imputed_tags };
+    return merge_tank_tags( $tank_tags_str, $archive_tags_list );
 }
 
 # update_tank_imputed_indexes(tank_id, removed_tags)

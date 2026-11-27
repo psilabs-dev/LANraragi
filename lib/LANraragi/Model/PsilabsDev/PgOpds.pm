@@ -161,7 +161,7 @@ sub render_archive_page {
     my @images = get_filelist($archive, $id);
 
     # If the page number is invalid, use the first page.
-    if ( $page > scalar @images ) {
+    if ( $page < 1 || $page > scalar @images ) {
         $page = 1;
     }
 
@@ -218,7 +218,7 @@ sub render_archive_page {
     } else {
 
         # Get the file extension to report content-type properly
-        my ( $n, $p, $file_ext ) = fileparse( $path, qr/\.[^.]*/ );
+        my ( $filename, $p, $file_ext ) = fileparse( $path, qr/\.[^.]*/ );
 
         # Get page data from cache or extract from archive
         my $cachekey = "page/$id/$path";
@@ -235,7 +235,8 @@ sub render_archive_page {
         $mojo->render_file(
             data                => $content,
             content_disposition => "inline",
-            format              => substr( $file_ext, 1 )
+            format              => substr( $file_ext, 1 ),
+            filename            => $filename . $file_ext
         );
     }
 }

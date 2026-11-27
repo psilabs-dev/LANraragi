@@ -184,8 +184,10 @@ export async function initializeAll(trackProgressLocally, authenticateProgress) 
         $("#tagContainer").append(LRR.buildTagsDiv(state.content.tags));
 
         const ratyEl = document.querySelector(`[data-raty]`);
-        if (ratyEl) {
-            const rating = LRR.splitTagsByNamespace(state.content.tags).rating?.at(0).length;
+        const isTank = state.id.startsWith("TANK_");
+        if (ratyEl && (!isTank || typeof state.content.ownTags === "string")) {
+            const editableTags = () => isTank ? state.content.ownTags : state.content.tags;
+            const rating = LRR.splitTagsByNamespace(editableTags()).rating?.at(0).length;
             new Raty(ratyEl, {
                 starType: `i`,
                 cancelButton: true,
@@ -195,7 +197,9 @@ export async function initializeAll(trackProgressLocally, authenticateProgress) 
                 score: rating,
                 click: function(score, element, evt) {
 
-                    let tags = LRR.splitTagsByNamespace(state.content.tags);
+                    const currentTags = editableTags();
+                    if (isTank && typeof currentTags !== "string") return;
+                    const tags = LRR.splitTagsByNamespace(currentTags || null);
                     let selectedRating = score;
 
                     if (selectedRating === null)
@@ -207,11 +211,17 @@ export async function initializeAll(trackProgressLocally, authenticateProgress) 
                     }
 
                     let tagList = LRR.buildTagList(tags);
-                    if (state.id.startsWith("TANK_"))
-                        Server.updateTagsFromTankoubon(state.id, tagList);
-                    else
+                    if (isTank) {
+                        Server.updateTagsFromTankoubon(state.id, tagList, async () => {
+                            state.content.ownTags = tagList.join(",");
+                            await updateTankTags();
+                            $("#tagContainer > table").remove();
+                            $("#tagContainer > .archive-summary").before(LRR.buildTagsDiv(state.content.tags));
+                        });
+                    } else {
                         Server.updateTagsFromArchive(state.id, tagList);
-                    $("#tagContainer > table").replaceWith(LRR.buildTagsDiv(tagList.join(",")));
+                        $("#tagContainer > table").replaceWith(LRR.buildTagsDiv(tagList.join(",")));
+                    }
                 }
             }).init();
         }
@@ -301,6 +311,18 @@ export async function initializeAll(trackProgressLocally, authenticateProgress) 
     });
 }
 
+function updateTankTags() {
+    return fetch(new LRR.ApiURL(`/api/tankoubons/${state.id}/tags`))
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(I18N.ServerInfoError)))
+        .then(data => {
+            state.content.tags = data.tags || "";
+        })
+        .catch(err => {
+            state.content.tags = state.content.ownTags;
+            LRR.showErrorToast(I18N.ServerInfoError, err);
+        });
+}
+
 export function loadContentData() {
 
     // Initialize content object to hold metadata -- This is a recursive object that will be used to build the page overlay.
@@ -323,15 +345,6 @@ export function loadContentData() {
         }
     };
 
-    const updateTankTags = function() {
-        return fetch(new LRR.ApiURL(`/api/tankoubons/${state.id}/tags`))
-            .then(r => r.ok ? r.json() : Promise.reject(new Error(I18N.ServerInfoError)))
-            .then(data => {
-                state.content.tags = data.tags || "";
-            })
-            .catch(err => LRR.showErrorToast(I18N.ServerInfoError, err));
-    };
-
     // If the ID is a Tank ID (TANK_xxxx), use the Tankoubon API for metadata
     if (state.id.startsWith("TANK_")) {
 
@@ -340,7 +353,8 @@ export function loadContentData() {
             .then(data => {
                 const tank = data.result;
                 state.content.title   = tank.name;
-                state.content.tags    = tank.tags    || "";
+                state.content.ownTags = tank.tags    || "";
+                state.content.tags    = state.content.ownTags;
                 state.content.summary = tank.summary || "";
 
                 state.content.chapters = [];

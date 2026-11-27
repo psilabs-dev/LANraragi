@@ -12,6 +12,7 @@ use LANraragi::Utils::PsilabsDev::PgArchive;
 use LANraragi::Utils::Logging qw(get_logger);
 use LANraragi::Utils::Generic qw(render_api_response);
 use LANraragi::Model::Config;
+use LANraragi::Utils::Tags qw(merge_tank_tags);
 
 # replaces LANraragi::Model::Tankoubon::get_tankoubon_list
 # get_tankoubon_list(page)
@@ -155,6 +156,25 @@ sub create_tankoubon {
 
     $dbh->disconnect();
     return $tank_id;
+}
+
+sub get_full_tags {
+    my ($tank_id) = @_;
+    my $dbh = get_dbh();
+    my ( $own_tags, $member_tags ) = $dbh->selectrow_array( <<'SQL', undef, $tank_id );
+        SELECT t.tags, string_agg(
+            CASE WHEN a.namespace = '' THEN a.value ELSE a.namespace || ':' || a.value END,
+            ',' ORDER BY m.position, a.tagid
+        )
+        FROM lrr_tank t
+        LEFT JOIN lrr_tank_to_archive_map m ON m.tankid = t.tankid
+        LEFT JOIN lrr_archive_to_tag_map a ON a.arcid = m.arcid
+        WHERE t.tankid = ?
+        GROUP BY t.tankid, t.tags
+SQL
+    $dbh->disconnect();
+    my $tags = merge_tank_tags( $own_tags // "", [$member_tags] );
+    return join( ",", @{ $tags->{own_tags} }, @{ $tags->{imputed_tags} } );
 }
 
 # replaces: LANraragi::Model::Tankoubon::get_tankoubon

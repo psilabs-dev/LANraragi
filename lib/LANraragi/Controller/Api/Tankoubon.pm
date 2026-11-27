@@ -60,7 +60,7 @@ sub get_tankoubon_tags {
     my $self    = shift->openapi->valid_input or return;
     my $tank_id = $self->stash('id');
 
-    my $tags = LANraragi::Model::Tankoubon::get_full_tags( $tank_id );
+    my $tags = LANraragi::Model::PsilabsDev::PgTankoubon::get_full_tags( $tank_id );
 
     $self->render( openapi => { tags => $tags } );
 }

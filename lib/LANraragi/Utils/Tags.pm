@@ -9,7 +9,7 @@ use LANraragi::Utils::String qw(trim trim_CRLF);
 
 # Functions related to the Tag system.
 use Exporter 'import';
-our @EXPORT_OK = qw( unflat_tagrules replace_CRLF restore_CRLF tags_rules_to_array rewrite_tags build_tag_replace_hash split_tags_to_array join_tags_to_string );
+our @EXPORT_OK = qw( unflat_tagrules replace_CRLF restore_CRLF tags_rules_to_array rewrite_tags build_tag_replace_hash split_tags_to_array join_tags_to_string merge_tank_tags );
 
 sub is_null_or_empty {
     return !length(shift);
@@ -44,6 +44,59 @@ sub split_tags_to_array {
         $tags = trim_CRLF($tags);
     }
     return @tags;
+}
+
+sub merge_tank_tags {
+    my ( $tank_tags_str, $archive_tags_list ) = @_;
+    my @own_tags = split_tags_to_array($tank_tags_str);
+
+    # Build set of own tags for deduplication (case-insensitive)
+    my %own_tags_lc = map { lc($_) => 1 } @own_tags;
+
+    # Track date-type tags for coalescing (date_added and timestamp)
+    my %own_date_tags;
+    my %max_imputed_dates;
+
+    # Check if tank has its own date_added or timestamp tags
+    foreach my $t (@own_tags) {
+        if ( $t =~ /^(date_added|timestamp):(\d+)$/i ) {
+            $own_date_tags{ lc($1) } = 1;
+        }
+    }
+
+    # Parse archive tags, deduplicate, exclude own_tags
+    my %seen;
+    my @imputed_tags;
+    foreach my $tags_str (@$archive_tags_list) {
+        next unless defined $tags_str && $tags_str ne "";
+        foreach my $t ( split( /,/, $tags_str ) ) {
+            $t = trim($t);
+            next if $t eq "";
+            my $t_lc = lc($t);
+
+            # Handle date-type tags specially - track max value per namespace
+            if ( $t =~ /^(date_added|timestamp):(\d+)$/i ) {
+                my ( $ns, $val ) = ( lc($1), $2 );
+                if ( !exists $max_imputed_dates{$ns} || $val > $max_imputed_dates{$ns}{value} ) {
+                    $max_imputed_dates{$ns} = { value => $val, tag => $t };
+                }
+                next;
+            }
+
+            next if $seen{$t_lc}++;
+            next if $own_tags_lc{$t_lc};
+            push @imputed_tags, $t;
+        }
+    }
+
+    # Add winning imputed date tags (only if tank has no own tag for that namespace)
+    foreach my $ns ( keys %max_imputed_dates ) {
+        if ( !exists $own_date_tags{$ns} ) {
+            push @imputed_tags, $max_imputed_dates{$ns}{tag};
+        }
+    }
+
+    return { own_tags => \@own_tags, imputed_tags => \@imputed_tags };
 }
 
 sub join_tags_to_string {

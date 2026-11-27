@@ -396,12 +396,13 @@ export function updateTagsFromArchive(arcId, tags) {
  * Sends a UPDATE request for the additional tags of the Tankoubon ID
  * @param {string} tankId Tankoubon ID
  * @param {string|string[]} tags Comma-separated tag list (or array of tags) to replace the Tankoubon's current tags with
+ * @param {Function|null} successCallback Called after a successful update
  */
-export function updateTagsFromTankoubon(tankId, tags) {
+export function updateTagsFromTankoubon(tankId, tags, successCallback = null) {
     const tagString = Array.isArray(tags) ? tags.join(",") : tags;
 
     return callAPIBody(`/api/tankoubons/${tankId}`, "PUT", JSON.stringify({ metadata: { tags: tagString } }),
-        I18N.EditMetadataSaved, I18N.TankoubonEditError, null, "application/json");
+        I18N.EditMetadataSaved, I18N.TankoubonEditError, successCallback, "application/json");
 }
 
 /**

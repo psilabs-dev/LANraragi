@@ -202,26 +202,21 @@ sub do_clause_search ( $clauses, $start, $sortkey, $sortorder, $grouptanks ) {
         my ( $where_sql, @params ) = compose_where_sql(
             map { [ build_archive_where_clauses( $_->{tokens}, $_->{constraints}, $_->{newonly}, $_->{untaggedonly}, $_->{hidecompleted}, $grouptanks ) ] } @resolved );
 
-        my $search_start = time();
-        my $archive_filtered;
-        ( $archive_filtered, @ids ) = search_archives_with_dbh( $dbh, $where_sql, \@params, $sortkey, $sortorder, $q_start, $q_limit );
-        my $search_time = (time() - $search_start) * 1000;
-        $logger->debug(sprintf("[PERF] Archive search: %.2fms", $search_time));
-        $filtered = $archive_filtered;
-
-        # When grouptanks=true, we also need to fetch tank IDs that match the search
-        # criteria and prepend them to the results (tanks typically come first)
+        my ( $tank_where_sql, @tank_params );
         if ($grouptanks) {
-            my ( $tank_where_sql, @tank_params ) = compose_where_sql(
+            ( $tank_where_sql, @tank_params ) = compose_where_sql(
                 map { [ build_tank_where_clauses( $_->{tokens}, $_->{constraints} ) ] } @resolved );
+        }
 
-            my $tank_start = time();
-            my ( $tank_filtered, @tank_ids ) = search_tanks_with_dbh( $dbh, $tank_where_sql, \@tank_params, $sortkey, $sortorder, $q_start, $q_limit );
-            my $tank_time = (time() - $tank_start) * 1000;
-            $logger->debug(sprintf("[PERF] Tank search: %.2fms", $tank_time));
-            $filtered += $tank_filtered;
-            if (@tank_ids) {
-                $logger->debug( "Found " . scalar @tank_ids . " tank results (paginated)" );
+        if ( ($sortkey // "") eq "lastread" ) {
+            ( $filtered, @ids ) = search_lastread_with_dbh(
+                $dbh, $where_sql, \@params, $tank_where_sql, \@tank_params, $sortorder, $q_start, $q_limit );
+        } else {
+            ( $filtered, @ids ) = search_archives_with_dbh( $dbh, $where_sql, \@params, $sortkey, $sortorder, $q_start, $q_limit );
+            if ($grouptanks) {
+                my ( $tank_filtered, @tank_ids ) = search_tanks_with_dbh(
+                    $dbh, $tank_where_sql, \@tank_params, $sortkey, $sortorder, $q_start, $q_limit );
+                $filtered += $tank_filtered;
                 unshift @ids, @tank_ids;
             }
         }
@@ -356,13 +351,13 @@ sub build_archive_where_clauses ( $tokens_in, $constraints, $newonly, $untaggedo
         $logger->debug("Searching for $tag, isneg=$isneg, isexact=$isexact");
 
         # Handle pagecount/read searches: pages:20, pages:>20, read:>0, etc.
-        if ( $tag =~ /^(read|pages):(>|<|>=|<=)?(\d+)$/ ) {
+        if ( $tag =~ /^(read|pages|lastread):(>=?|<=?)?(\d+)$/ ) {
             my $col      = $1;
             my $operator = $2 || "=";
             my $value    = $3;
 
             # Map column names
-            $col = $col eq "pages" ? "pagecount" : "progress";
+            $col = { pages => "pagecount", read => "progress", lastread => "lastreadtime" }->{$col};
 
             my $clause = "a.$col $operator ?";
             if ($isneg) {
@@ -596,6 +591,15 @@ sub build_tank_where_clauses ( $tokens_in, $constraints ) {
 
         $logger->debug("Tank search for $tag, isneg=$isneg, isexact=$isexact");
 
+        if ( $tag =~ /^lastread:(>=?|<=?)?(\d+)$/ ) {
+            my $operator = $1 || "=";
+            my $value = $2;
+            my $clause = tank_lastread_sql() . " $operator ?";
+            push @where_clauses, $isneg ? "NOT ($clause)" : $clause;
+            push @params, $value;
+            next;
+        }
+
         # Skip page/read count searches for tanks (they don't have pagecount/progress)
         if ( $tag =~ /^(read|pages):/ ) {
             next;
@@ -696,6 +700,41 @@ sub build_tank_where_clauses ( $tokens_in, $constraints ) {
 # Query layer
 # ---------------------------------------------------------------------------
 
+sub tank_lastread_sql {
+    return "COALESCE((
+        SELECT MAX(member.lastreadtime)
+        FROM lrr_tank_to_archive_map membership
+        JOIN lrr_archive member ON member.arcid = membership.arcid
+        WHERE membership.tankid = t.tankid
+    ), 0)";
+}
+
+sub search_lastread_with_dbh ( $dbh, $archive_where, $archive_params, $tank_where, $tank_params, $reverse, $start, $limit ) {
+    my $matches = "SELECT a.arcid AS id, a.lastreadtime FROM lrr_archive a $archive_where";
+    my @params = @$archive_params;
+    if (defined $tank_where) {
+        my $lastread = tank_lastread_sql();
+        $matches .= " UNION ALL SELECT t.tankid, $lastread FROM lrr_tank t $tank_where";
+        push @params, @$tank_params;
+    }
+
+    my $direction = $reverse ? "ASC" : "DESC";
+    my $sql = "SELECT id, COUNT(*) OVER() FROM ($matches) AS matches
+               ORDER BY (lastreadtime > 0) DESC, lastreadtime $direction, id ASC";
+    my @page;
+    if ( defined $start && $limit > 0 ) {
+        $sql .= " LIMIT ? OFFSET ?";
+        @page = ( $limit, $start );
+    }
+
+    my $rows = $dbh->selectall_arrayref( $sql, undef, @params, @page );
+    my $filtered = @$rows ? $rows->[0][1] : 0;
+    if ( !@$rows && $start ) {
+        ($filtered) = $dbh->selectrow_array( "SELECT COUNT(*) FROM ($matches) AS matches", undef, @params );
+    }
+    return ( $filtered, map { $_->[0] } @$rows );
+}
+
 # Run the prepared archive statement: sort (including tag-namespace lateral
 # sort), pagination, filtered count via window function, EXPLAIN diagnostics.
 # Returns ($filtered_count, @ids)
@@ -733,10 +772,6 @@ sub search_archives_with_dbh ( $dbh, $where_sql, $params_in, $sortkey, $sortorde
     my $order_sql = "";
     if ( !$sortkey || $sortkey eq "title" ) {
         $order_sql = "ORDER BY a.title" . ( $sortorder ? " DESC" : " ASC" );
-    } elsif ( $sortkey eq "lastread" ) {
-        # Partition: archives with lastreadtime > 0 first, unread archives last
-        $order_sql = "ORDER BY CASE WHEN a.lastreadtime IS NULL OR a.lastreadtime = 0 THEN 1 ELSE 0 END, a.lastreadtime"
-            . ( $sortorder ? " DESC" : " ASC" );
     } else {
         # Sort by tag namespace value (using LATERAL JOIN result)
         if ($use_lateral_sort) {
@@ -838,9 +873,6 @@ sub search_tanks_with_dbh ( $dbh, $where_sql, $params_in, $sortkey, $sortorder, 
     # Build ORDER BY clause for tanks
     my $order_sql = "";
     if ( !$sortkey || $sortkey eq "title" ) {
-        $order_sql = "ORDER BY t.name" . ( $sortorder ? " DESC" : " ASC" );
-    } elsif ( $sortkey eq "lastread" ) {
-        # Tanks don't have lastreadtime, so we just order by name
         $order_sql = "ORDER BY t.name" . ( $sortorder ? " DESC" : " ASC" );
     } else {
         # Sort by tag namespace - search within tags field

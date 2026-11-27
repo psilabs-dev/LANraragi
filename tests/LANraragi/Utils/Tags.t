@@ -336,4 +336,13 @@ note('testing tag rules hash building...');
     );
 }
 
+{
+    my $unified = LANraragi::Utils::Tags::merge_tank_tags(
+        "series:Tank, date_added:4",
+        ["series:tank, genre:Drama, date_added:9, timestamp:11", "genre:drama, timestamp:27"]
+    );
+    is_deeply( $unified->{own_tags}, [ "series:Tank", "date_added:4" ], "preserves custom tank tags" );
+    is_deeply( $unified->{imputed_tags}, [ "genre:Drama", "timestamp:27" ], "coalesces member tags and dates" );
+}
+
 done_testing();
